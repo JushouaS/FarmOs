@@ -63,23 +63,28 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body", issues: parsed.error.issues });
     const userId = request.authUser!.sub;
 
-    await app.sqlWrite`DELETE FROM notification_preferences WHERE user_id = ${userId}`;
-    if (parsed.data.length > 0) {
-      const rows = parsed.data.map((p) => ({
-        user_id: userId,
-        channel: p.channel,
-        enabled: p.enabled,
-        min_severity: p.minSeverity,
-        quiet_hours_start: p.quietHoursStart ?? null,
-        quiet_hours_end: p.quietHoursEnd ?? null,
-      }));
-      await app.sqlWrite`
-        INSERT INTO notification_preferences
-          (user_id, channel, enabled, min_severity, quiet_hours_start, quiet_hours_end)
-        SELECT * FROM jsonb_to_recordset(${app.sqlWrite.json(rows)})
-          AS x(user_id uuid, channel text, enabled bool, min_severity text,
-               quiet_hours_start time, quiet_hours_end time)`;
-    }
+    // H-3: wrap delete + insert in a transaction so a crash between the two
+    // writes never leaves the user with no preferences at all.
+    await app.sqlWrite.begin(async (tx) => {
+      await tx`DELETE FROM notification_preferences WHERE user_id = ${userId}`;
+      if (parsed.data.length > 0) {
+        const rows = parsed.data.map((p) => ({
+          user_id: userId,
+          channel: p.channel,
+          enabled: p.enabled,
+          min_severity: p.minSeverity,
+          quiet_hours_start: p.quietHoursStart ?? null,
+          quiet_hours_end: p.quietHoursEnd ?? null,
+        }));
+        await tx`
+          INSERT INTO notification_preferences
+            (user_id, channel, enabled, min_severity, quiet_hours_start, quiet_hours_end)
+          SELECT * FROM jsonb_to_recordset(${tx.json(rows)})
+            AS x(user_id uuid, channel text, enabled bool, min_severity text,
+                 quiet_hours_start time, quiet_hours_end time)`;
+      }
+    });
+
     return reply.send({ updated: true, count: parsed.data.length });
   });
 }

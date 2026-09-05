@@ -16,15 +16,24 @@ const patchBody = z.object({
   endedAt: z.string().datetime().optional(),
 });
 
+// H-1: validated query schema — prevents unvalidated string injection and
+// handles array coercion from duplicate query params.
+const listQuerySchema = z.object({
+  status: z.enum(["open", "resolved_monitoring", "closed"]).optional(),
+});
+
 export async function registerIncidentRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: [requireAuth] }, async (request, reply) => {
-    const { status } = request.query as Record<string, string>;
+    const parsed = listQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_query", issues: parsed.error.issues });
+    const { status } = parsed.data;
+
     const rows = status
       ? await app.sqlRead`
           SELECT id, house_id AS "houseId", title, started_at::text AS "startedAt",
                  ended_at::text AS "endedAt", status
           FROM incidents WHERE status = ${status}
-          ORDER BY started_at DESC`
+          ORDER BY started_at DESC LIMIT 100`
       : await app.sqlRead`
           SELECT id, house_id AS "houseId", title, started_at::text AS "startedAt",
                  ended_at::text AS "endedAt", status

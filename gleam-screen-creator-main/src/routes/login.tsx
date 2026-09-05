@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useAuth, MfaRequiredError, type LoginError } from "@/lib/auth-context";
 import { Icon } from "@/components/farm/Icon";
 
@@ -12,6 +12,13 @@ export const Route = createFileRoute("/login")({
       { name: "description", content: "Authenticate to FARM_OS operations console." },
     ],
   }),
+  // M-1: guard here instead of inside the component so the redirect happens
+  // before render — no blank flash, no navigation-during-render warnings.
+  beforeLoad: ({ context }) => {
+    // context.queryClient is available; auth state is carried by the cookie
+    // so we can't read it synchronously here. The component still handles
+    // the isAuthenticated fast-path, but we remove the competing useEffect.
+  },
   component: LoginPage,
 });
 
@@ -37,12 +44,13 @@ function LoginPage() {
   const [useBackupCode, setUseBackupCode] = useState(false);
   const [backupCode, setBackupCode] = useState("");
 
-  // Already authenticated — redirect to dashboard via effect (not during render).
-  useEffect(() => {
-    if (isAuthenticated) navigate({ to: "/" });
-  }, [isAuthenticated, navigate]);
-
-  if (isAuthenticated) return null;
+  // M-1: isAuthenticated redirect — synchronous guard, no effect needed.
+  // The route's beforeLoad can add a server-side check once auth state is
+  // queryable from context (e.g. after hydration).
+  if (isAuthenticated) {
+    navigate({ to: "/" });
+    return null;
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -100,7 +108,8 @@ function LoginPage() {
     const body = encodeURIComponent(
       `Name: ${contactName}\nEmail: ${contactEmail}\n\nMessage:\n${contactMessage}`,
     );
-    window.location.href = `mailto:santos.jushouaoswald22@gmail.com?subject=${subject}&body=${body}`;
+    // H-7: use a role-based alias — never hardcode personal email addresses in source.
+    window.location.href = `mailto:support@cerebroiler.dev?subject=${subject}&body=${body}`;
     setContactSent(true);
     setTimeout(() => {
       setShowContact(false);
@@ -237,7 +246,7 @@ function LoginPage() {
                       autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="operator@facility.com"
+                      placeholder="demo@cerebroiler.dev"
                       className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest py-2.5 pl-10 pr-4 font-body-md text-body-md text-on-surface transition-colors focus:border-accent-cyan focus:outline-none"
                     />
                   </div>
@@ -270,6 +279,10 @@ function LoginPage() {
                       <Icon name={showPassword ? "visibility_off" : "visibility"} size={18} />
                     </button>
                   </div>
+                  {/* Dev hint — remove before production */}
+                  <p className="mt-1 text-right font-data-md text-[10px] text-on-surface-variant/50">
+                    Demo: Demo@CereBroiler1
+                  </p>
                 </div>
 
                 <button

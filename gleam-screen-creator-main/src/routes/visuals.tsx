@@ -157,10 +157,11 @@ function VisualsPage() {
 
   const activeEvent = hoveredEvent ?? selectedEvent;
 
-  // Daily weight check: simulated next check at a fixed time (e.g. 06:00 next day)
+  // Daily weight check: next check at 06:00 UTC each day
   const lastWeighIn = "2024-05-24T06:00:00.000Z";
   const nextWeighIn = "2024-05-25T06:00:00.000Z";
-  const now = new Date("2024-05-24T16:30:00.000Z"); // dataset AS_OF
+  // L-2: use real current time instead of the hard-coded dataset timestamp
+  const now = new Date();
   const hoursUntilNext = Math.max(
     0,
     Math.round((new Date(nextWeighIn).getTime() - now.getTime()) / 3_600_000),

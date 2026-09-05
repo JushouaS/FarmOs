@@ -45,7 +45,7 @@ export function buildFarmSnapshot(): string {
     `- Open incident (${incident.id}, ${incident.status}): ${houseLabel(incident.houseId)} activity dropped ${formatPercent(incident.activityDropPercent)} between ${formatWindow(incident.startedAt, incident.endedAt)}. Sensor ${incident.peak.sensorId} peaked at ${formatMeasurement(incident.peak.value, incident.peak.unit.toLowerCase())} (${formatDeltaVsBaseline(incident.peak.value, incident.peak.baseline)} vs ${incident.peak.baseline} ppm baseline), above the ${incident.peak.threshold} ppm threshold for ${formatDuration(incident.exceedanceMinutes)}. Cause: ${incident.cause}. ${incident.resolution}; current reading ${formatMeasurement(nh3Current.value, nh3Current.unit.toLowerCase())}.`,
     `- Camera AI (${incident.evidence.cameraId}): ${incident.evidence.detectionLabel} warning flagged (${incident.evidence.detectionConfidence} confidence) in the ${houseLabel(incident.houseId)} replay.`,
     `- Behavior on ${camera.id}: movement index ${behavior.movementIndex} (${behavior.movementLabel}), huddling risk ${formatPercent(behavior.huddlingRisk * 100, 0)}, ${behavior.aggressionEvents} aggression events.`,
-    `- Last logged anomaly: ${farm.timeline.events[farm.timeline.events.length - 1].label}, ${formatDuration(minutesSinceLastAnomaly())} ago.`,
+    `- Last logged anomaly: ${farm.timeline.events.at(-1)?.label ?? "none"}, ${formatDuration(minutesSinceLastAnomaly())} ago.`,
     `- Platform: API_${platform.apiVersion}, ML_MODEL_${platform.mlModel}, inference latency ${platform.inferenceLatencyMs} ms, CPU ${platform.cpuPercent}%, RAM ${platform.ramGb} GB, status ${platform.status.toUpperCase()}.`,
   ].join("\n");
 }

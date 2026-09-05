@@ -495,6 +495,42 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   /* -------------------------------------------------------------------------- */
 
   /**
+   * GET /auth/users
+   * Paginated user list (id, email, role). Restricted to ADMIN role.
+   *
+   * Query params:
+   *   limit  — number of rows per page (1-100, default 50)
+   *   offset — row offset for pagination (default 0)
+   */
+  const usersQuerySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  });
+
+  app.get("/users", { preHandler: [requireAuth, requireRole("ADMIN")] }, async (request, reply) => {
+    const parsed = usersQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_query", issues: parsed.error.issues });
+    const { limit, offset } = parsed.data;
+
+    const rows = await app.sqlRead`
+      SELECT u.id, u.email,
+             COALESCE(
+               (SELECT r.code FROM roles r
+                INNER JOIN user_roles ur ON ur.role_id = r.id
+                WHERE ur.user_id = u.id
+                ORDER BY r.code
+                LIMIT 1),
+               'VIEWER'
+             ) AS role
+      FROM users u
+      ORDER BY u.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}`;
+
+    const total = await app.sqlRead`SELECT COUNT(*)::int AS count FROM users`;
+    return { users: rows, total: total[0]!.count as number, limit, offset };
+  });
+
+  /**
    * GET /auth/sessions
    * List active sessions for the authenticated user. Does not expose tokens.
    */

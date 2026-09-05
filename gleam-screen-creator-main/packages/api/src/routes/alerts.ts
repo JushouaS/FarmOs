@@ -78,14 +78,29 @@ export async function registerAlertRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const userId = request.authUser!.sub;
     const ts = new Date().toISOString();
-    const updated = await app.sqlWrite`
-      UPDATE alerts
-      SET acknowledged = true, acknowledged_at = ${ts}, acknowledged_by = ${userId}
-      WHERE id = ${id} AND acknowledged = false
-      RETURNING id`;
-    if (updated.count === 0) {
-      return { updated: false, reason: "already_acknowledged_or_missing" };
+
+    if (action === "acknowledge") {
+      const updated = await app.sqlWrite`
+        UPDATE alerts
+        SET acknowledged = true, acknowledged_at = ${ts}, acknowledged_by = ${userId}
+        WHERE id = ${id} AND acknowledged = false
+        RETURNING id`;
+      if (updated.count === 0) {
+        return { updated: false, reason: "already_acknowledged_or_missing" };
+      }
+    } else {
+      // H-2: dismiss sets its own dismissed flag — does NOT touch acknowledged,
+      // so a dismissed alert stays distinguishable from an acknowledged one.
+      const updated = await app.sqlWrite`
+        UPDATE alerts
+        SET dismissed = true, dismissed_at = ${ts}, dismissed_by = ${userId}
+        WHERE id = ${id} AND dismissed = false
+        RETURNING id`;
+      if (updated.count === 0) {
+        return { updated: false, reason: "already_dismissed_or_missing" };
+      }
     }
+
     await app.sqlWrite`
       INSERT INTO alert_history (alert_id, action, by_user_id)
       VALUES (${id}, ${action}, ${userId})`;

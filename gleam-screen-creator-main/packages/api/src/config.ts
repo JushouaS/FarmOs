@@ -24,7 +24,9 @@ const schema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_CORS_ORIGINS: z
     .string()
-    .default("")
+    // H-6: default to localhost dev origins so an empty string never becomes
+    // an open wildcard. In production set this explicitly.
+    .default("http://localhost:5173,http://localhost:8080")
     .transform((raw) =>
       raw
         .split(",")
@@ -35,13 +37,19 @@ const schema = z.object({
   DATABASE_URL: z.string().min(10, "DATABASE_URL is required"),
   DATABASE_WRITE_URL: z.string().optional(),
 
-  JWT_SECRET: z.string().min(16, "JWT_SECRET must be >= 16 bytes"),
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be >= 32 bytes"),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(15 * 60),
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(30 * 24 * 60 * 60),
 
   // Vision service (Flask)
   VISION_SERVICE_URL: z.string().url().default("http://127.0.0.1:5000"),
-  VISION_SERVICE_TOKEN: z.string().default("dev-vision-token-change-in-production"),
+  // H-4: no insecure default — server will refuse to start without a real token.
+  VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
+
+  // Groq AI (Intelligence engine) — https://console.groq.com/keys
+  // Optional at startup; required only when intelligence routes are hit.
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
 });
 
 const parsed = schema.safeParse(process.env);

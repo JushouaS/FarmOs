@@ -65,11 +65,15 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   app.get("/stream/:cameraId", { preHandler: [requireAuth] }, async (request, reply) => {
     const { cameraId } = request.params as { cameraId: string };
     try {
+      // C-4: 15s connect timeout prevents stalled cameras from holding a
+      // server connection open indefinitely. The stream itself is piped
+      // directly so it does not time out after connect.
       const res = await fetch(`${VISION_BASE}/stream/${encodeURIComponent(cameraId)}`, {
         headers: visionHeaders(),
+        signal: AbortSignal.timeout(15_000),
       });
       if (!res.ok) {
-        const body = await res.text();
+        const body = (await res.text().catch(() => "")).slice(0, 500);
         return reply.code(res.status).send({ error: "stream_error", detail: body });
       }
 
@@ -106,7 +110,8 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) {
-        const body = await res.text();
+        // M-7: truncate body to prevent internal Flask stack traces leaking to the client
+        const body = (await res.text().catch(() => "")).slice(0, 500);
         return reply.code(res.status).send({ error: "capture_error", detail: body });
       }
       return reply.send(await res.json());
@@ -127,7 +132,8 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         signal: AbortSignal.timeout(30_000),
       });
       if (!res.ok) {
-        const body = await res.text();
+        // M-7: truncate body to prevent internal Flask stack traces leaking to the client
+        const body = (await res.text().catch(() => "")).slice(0, 500);
         return reply.code(res.status).send({ error: "analyze_error", detail: body });
       }
       return reply.send(await res.json());

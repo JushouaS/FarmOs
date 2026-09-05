@@ -206,23 +206,41 @@ export const getAlerts = createServerFn({ method: "GET" })
       }));
   });
 
-/** Alerts — mark an alert as acknowledged. */
+/** Alerts — mark an alert as acknowledged via the REST API. */
 export const acknowledgeAlertFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
+    // M-2: mutations go through the real REST API, not the in-memory dataset.
+    // The api-client handles credentials via the httpOnly cookie.
     const { id } = (data ?? {}) as { id: string };
-    const alert = farm.alerts.find((a) => a.id === id);
-    if (!alert || alert.acknowledged) return { updated: false, reason: "already_acknowledged_or_missing" };
-    alert.acknowledged = true;
-    alert.acknowledgedAt = new Date().toISOString();
-    return { updated: true, id };
+    const API_BASE =
+      (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
+      "http://localhost:4000";
+    const res = await fetch(`${API_BASE}/alerts/${id}/acknowledge`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { updated: false, reason: (body as any).error ?? "request_failed" };
+    }
+    return res.json() as Promise<{ updated: boolean; id?: string; reason?: string }>;
   });
 
-/** Alerts — dismiss (remove) an alert. */
+/** Alerts — dismiss an alert via the REST API. */
 export const dismissAlertFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
+    // M-2: mutations go through the real REST API, not the in-memory dataset.
     const { id } = (data ?? {}) as { id: string };
-    const idx = farm.alerts.findIndex((a) => a.id === id);
-    if (idx === -1) return { updated: false, reason: "not_found" };
-    farm.alerts.splice(idx, 1);
-    return { updated: true, id };
+    const API_BASE =
+      (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
+      "http://localhost:4000";
+    const res = await fetch(`${API_BASE}/alerts/${id}/dismiss`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { updated: false, reason: (body as any).error ?? "request_failed" };
+    }
+    return res.json() as Promise<{ updated: boolean; id?: string; reason?: string }>;
   });

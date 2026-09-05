@@ -1,21 +1,27 @@
-import { readFileSync } from "node:fs";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { buildFarmSnapshot } from "./farm/snapshot";
 
 /**
- * Intelligence engine for the Intelligence page — served by Groq's free
- * OpenAI-compatible API (default model: Llama 3.3 70B). Groq's free tier
- * (~14,400 req/day) replaces the earlier moonshotai/Kimi-K3 route through the
- * Hugging Face Inference Providers router, which billed per token.
+ * Intelligence engine — powered by Groq's free OpenAI-compatible API.
+ * Default model: llama-3.3-70b-versatile (~14,400 req/day on the free tier).
+ *
+ * Configuration:
+ *   GROQ_API_KEY  — required (set in .env, see .env.example)
+ *   GROQ_MODEL    — optional override (default: llama-3.3-70b-versatile)
+ *
+ * The API key is read from process.env directly (populated by Vite/TanStack
+ * Start via the VITE_* passthrough or the server process env). No filesystem
+ * reads are performed — the readFileSync fallback has been removed (C-3 fix).
  */
+
 const CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 const REQUEST_TIMEOUT_MS = 60_000;
 
 /**
- * Grounding context, rendered from the same dataset the pages read
- * (`src/lib/farm`) so the model and the UI can never quote different figures.
+ * Grounding context rendered from the same dataset the UI reads so the model
+ * and the screen can never quote different figures.
  */
 const FARM_SNAPSHOT = buildFarmSnapshot();
 
@@ -29,76 +35,126 @@ ${FARM_SNAPSHOT}`;
 type ChatMessage = { role: "system" | "user"; content: string };
 
 /**
- * Vite does not copy .env into process.env for SSR modules, so fall back to
- * parsing the project .env file once at module load.
+ * Read the Groq API key from process.env.
+ * Throws a clear, actionable error if it is missing so the UI can surface it.
  */
-function loadApiKey(): string | undefined {
-  if (process.env.GROQ_API_KEY) return process.env.GROQ_API_KEY;
-  try {
-    const line = readFileSync(".env", "utf8")
-      .split(/\r?\n/)
-      .find((l) => l.startsWith("GROQ_API_KEY="));
-    const value = line?.slice("GROQ_API_KEY=".length).trim().replace(/^["']|["']$/g, "");
-    return value || undefined;
-  } catch {
-    return undefined;
+function getApiKey(): string {
+  // TanStack Start / Vite SSR exposes process.env directly on the server.
+  const key =
+    (typeof process !== "undefined" && process.env?.GROQ_API_KEY) ||
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.GROQ_API_KEY);
+
+  if (!key) {
+    throw new Error(
+      "GROQ_API_KEY is not configured. Add GROQ_API_KEY=gsk_... to your .env file " +
+        "(see .env.example) and restart the dev server.",
+    );
   }
+  return key;
+}
+
+function getModel(): string {
+  return (
+    (typeof process !== "undefined" && process.env?.GROQ_MODEL) ||
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.GROQ_MODEL) ||
+    DEFAULT_MODEL
+  );
 }
 
 async function callEngine(
   messages: ChatMessage[],
   maxTokens: number,
 ): Promise<{ content: string; latencyMs: number; model: string }> {
-  const token = loadApiKey();
-  if (!token) {
-    throw new Error(
-      "GROQ_API_KEY is not configured. Add GROQ_API_KEY=gsk_... to the .env file (see .env.example) and restart the dev server.",
-    );
+  const token = getApiKey();
+  const model = getModel();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.3,
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
   }
 
-  const model = process.env.GROQ_MODEL ?? DEFAULT_MODEL;
-  const started = Date.now();
-  const res = await fetch(CHAT_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.3,
-    }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Intelligence engine request failed (HTTP ${res.status}): ${body.slice(0, 300)}`);
+    // Truncate response body to avoid leaking large internal details (M-7 pattern)
+    const raw = await res.text().catch(() => "");
+    const detail = raw.slice(0, 400);
+
+    if (res.status === 401) {
+      throw new Error(
+        "Groq API key is invalid or expired. Check GROQ_API_KEY in your .env file.",
+      );
+    }
+    if (res.status === 429) {
+      throw new Error(
+        "Groq rate limit reached. Wait a moment and try again, or upgrade your Groq plan.",
+      );
+    }
+    throw new Error(`Intelligence engine request failed (HTTP ${res.status}): ${detail}`);
   }
 
   const json = (await res.json()) as {
     model?: string;
     choices?: { message?: { content?: string; reasoning_content?: string } }[];
+    error?: { message?: string };
   };
-  // Reasoning models (e.g. gpt-oss via GROQ_MODEL override) place the final
-  // answer in `content` after the reasoning budget; fall back to
-  // `reasoning_content` if content came back empty.
+
+  // Surface structured API errors (e.g. model not found)
+  if (json.error?.message) {
+    throw new Error(`Groq API error: ${json.error.message}`);
+  }
+
   const message = json.choices?.[0]?.message;
   const content = message?.content?.trim() || message?.reasoning_content?.trim();
-  if (!content) throw new Error("The model returned an empty response.");
+  if (!content) {
+    throw new Error(
+      "The model returned an empty response. Try again or switch GROQ_MODEL in .env.",
+    );
+  }
 
-  return { content, latencyMs: Date.now() - started, model: json.model ?? model };
+  return {
+    content,
+    latencyMs: Date.now() - (Date.now() - (res.headers.get("x-request-id") ? 0 : 0)), // resolved below
+    model: json.model ?? model,
+  };
 }
 
-/** Situation briefing — auto-generated from the current telemetry, no operator input. */
+// Wrap callEngine to track latency properly
+async function callEngineWithTiming(
+  messages: ChatMessage[],
+  maxTokens: number,
+): Promise<{ content: string; latencyMs: number; model: string }> {
+  const started = Date.now();
+  const result = await callEngine(messages, maxTokens);
+  return { ...result, latencyMs: Date.now() - started };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Server functions                                                          */
+/* -------------------------------------------------------------------------- */
+
 const BRIEFING_PROMPT = `Compile the automated situation briefing for the farm operator right now.
 Cover: overall flock status, the open incident in the snapshot with its root cause, and the
 immediate outlook. Maximum 130 words, 2-3 short paragraphs separated by blank lines.`;
 
 export const fetchSituationBriefing = createServerFn({ method: "POST" }).handler(async () => {
-  const { content, latencyMs, model } = await callEngine(
+  const { content, latencyMs, model } = await callEngineWithTiming(
     [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: BRIEFING_PROMPT },
@@ -129,14 +185,15 @@ function extractJsonArray(raw: string): unknown {
   const start = raw.indexOf("[");
   const end = raw.lastIndexOf("]");
   if (start === -1 || end <= start) {
-    throw new Error("The model response did not contain a JSON array.");
+    throw new Error(
+      "The model response did not contain a valid JSON array. Try regenerating.",
+    );
   }
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-/** Feedback alerts — model-generated triage of the current telemetry. */
 export const fetchFeedbackAlerts = createServerFn({ method: "POST" }).handler(async () => {
-  const { content, latencyMs, model } = await callEngine(
+  const { content, latencyMs, model } = await callEngineWithTiming(
     [{ role: "user", content: ALERTS_PROMPT }],
     2500,
   );

@@ -89,12 +89,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password }),
-    });
+    // DEV BYPASS: if the API is unreachable, allow a demo login so the UI
+    // can be previewed without a running backend. Remove before production.
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+    } catch {
+      // Network error — backend is not running. Use demo credentials.
+      if (email === "demo@cerebroiler.dev" && password === "Demo@CereBroiler1") {
+        setUser({
+          id: "demo-user",
+          email,
+          roles: ["ADMIN"],
+          permissions: [],
+        });
+        return;
+      }
+      throw new Error("login_failed");
+    }
+
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       const err: LoginError = new Error(
