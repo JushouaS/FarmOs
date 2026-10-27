@@ -27,8 +27,11 @@ const API_BASE =
 const fetchOpts: RequestInit = { credentials: "include" };
 
 /* ── Local admin account ────────────────────────────────────────
- * Checked before the API so the dashboard is reachable even when
- * no backend is running. Username "admin", password "admin". */
+ * Offline fallback only: used when the API can't be reached, so the
+ * dashboard is still reachable with no backend running. While the API
+ * is up it must not apply — the API knows nothing of this session, so
+ * every data loader would 401 and bounce back to /login in a loop.
+ * Username "admin", password "admin". */
 const LOCAL_USERNAME = "admin";
 const LOCAL_PASSWORD = "admin";
 const SESSION_KEY = "cb-auth-session";
@@ -117,6 +120,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
           return;
         }
+        // API is up but has no session for us — any local session is stale.
+        writeLocalSession(null);
+        setIsLoading(false);
+        return;
       } catch {
         // Network down — fall through to the local session.
       }
@@ -127,25 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    // Local admin account: works with or without a running backend.
-    const username = email.trim().toLowerCase();
-    if (username === LOCAL_USERNAME) {
-      if (password !== LOCAL_PASSWORD) {
-        const err: LoginError = new Error("invalid_credentials");
-        throw err;
-      }
-      const adminUser: AuthUser = {
-        id: "admin",
-        email: "admin",
-        fullName: "Farm Administrator",
-        roles: ["ADMIN"],
-        permissions: [],
-      };
-      writeLocalSession(adminUser);
-      setUser(adminUser);
-      return;
-    }
-
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/auth/login`, {
@@ -155,6 +143,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
     } catch {
+      // API unreachable — allow the local admin account instead.
+      const username = email.trim().toLowerCase();
+      if (username === LOCAL_USERNAME && password === LOCAL_PASSWORD) {
+        const adminUser: AuthUser = {
+          id: "admin",
+          email: "admin",
+          fullName: "Farm Administrator",
+          roles: ["ADMIN"],
+          permissions: [],
+        };
+        writeLocalSession(adminUser);
+        setUser(adminUser);
+        return;
+      }
       throw new Error("login_failed");
     }
 
