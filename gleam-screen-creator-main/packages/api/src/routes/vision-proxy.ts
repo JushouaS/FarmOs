@@ -121,10 +121,21 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   });
 
   // -----------------------------------------------------------------------
-  // POST /visual/analyze/:cameraId — full CV pipeline + DB write
+  // POST /visual/analyze/:cameraId — proxy the CV pass to Flask, then
+  // persist what it found.
+  //
+  // cerebroil-stream (Flask) has no database connection by design — it
+  // always reports db_written: false. Previously nothing downstream ever
+  // wrote the result anywhere despite the route's own comment claiming a
+  // "DB write" happened, so every analyze call was silently thrown away.
+  // This now does that write here, against the tables the rest of the API
+  // already reads from (detections, behavior_snapshots, volumetric_samples),
+  // and is tolerant of a camera with no matching house/sensor row rather
+  // than failing the whole request.
   // -----------------------------------------------------------------------
   app.post("/analyze/:cameraId", { preHandler: [requireAuth] }, async (request, reply) => {
     const { cameraId } = request.params as { cameraId: string };
+    let analysis: any;
     try {
       const res = await fetch(`${VISION_BASE}/analyze/${encodeURIComponent(cameraId)}`, {
         method: "POST",
@@ -136,9 +147,78 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         const body = (await res.text().catch(() => "")).slice(0, 500);
         return reply.code(res.status).send({ error: "analyze_error", detail: body });
       }
-      return reply.send(await res.json());
+      analysis = await res.json();
     } catch {
       return reply.code(503).send({ error: "vision_service_unavailable" });
     }
+
+    let dbWritten = false;
+    try {
+      dbWritten = await persistAnalysis(app, cameraId, analysis);
+    } catch (err) {
+      app.log.error({ err, cameraId }, "vision analyze: DB write failed, returning analysis unpersisted");
+    }
+
+    return reply.send({ ...analysis, db_written: dbWritten });
   });
+}
+
+/**
+ * Writes an /analyze result into Postgres. Returns true only if at least one
+ * row was actually written. Looks the camera up by id; if it has no matching
+ * `cameras` row (or the row has no sensor/cohort to attach a weight sample
+ * to) the corresponding piece is skipped rather than thrown.
+ */
+async function persistAnalysis(app: FastifyInstance, cameraId: string, analysis: any): Promise<boolean> {
+  const cameraRows = await app.sqlRead`
+    SELECT id, house_id AS "houseId" FROM cameras WHERE id = ${cameraId}`;
+  if (cameraRows.count === 0) return false;
+  const camera = cameraRows[0]!;
+
+  let wrote = false;
+
+  const detections: any[] = Array.isArray(analysis?.detections) ? analysis.detections : [];
+  for (const d of detections) {
+    const id = `D-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await app.sqlWrite`
+      INSERT INTO detections (id, camera_id, frame_at, box_x, box_y, box_w, box_h, behavior, estimated_weight_g, weight_confidence, flag)
+      VALUES (${id}, ${camera.id}, now(), ${d.box_x}, ${d.box_y}, ${d.box_w}, ${d.box_h}, ${d.behavior ?? "UNKNOWN"}, ${d.estimated_weight_g ?? null}, ${d.weight_confidence ?? null}, ${d.flag ?? null})`;
+    wrote = true;
+  }
+
+  const behaviour = analysis?.behaviour;
+  if (behaviour) {
+    await app.sqlWrite`
+      INSERT INTO behavior_snapshots (camera_id, at, movement_index, movement_label, movement_status, huddling_risk, huddling_label, huddling_status, aggression_events)
+      VALUES (${camera.id}, now(), ${behaviour.movement_index ?? null}, ${behaviour.movement_label ?? null}, ${behaviour.movement_status ?? null}, ${behaviour.huddling_risk ?? null}, ${behaviour.huddling_label ?? null}, ${behaviour.huddling_status ?? null}, ${behaviour.aggression_events ?? 0})`;
+    wrote = true;
+  }
+
+  const clusters: any[] = Array.isArray(analysis?.clusters) ? analysis.clusters : [];
+  for (const cl of clusters) {
+    await app.sqlWrite`
+      INSERT INTO cluster_warnings (camera_id, raised_at, label, risk, box)
+      VALUES (${camera.id}, now(), ${cl.label ?? "Cluster warning"}, ${cl.risk ?? 0}, ${JSON.stringify(cl.box ?? {})}::jsonb)`;
+    wrote = true;
+  }
+
+  const weight = analysis?.weight;
+  if (weight) {
+    // volumetric_samples wants a sensor_id and (optionally) a cohort_id.
+    // Best-effort lookup: any sensor on this camera's house; any cohort tied
+    // to the same house. Skip the insert if neither resolves rather than
+    // writing a row with a dangling/guessed foreign key.
+    const sensorRows = await app.sqlRead`
+      SELECT id FROM sensors WHERE house_id = ${camera.houseId} ORDER BY id LIMIT 1`;
+    if (sensorRows.count > 0) {
+      const cohortRows = await app.sqlRead`
+        SELECT id FROM cohorts WHERE house_id = ${camera.houseId} ORDER BY updated_at DESC LIMIT 1`;
+      await app.sqlWrite`
+        INSERT INTO volumetric_samples (sensor_id, cohort_id, calculated_mass_g, density_ratio, precision_percent, sampled_at)
+        VALUES (${sensorRows[0]!.id}, ${cohortRows[0]?.id ?? null}, ${weight.median_g ?? null}, ${null}, ${weight.confidence != null ? weight.confidence * 100 : null}, now())`;
+      wrote = true;
+    }
+  }
+
+  return wrote;
 }

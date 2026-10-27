@@ -1,14 +1,12 @@
+import { redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeader } from "@tanstack/react-start/server";
 import { formatMeasurement } from "./format";
 import {
   activeIncident,
   farm,
-  flockStandardDeviationG,
   houseLabel,
-  houseReadings,
-  lastAnomaly,
   liveCamera,
-  minutesSinceLastAnomaly,
   readingByCode,
 } from "./dataset";
 import type { ReportFinding } from "./types";
@@ -17,66 +15,89 @@ import type { ReportFinding } from "./types";
  * Data access layer — the seam a real database plugs into.
  *
  * Each function is a TanStack server function, so it already runs on the server
- * for both SSR and client navigation. Today the handlers read the in-memory
- * `farm` dataset; to go live, replace the body of each handler with the
- * equivalent query (e.g. `await db.query.houses.findMany(...)`) and keep the
- * returned shape. Pages consume these through route loaders and never import
- * the dataset for their figures, so no UI code changes when the source changes.
+ * for both SSR and client navigation. Pages consume these through route loaders
+ * and never import the dataset for their figures, so no UI code changes when
+ * the source changes.
  *
  * Contract for every handler:
  * - returns JSON-serializable data only (numbers, strings, ISO timestamps);
  * - returns raw values, not formatted strings (formatting lives in `format.ts`);
  * - is read-only and safe to call during render.
+ *
+ * `getOperationsOverview`, `getGrowthAnalytics` and `getAlerts` below now call
+ * the live packages/api REST API (same pattern `acknowledgeAlertFn` already
+ * used for mutations) instead of the in-memory `farm` dataset. The others
+ * (`getMonitoringReport`, `getVisualTelemetry`) are not converted yet — see
+ * the project's phase2-remediation-log for what's still pending.
  */
+
+const API_BASE =
+  (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
+  "http://localhost:4000";
+
+/**
+ * The session cookie lives in the *browser's* jar, but every function below
+ * is a TanStack server function: it runs server-side even when the client
+ * calls it, so `fetch(..., { credentials: "include" })` has no browser cookie
+ * jar to draw from and silently sends an unauthenticated request. We have to
+ * read the inbound request's own Cookie header and forward it by hand.
+ */
+function forwardedCookieHeader(): Record<string, string> {
+  try {
+    const cookie = getRequestHeader("cookie");
+    return cookie ? { cookie } : {};
+  } catch {
+    // No active request context (e.g. called outside a server fn) — proceed
+    // unauthenticated rather than crashing the caller.
+    return {};
+  }
+}
+
+/**
+ * Shared fetch helper: forwards the session cookie, throws on non-2xx.
+ * A 401 redirects to /login — otherwise a signed-out visitor hits the root
+ * error boundary before the client-side auth guard ever gets to run.
+ */
+async function apiGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    headers: forwardedCookieHeader(),
+  });
+  if (res.status === 401) {
+    throw redirect({ to: "/login" });
+  }
+  if (!res.ok) {
+    throw new Error(`API ${path} returned ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
 
 /** Dashboard — executive summary, activity index, KPI cards, alerts, sensors. */
 export const getOperationsOverview = createServerFn({ method: "GET" }).handler(async () => {
-  const clusterHouseId = liveCamera().houseId;
-
-  return {
-    facility: {
-      name: farm.facility.name,
-      houseRange: farm.facility.houseRange,
-      breed: farm.facility.breed,
-    },
-    cycle: farm.cycle,
-    platform: farm.platform,
-    summary: farm.summary,
-    activity: farm.activity,
-    weight: farm.weight,
-    flockStandardDeviationG: flockStandardDeviationG(),
-    water: farm.water,
-    feed: farm.feed,
-    alerts: farm.alerts,
-    /** Sensor cluster shown at the foot of the dashboard. */
-    cluster: {
-      houseId: clusterHouseId,
-      houseLabel: houseLabel(clusterHouseId),
-      readings: houseReadings(clusterHouseId),
-    },
-    lastAnomaly: lastAnomaly(),
-    minutesSinceLastAnomaly: minutesSinceLastAnomaly(),
-    report: farm.report,
-  };
+  return apiGet<any>("/operations/overview");
 });
 
-/** Analytics — growth curve, cohort distribution, volumetric sample. */
+/**
+ * Analytics — growth curve, cohort distribution, volumetric sample.
+ *
+ * Pulls weight/feed/flockStandardDeviationG from /operations/overview (the
+ * richer, already-computed figures) and cohorts/volumetric from
+ * /growth/analytics, rather than duplicating that SQL in two routes.
+ */
 export const getGrowthAnalytics = createServerFn({ method: "GET" }).handler(async () => {
-  const volumetricCohort = farm.cohorts.find((c) => c.id === farm.volumetric.cohortId);
+  const [overview, growth] = await Promise.all([
+    apiGet<any>("/operations/overview"),
+    apiGet<any>("/growth/analytics"),
+  ]);
 
   return {
-    cycle: farm.cycle,
-    weight: farm.weight,
-    feed: farm.feed,
-    flockStandardDeviationG: flockStandardDeviationG(),
-    cohorts: farm.cohorts.map((cohort) => ({
-      ...cohort,
-      houseLabel: houseLabel(cohort.houseId),
-    })),
-    volumetric: {
-      ...farm.volumetric,
-      cohortHouseLabel: volumetricCohort ? houseLabel(volumetricCohort.houseId) : null,
-    },
+    cycle: overview.cycle,
+    weight: overview.weight,
+    feed: overview.feed,
+    flockStandardDeviationG: overview.flockStandardDeviationG,
+    cohorts: growth.cohorts,
+    volumetric: growth.volumetric,
+    mortality: growth.mortality,
   };
 });
 
@@ -191,19 +212,13 @@ export const getMonitoringReport = createServerFn({ method: "GET" }).handler(asy
 export const getAlerts = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const input = (data ?? {}) as { severity?: string; acknowledged?: boolean };
-    return farm.alerts
-      .filter((a) => !input.severity || a.severity === input.severity)
-      .filter((a) => input.acknowledged === undefined || a.acknowledged === input.acknowledged)
-      .map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        severity: a.severity,
-        raisedAt: a.raisedAt,
-        message: a.message,
-        acknowledged: a.acknowledged,
-        acknowledgedAt: a.acknowledgedAt ?? null,
-        sourceIncidentId: a.sourceIncidentId ?? null,
-      }));
+    const params = new URLSearchParams();
+    if (input.severity) params.set("severity", input.severity);
+    if (input.acknowledged !== undefined) params.set("acknowledged", String(input.acknowledged));
+    const qs = params.toString();
+    // /alerts already returns exactly this shape (id/kind/severity/raisedAt/
+    // message/acknowledged/acknowledgedAt/sourceIncidentId) — no reshaping needed.
+    return apiGet<any>(`/alerts${qs ? `?${qs}` : ""}`);
   });
 
 /** Alerts — mark an alert as acknowledged via the REST API. */
@@ -218,6 +233,7 @@ export const acknowledgeAlertFn = createServerFn({ method: "POST" })
     const res = await fetch(`${API_BASE}/alerts/${id}/acknowledge`, {
       method: "POST",
       credentials: "include",
+      headers: forwardedCookieHeader(),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -237,6 +253,7 @@ export const dismissAlertFn = createServerFn({ method: "POST" })
     const res = await fetch(`${API_BASE}/alerts/${id}/dismiss`, {
       method: "POST",
       credentials: "include",
+      headers: forwardedCookieHeader(),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

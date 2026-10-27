@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/farm/AppShell";
 import { getOperationsOverview } from "@/lib/farm/repository";
-import { activeBirds, behaviorBreakdown, broilers, farm, inactiveBirds } from "@/lib/farm/dataset";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Cerebroil" }] }),
@@ -31,9 +30,8 @@ const BEHAVIOR_COLORS = {
   Inactive: "var(--status-red)",
 } as const;
 
-function ActivityDonut() {
-  const bd = behaviorBreakdown();
-  const total = broilers.length;
+function ActivityDonut({ active, inactive, total }: { active: number; inactive: number; total: number }) {
+  const bd = { Active: active, Inactive: inactive };
   const R = 38, CX = 48, CY = 48, SW = 11;
   const circ = 2 * Math.PI * R;
   let offset = 0;
@@ -75,8 +73,8 @@ function ActivityDonut() {
 }
 
 /* ── Weight sparkline ────────────────────────────────────────── */
-function WeightSparkline() {
-  const pts = farm.weight.curve.filter((p) => p.actualG > 0);
+function WeightSparkline({ curve }: { curve: { actualG: number }[] }) {
+  const pts = curve.filter((p) => p.actualG > 0);
   const W = 260, H = 60, pX = 4, pY = 6;
   const maxV = Math.max(...pts.map((p) => p.actualG));
   const xS = (i: number) => pX + (i / (pts.length - 1)) * (W - pX * 2);
@@ -100,19 +98,28 @@ function WeightSparkline() {
 
 /* ── Dashboard ──────────────────────────────────────────────── */
 function Dashboard() {
-  const data = Route.useLoaderData() as Awaited<ReturnType<typeof getOperationsOverview>>;
-  const cluster = data.cluster as { readings: { parameter: string; value: number; bounds: { label: string } }[] };
+  const data = Route.useLoaderData() as any;
+  const cluster = data.cluster as { readings: { parameter: string; value: number; bounds: { label: string } }[] } | null;
 
-  const temp  = cluster.readings.find((r) => r.parameter === "temperature");
-  const humid = cluster.readings.find((r) => r.parameter === "humidity");
-  const nh3   = cluster.readings.find((r) => r.parameter === "nh3");
+  const readings = cluster?.readings ?? [];
+  const temp  = readings.find((r) => r.parameter === "temperature");
+  const humid = readings.find((r) => r.parameter === "humidity");
+  const nh3   = readings.find((r) => r.parameter === "nh3");
 
-  const active    = activeBirds();
-  const inactive  = inactiveBirds();
-  const total     = broilers.length;
-  const actPct    = Math.round((active / total) * 100);
-  const avgWeight = Math.round(broilers.reduce((s, b) => s + b.weightG, 0) / total);
-  const topAlerts = farm.alerts.filter((a) => !a.acknowledged).slice(0, 4);
+  // No per-bird roster exists in the live schema (only house-level population
+  // and a flock-wide activity index) — derive a real active/inactive split
+  // from today's measured activity index applied to the house population,
+  // rather than carrying over the mock's fictional 28-bird sample roster.
+  // Scope the bird count to the house the live camera is watching (matches
+  // the page's single-pen framing) rather than summing every house.
+  const houses: { id: string; population: number }[] = data.houses ?? [];
+  const total = houses.find((h) => h.id === data.cluster?.houseId)?.population
+    ?? houses.reduce((s, h) => s + h.population, 0);
+  const actPct    = Math.round(data.activity?.value ?? 0);
+  const active    = Math.round((total * actPct) / 100);
+  const inactive  = total - active;
+  const avgWeight = data.weight?.actualAvgG ?? 0;
+  const topAlerts = (data.alerts as any[]).filter((a) => !a.acknowledged).slice(0, 4);
 
   return (
     <AppShell>
@@ -123,8 +130,8 @@ function Dashboard() {
             Dashboard
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-            {farm.facility.name} &middot; Pen 1 &middot; Grow-out Day{" "}
-            <TV>{farm.cycle.day}</TV>/42 &middot; Ross 308
+            {data.facility.name} &middot; {data.cluster?.houseLabel ?? "Pen 1"} &middot; Grow-out Day{" "}
+            <TV>{data.cycle?.day ?? "—"}</TV>/42 &middot; {data.facility.breed ?? "Ross 308"}
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-lg px-3 py-1.5 self-start shrink-0"
@@ -168,7 +175,7 @@ function Dashboard() {
             <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>kg</span>
           </div>
           <p className="font-mono text-xs mt-1" style={{ color: "var(--status-green-text)" }}>
-            +{((avgWeight - farm.weight.standardG) / farm.weight.standardG * 100).toFixed(1)}% vs std
+            {data.weight?.variancePercent >= 0 ? "+" : ""}{(data.weight?.variancePercent ?? 0).toFixed(1)}% vs std
           </p>
         </div>
 
@@ -225,7 +232,7 @@ function Dashboard() {
                 Weight Trend
               </h2>
               <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
-                Actual scans vs Ross 308 &middot; Day {farm.cycle.day}/42
+                Actual scans vs Ross 308 &middot; Day {data.cycle?.day ?? "—"}/42
               </p>
             </div>
             <Link to="/telemetry" className="text-xs font-semibold hover:underline"
@@ -233,13 +240,13 @@ function Dashboard() {
               Full Analytics →
             </Link>
           </div>
-          <WeightSparkline />
+          <WeightSparkline curve={data.weight?.curve ?? []} />
           <div className="mt-3 grid grid-cols-3 gap-3 pt-3"
             style={{ borderTop: "1px solid var(--border-subtle)" }}>
             {[
-              { label: "Confidence", value: `${farm.weight.estimationConfidencePercent}%` },
-              { label: "Sample",     value: `${farm.weight.sampleSize} birds` },
-              { label: "FCR",        value: String(farm.feed.fcr) },
+              { label: "Confidence", value: `${Math.round(data.weight?.estimationConfidencePercent ?? 0)}%` },
+              { label: "Sample",     value: `${data.weight?.sampleSize ?? 0} birds` },
+              { label: "FCR",        value: String(data.feed?.fcr ?? "—") },
             ].map((s) => (
               <div key={s.label}>
                 <p className="label-section">{s.label}</p>
@@ -261,7 +268,7 @@ function Dashboard() {
               last scan
             </span>
           </div>
-          <ActivityDonut />
+          <ActivityDonut active={active} inactive={inactive} total={total} />
           <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
             <div className="mb-1 flex items-center justify-between text-xs">
               <span style={{ color: "var(--text-secondary)" }}>Activity rate</span>
