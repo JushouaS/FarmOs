@@ -1,723 +1,699 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AppShell } from "@/components/farm/AppShell";
-import { Icon } from "@/components/farm/Icon";
-import { liveCamera } from "@/lib/farm/dataset";
+import { useState, useRef } from "react";
+import { AppShell, useAppShell } from "@/components/farm/AppShell";
+import { Menu, PanelLeft } from "lucide-react";
 import {
-  STATUS_TONE,
-  barWidth,
-  formatCompact,
-  formatKilograms,
-  formatMeasurement,
-  formatNumber,
-  formatPercent,
-  formatScore,
-  formatSignedPercent,
-  formatTimeUtc,
-  statusLabel,
-  timelinePosition,
-  timelineTicks,
-} from "@/lib/farm/format";
-import { getVisualTelemetry } from "@/lib/farm/repository";
-import {
-  visionStreamUrl,
-  checkVisionHealth,
-  captureImage,
-  analyzeFrame,
-  type VisionHealth,
-} from "@/lib/api-client";
-
-const TITLE = "Visual Telemetry | CereBroiler Live Feeds";
-const DESC =
-  "Live 4K house feed with behavior monitoring, 3D-camera weight estimation, spatial distribution and a 24h anomaly timeline.";
-
-// `head()` runs before loader data exists, so the social preview reads the
-// dataset directly — the same still the feed renders below.
-const FEED_IMAGE = liveCamera().stillUrl;
+  farm,
+  broilers,
+  kinectDetections,
+  modelTelemetry,
+  behaviorBreakdown,
+  weightBreakdown,
+  effectiveBehavior,
+  weightCategory,
+  BEHAVIOR_COLOR,
+  DAHUA_FEED_STREAM,
+  KINECT_FEED_STREAM,
+  type BroilerBird,
+  type KinectDetection,
+} from "@/lib/farm/dataset";
 
 export const Route = createFileRoute("/visuals")({
-  head: () => ({
-    meta: [
-      { title: TITLE },
-      { name: "description", content: DESC },
-      { property: "og:title", content: TITLE },
-      { property: "og:description", content: DESC },
-      { property: "og:image", content: FEED_IMAGE },
-      { name: "twitter:image", content: FEED_IMAGE },
-    ],
-  }),
-  loader: () => getVisualTelemetry(),
-  component: VisualsPage,
+  head: () => ({ meta: [{ title: "Live Vision - Cerebroil" }] }),
+  component: VisualsDashboardPage,
 });
 
-type FeedMode = "behavior" | "weight";
+type ViewLayout = "dual" | "dahua" | "kinect";
 
-/** Overlay stroke colours, matched to the accent palette used by the HUD. */
-const OVERLAY_NEUTRAL = "#f3f4f6";
-const OVERLAY_DEPTH = "#22d3ee";
-const OVERLAY_WARN = "#f59e0b";
+export function VisualsDashboardPage() {
+  const shell = useAppShell();
+  const [layout, setLayout] = useState<ViewLayout>("dual");
+  const [showOverlays, setShowOverlays] = useState(true);
+  const [showConfidence] = useState(true);
+  const [selectedBird, setSelectedBird] = useState<BroilerBird | null>(null);
+  const [selectedKinect, setSelectedKinect] = useState<KinectDetection | null>(null);
+  const [dahuaError, setDahuaError] = useState(false);
+  const [kinectError, setKinectError] = useState(false);
+  const [nightModeActive, setNightModeActive] = useState(false);
+  const [flashNotice, setFlashNotice] = useState<string | null>(null);
 
-function VisualsPage() {
-  const {
-    camera,
-    hud,
-    detections,
-    clusterWarning,
-    behavior,
-    weight,
-    cycleDay,
-    cycleTotalDays,
-    timeline,
-  } = Route.useLoaderData();
-  const [mode, setMode] = useState<FeedMode>("behavior");
-  const [gridOverlay, setGridOverlay] = useState(false);
-  const [hoveredEvent, setHoveredEvent] = useState<typeof timeline.events[number] | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<typeof timeline.events[number] | null>(null);
-  const timelineRef = useRef<HTMLDivElement>(null);
-  const [feedLoaded, setFeedLoaded] = useState(false);
-  const [feedError, setFeedError] = useState(false);
-  const [visionHealth, setVisionHealth] = useState<VisionHealth | null>(null);
-  const [capturing, setCapturing] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeMsg, setAnalyzeMsg] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Poll vision service health every 10s
-  useEffect(() => {
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const h = await checkVisionHealth();
-        if (!cancelled) setVisionHealth(h);
-      } catch {
-        if (!cancelled) setVisionHealth(null);
-      }
-    };
-    poll();
-    const id = setInterval(poll, 10_000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, []);
+  const bBreakdown = behaviorBreakdown(nightModeActive);
+  const wBreakdown = weightBreakdown();
+  const totalBirds = broilers.length;
 
-  const handleCapture = useCallback(async () => {
-    setCapturing(true);
-    try {
-      const res = await captureImage(camera.id);
-      // Download the JPEG
-      const link = document.createElement("a");
-      link.href = `data:image/jpeg;base64,${res.image}`;
-      link.download = `capture_${camera.id}_${Date.now()}.jpg`;
-      link.click();
-    } catch {
-      /* swallow */
-    } finally {
-      setCapturing(false);
+  const handleSnapshot = () => {
+    const time = new Date().toLocaleTimeString();
+    setFlashNotice(`Frame snapshot captured at ${time}`);
+    setTimeout(() => setFlashNotice(null), 3200);
+  };
+
+  const handleFullscreenToggle = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch(() => { });
+    } else {
+      document.exitFullscreen().catch(() => { });
     }
-  }, [camera.id]);
-
-  const handleAnalyze = useCallback(async () => {
-    setAnalyzing(true);
-    setAnalyzeMsg(null);
-    try {
-      const res = await analyzeFrame(camera.id);
-      setAnalyzeMsg(
-        `Detected ${res.detection_count} birds, ${res.cluster_count} cluster(s) — DB ${res.db_written ? "updated" : "write failed"}`
-      );
-    } catch {
-      setAnalyzeMsg("Analysis failed — vision service may be offline");
-    } finally {
-      setAnalyzing(false);
-    }
-  }, [camera.id]);
-
-  /** Snap a click position on the timeline to the nearest event. */
-  const handleTimelineClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!timelineRef.current) return;
-      const rect = timelineRef.current.getBoundingClientRect();
-      const clickPct = ((e.clientX - rect.left) / rect.width) * 100;
-      // Find closest event to click position
-      let closest: typeof timeline.events[number] | null = null;
-      let closestDist = Infinity;
-      for (const evt of timeline.events) {
-        const evtPct = parseFloat(timelinePosition(evt.at, timeline.windowStart, timeline.windowEnd));
-        const dist = Math.abs(evtPct - clickPct);
-        if (dist < closestDist) {
-          closestDist = dist;
-          closest = evt;
-        }
-      }
-      // Only snap if within 5% of an event
-      if (closest && closestDist < 5) {
-        setSelectedEvent((prev) => (prev?.id === closest!.id ? null : closest));
-      } else {
-        setSelectedEvent(null);
-      }
-    },
-    [timeline.events, timeline.windowStart, timeline.windowEnd],
-  );
-
-  const activeEvent = hoveredEvent ?? selectedEvent;
-
-  // Daily weight check: next check at 06:00 UTC each day
-  const lastWeighIn = "2024-05-24T06:00:00.000Z";
-  const nextWeighIn = "2024-05-25T06:00:00.000Z";
-  // L-2: use real current time instead of the hard-coded dataset timestamp
-  const now = new Date();
-  const hoursUntilNext = Math.max(
-    0,
-    Math.round((new Date(nextWeighIn).getTime() - now.getTime()) / 3_600_000),
-  );
-
-  const movementTone = STATUS_TONE[behavior.movementStatus];
-  const huddlingTone = STATUS_TONE[behavior.huddlingStatus];
-  const pointDensity = formatCompact(camera.depthPointsPerFrame).toUpperCase();
+  };
 
   return (
     <AppShell bare>
-      <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-6 py-3">
-        <div className="flex items-center gap-4">
+      <div
+        ref={containerRef}
+        className="flex h-[calc(100vh-56px)] flex-col bg-[var(--surface-page)] text-[var(--text-primary)]"
+      >
+        {/* Top Control Bar */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 elevation-1">
+          <div className="flex items-center gap-3">
+            {/* Mobile hamburger */}
+            <button
+              type="button"
+              onClick={() => shell?.openMobileMenu()}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)] lg:hidden"
+              style={{ color: "var(--text-secondary)" }}
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            {/* Desktop sidebar toggle */}
+            <button
+              type="button"
+              onClick={() => shell?.toggleCollapsed()}
+              className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)]"
+              style={{ color: "var(--text-secondary)" }}
+              aria-label="Toggle sidebar"
+            >
+              <PanelLeft className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--cv-accent)] opacity-75"></span>
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-[var(--cv-accent)]"></span>
+              </span>
+              <h1 className="font-display text-sm font-semibold tracking-tight text-[var(--text-primary)] text-balance">
+                Live Camera Feeds
+              </h1>
+            </div>
+
+            <div className="hidden h-4 w-px bg-[var(--border-default)] sm:block" />
+
+            {/* Farm & Pen Info Tag */}
+            <div className="hidden items-center gap-1.5 text-xs text-[var(--text-secondary)] sm:flex">
+              <span className="rounded bg-[var(--surface-raised)] px-2 py-0.5 font-medium">
+                {farm.facility.houses[0].label}
+              </span>
+              <span className="text-[var(--text-tertiary)]">/</span>
+              <span>{farm.facility.name}</span>
+            </div>
+          </div>
+
+          {/* Controls: View Layout Switcher, Overlays, Actions */}
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-error" />
-            <h1 className="font-data-md text-data-md text-on-surface">LIVE_FEED: {camera.id}</h1>
-          </div>
-          <div className="h-4 w-px bg-outline-variant" />
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleCapture}
-            disabled={capturing}
-            className="rounded-lg border border-outline-variant px-3 py-1 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
-            title="Capture a single JPEG frame"
-          >
-            {capturing ? "CAPTURING…" : "SNAPSHOT"}
-          </button>
-          <button
-            onClick={handleAnalyze}
-            disabled={analyzing}
-            className="rounded-lg border border-outline-variant px-3 py-1 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
-            title="Run CV analysis on current frame"
-          >
-            {analyzing ? "ANALYZING…" : "ANALYZE"}
-          </button>
-          <div className="h-4 w-px bg-outline-variant" />
-          <button
-            onClick={() => setGridOverlay((on) => !on)}
-            className={
-              gridOverlay
-                ? "rounded-lg border border-primary bg-surface-container-high panel-gradient px-3 py-1 font-label-caps text-label-caps text-primary"
-                : "rounded-lg border border-outline-variant px-3 py-1 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-high"
-            }
-          >
-            GRID_OVERLAY
-          </button>
-          <button
-            onClick={() => setMode("behavior")}
-            className={
-              mode === "behavior"
-                ? "rounded-lg border border-primary bg-surface-container-high panel-gradient px-3 py-1 font-label-caps text-label-caps text-primary"
-                : "rounded-lg border border-outline-variant px-3 py-1 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-high"
-            }
-          >
-            BEHAVIOR
-          </button>
-          <button
-            onClick={() => setMode("weight")}
-            className={
-              mode === "weight"
-                ? "rounded-lg border border-primary bg-surface-container-high panel-gradient px-3 py-1 font-label-caps text-label-caps text-primary"
-                : "rounded-lg border border-outline-variant px-3 py-1 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-high"
-            }
-          >
-            WEIGHT
-          </button>
-        </div>
-      </div>
-
-      {/* Analyze result toast */}
-      {analyzeMsg && (
-        <div className="flex items-center justify-between border-b border-outline-variant/40 bg-surface-container px-6 py-1.5">
-          <span className="font-body-sm text-[11px] text-on-surface-variant">{analyzeMsg}</span>
-          <button onClick={() => setAnalyzeMsg(null)} className="text-on-surface-variant hover:text-on-surface">
-            <Icon name="close" size={14} />
-          </button>
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
-        <div className="relative flex-1 overflow-hidden bg-[#070708]">
-          {/* CCTV feed image */}
-          {!feedLoaded && !feedError && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#070708]">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-cyan border-t-transparent" />
-              <span className="font-label-caps text-[10px] text-on-surface-variant">CONNECTING TO FEED...</span>
-            </div>
-          )}
-          {feedError && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#070708]">
-              <Icon name="videocam_off" size={40} className="text-on-surface-variant" />
-              <span className="font-label-caps text-[10px] text-on-surface-variant">FEED UNAVAILABLE</span>
-            </div>
-          )}
-          <img
-            src={visionStreamUrl(camera.id)}
-            alt="High-angle CCTV view of a modern poultry house interior under clinical lighting"
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${feedLoaded ? "opacity-90" : "opacity-0"}`}
-            onLoad={() => setFeedLoaded(true)}
-            onError={() => setFeedError(true)}
-          />
-          <div className="absolute inset-0 hud-scanline" />
-
-          {/* Live feed status bar */}
-          <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-4 py-2">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-error" />
-                <span className="font-label-caps text-[10px] font-bold text-white">LIVE</span>
-              </span>
-              <span className="font-data-md text-[10px] text-white/70">
-                {camera.id}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="font-data-md text-[10px] text-white/70">
-                {new Date().toLocaleString("en-US", { hour12: false })}
-              </span>
-              <span className="flex items-center gap-1">
-                <Icon name="signal_cellular_alt" size={14} className="text-accent-teal" />
-                <span className="font-label-caps text-[9px] text-accent-teal">SIGNAL</span>
-              </span>
-              {visionHealth && (
-                <span className="flex items-center gap-1">
-                  <span className={`h-1.5 w-1.5 rounded-full ${visionHealth.status === "ok" ? "bg-accent-teal" : "bg-warning"}`} />
-                  <span className="font-label-caps text-[9px] text-white/60">VISION</span>
-                  <span className="font-data-md text-[9px] text-white/50">
-                    {visionHealth.cameras_connected}/{visionHealth.cameras_configured}
-                  </span>
-                </span>
-              )}
-            </div>
-          </div>
-          <svg
-            className="pointer-events-none absolute inset-0 h-full w-full"
-            viewBox="0 0 1000 600"
-          >
-            {mode === "behavior" ? (
-              <>
-                {detections.map((detection) => {
-                  const stroke = detection.flag ? OVERLAY_WARN : OVERLAY_NEUTRAL;
-                  return (
-                    <g key={detection.id}>
-                      <rect
-                        fill="none"
-                        height={detection.box.height}
-                        stroke={stroke}
-                        strokeDasharray={detection.behavior === "FEEDING" ? "2 2" : undefined}
-                        strokeWidth="1"
-                        width={detection.box.width}
-                        x={detection.box.x}
-                        y={detection.box.y}
-                      />
-                      <text
-                        fill={stroke}
-                        fontFamily="JetBrains Mono"
-                        fontSize="8"
-                        x={detection.box.x}
-                        y={detection.box.y - 5}
-                      >
-                        ID: {detection.id} [{detection.behavior}]
-                      </text>
-                    </g>
-                  );
-                })}
-                <rect
-                  fill="none"
-                  height={clusterWarning.box.height}
-                  stroke={OVERLAY_WARN}
-                  strokeWidth="1"
-                  width={clusterWarning.box.width}
-                  x={clusterWarning.box.x}
-                  y={clusterWarning.box.y}
-                />
-                <text
-                  fill={OVERLAY_WARN}
-                  fontFamily="JetBrains Mono"
-                  fontSize="10"
-                  x={clusterWarning.box.x}
-                  y={clusterWarning.box.y - 5}
-                >
-                  WARN: {clusterWarning.label} [{formatScore(clusterWarning.risk)} RISK]
-                </text>
-              </>
-            ) : (
-              <>
-                {/* Daily weight check overlay — minimal, not continuous */}
-                <text fill={OVERLAY_DEPTH} fontFamily="JetBrains Mono" fontSize="11" x="20" y="580">
-                  DAILY_WEIGH_IN | LAST: 06:00 UTC | NEXT: ~{hoursUntilNext}H
-                </text>
-              </>
-            )}
-            {gridOverlay && (
-              <>
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <line
-                    key={`gv-${i}`}
-                    stroke={OVERLAY_DEPTH}
-                    strokeOpacity="0.3"
-                    strokeWidth="1"
-                    vectorEffect="non-scaling-stroke"
-                    x1={(i + 1) * 100}
-                    x2={(i + 1) * 100}
-                    y1="0"
-                    y2="600"
-                  />
-                ))}
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <line
-                    key={`gh-${i}`}
-                    stroke={OVERLAY_DEPTH}
-                    strokeOpacity="0.3"
-                    strokeWidth="1"
-                    vectorEffect="non-scaling-stroke"
-                    x1="0"
-                    x2="1000"
-                    y1={(i + 1) * 100}
-                    y2={(i + 1) * 100}
-                  />
-                ))}
-                <line stroke={OVERLAY_DEPTH} strokeOpacity="0.6" strokeWidth="1" vectorEffect="non-scaling-stroke" x1="0" x2="1000" y1="300" y2="300" />
-                <line stroke={OVERLAY_DEPTH} strokeOpacity="0.6" strokeWidth="1" vectorEffect="non-scaling-stroke" x1="500" x2="500" y1="0" y2="600" />
-                <text fill={OVERLAY_DEPTH} fontFamily="JetBrains Mono" fontSize="9" x="860" y="20">
-                  CAL_GRID: 10x6 | LOCKED
-                </text>
-              </>
-            )}
-            <line stroke="#232426" strokeWidth="0.5" x1="0" x2="1000" y1="300" y2="300" />
-            <line stroke="#232426" strokeWidth="0.5" x1="500" x2="500" y1="0" y2="600" />
-          </svg>
-
-          <div className="absolute left-6 top-6 rounded-xl border border-outline-variant bg-surface-container-lowest/80 panel-gradient p-4 backdrop-blur-sm">
-            <p className="mb-1 font-label-caps text-[10px] text-on-surface-variant">
-              OPTICAL_SENSORS
-            </p>
-            <div className="flex items-center gap-4">
-              <div>
-                <p className="font-data-md text-[10px] text-outline-variant">
-                  {hud.temperature.label}
-                </p>
-                <p className="font-data-lg text-data-lg text-primary">
-                  {formatMeasurement(hud.temperature.value, hud.temperature.unit)}
-                </p>
+            {/* Notification Toast */}
+            {flashNotice && (
+              <div className="animate-spring-in hidden items-center rounded-lg border border-[var(--status-green-border)] bg-[var(--status-green-bg)] px-2.5 py-1 text-xs font-medium text-[var(--status-green-text)] md:flex">
+                {flashNotice}
               </div>
-              <div className="h-8 w-px bg-outline-variant" />
-              <div>
-                <p className="font-data-md text-[10px] text-outline-variant">{hud.humidity.label}</p>
-                <p className="font-data-lg text-data-lg text-primary">
-                  {formatMeasurement(hud.humidity.value, hud.humidity.unit)}
-                </p>
-              </div>
-            </div>
-          </div>
+            )}
 
-          <div className="absolute bottom-6 right-6 flex flex-col items-end gap-2">
-            <div className="flex items-center gap-4 rounded-lg border border-outline-variant bg-surface-container-lowest/80 panel-gradient p-2 backdrop-blur-sm">
-              <span className="font-data-md text-[11px] text-on-surface">
-                LOC_X: {camera.location.x.toFixed(3)}
-              </span>
-              <span className="font-data-md text-[11px] text-on-surface">
-                LOC_Y: {camera.location.y.toFixed(3)}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-outline-variant bg-surface-container-lowest/80 transition-colors hover:bg-primary hover:text-background">
-                <Icon name="videocam" size={20} />
+            {/* Layout Mode Selector (Concentric: outer rounded-lg p-0.5, inner rounded-md) */}
+            <div className="flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-0.5">
+              <button
+                type="button"
+                onClick={() => setLayout("dual")}
+                className={`tactile-btn rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${layout === "dual"
+                    ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                  }`}
+                aria-label="Dual camera split layout"
+              >
+                Split (Dual)
               </button>
-              <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-outline-variant bg-surface-container-lowest/80 transition-colors hover:bg-primary hover:text-background">
-                <Icon name="screenshot_region" size={20} />
+              <button
+                type="button"
+                onClick={() => setLayout("dahua")}
+                className={`tactile-btn rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${layout === "dahua"
+                    ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                  }`}
+                aria-label="Dahua overhead view only"
+              >
+                Dahua CCTV
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayout("kinect")}
+                className={`tactile-btn rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${layout === "kinect"
+                    ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                  }`}
+                aria-label="Kinect 3D depth view only"
+              >
+                Kinect 3D
               </button>
             </div>
-          </div>
-        </div>
 
-        <aside className="hidden w-80 flex-col overflow-y-auto border-l border-outline-variant bg-surface-container-lowest lg:flex">
-          <div className="border-b border-outline-variant p-4">
-            <h3 className="flex items-center gap-2 font-label-caps text-label-caps text-primary">
-              <Icon name={mode === "behavior" ? "psychology" : "view_in_ar"} size={16} />
-              {mode === "behavior" ? "BEHAVIORAL_INSIGHTS" : "WEIGHT_ESTIMATION"}
-            </h3>
-          </div>
-          {mode === "behavior" ? (
-            <div className="space-y-4 p-4">
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="font-label-caps text-[10px] text-on-surface-variant">
-                    MOVEMENT_INDEX
-                  </p>
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${movementTone.chip}`}
-                  >
-                    {statusLabel(behavior.movementStatus)}
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <p className="font-data-lg text-data-lg text-primary">
-                    {formatScore(behavior.movementIndex)}
-                  </p>
-                  <p className="font-data-md text-data-md text-on-surface-variant">
-                    {behavior.movementLabel}
-                  </p>
-                </div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-outline-variant">
-                  <div
-                    className="h-full rounded-full accent-gradient"
-                    style={{ width: barWidth(behavior.movementIndex, 1) }}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="font-label-caps text-[10px] text-on-surface-variant">
-                    HUDDLING_RISK
-                  </p>
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${huddlingTone.chip}`}
-                  >
-                    {statusLabel(behavior.huddlingStatus)}
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <p className="font-data-lg text-data-lg text-primary">
-                    {formatPercent(behavior.huddlingRisk * 100, 0)}
-                  </p>
-                  <p className="font-data-md text-data-md text-on-surface-variant">
-                    {behavior.huddlingLabel}
-                  </p>
-                </div>
-              </div>
-              <div className="rounded-lg border border-outline-variant bg-surface-container panel-gradient p-3">
-                <p className="mb-2 font-label-caps text-[10px] text-outline-variant">
-                  AGGRESSION_LOG
-                </p>
-                <div className="flex items-center gap-3">
-                  <Icon name="shield" className="text-on-surface-variant" />
-                  <span className="font-data-md text-data-md text-on-surface">
-                    {behavior.aggressionEvents} EVENTS DETECTED
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 p-4">
-              {/* Daily weigh-in result */}
-              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="font-label-caps text-[10px] text-primary">
-                    DAILY_WEIGH_IN
-                  </p>
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${
-                      STATUS_TONE[weight.status].chip
-                    }`}
-                  >
-                    {statusLabel(weight.status).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <p className="font-data-lg text-data-lg text-primary">
-                    {formatNumber(weight.actualAvgG)}g
-                  </p>
-                  <p className="font-data-md text-[11px] text-on-surface-variant">
-                    {formatSignedPercent(weight.variancePercent)} vs std
-                  </p>
-                </div>
-                <p className="mt-1 font-data-md text-[10px] text-on-surface-variant">
-                  Standard: {formatNumber(weight.standardG)}g
-                </p>
-              </div>
+            {/* Toggle Overlay Button */}
+            <button
+              type="button"
+              onClick={() => setShowOverlays(!showOverlays)}
+              className={`tactile-btn hidden items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium md:flex ${showOverlays
+                  ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
+                  : "border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                }`}
+              title="Toggle AI Bounding Box Overlays"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 9h6v6H9z" />
+              </svg>
+              <span>Detections</span>
+            </button>
 
-              {/* Check schedule */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="font-label-caps text-[10px] text-on-surface-variant">
-                    LAST_CHECK
-                  </p>
-                  <span className="rounded-md bg-accent-teal/10 px-1.5 py-0.5 text-[9px] font-bold text-accent-teal">
-                    COMPLETED
-                  </span>
-                </div>
-                <p className="font-data-md text-data-md text-on-surface">
-                  {new Date(lastWeighIn).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })} UTC
-                </p>
-                <p className="font-data-md text-[10px] text-on-surface-variant">
-                  {formatNumber(weight.sampleSize)} birds sampled
-                </p>
-              </div>
+            {/* Snapshot Trigger Button */}
+            <button
+              type="button"
+              onClick={handleSnapshot}
+              className="tactile-btn flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+              title="Capture instantaneous frame"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              <span className="hidden sm:inline">Snapshot</span>
+            </button>
 
-              {/* Next check countdown */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="font-label-caps text-[10px] text-on-surface-variant">
-                    NEXT_CHECK
-                  </p>
-                  <span className="rounded-md bg-on-surface-variant/10 px-1.5 py-0.5 text-[9px] font-bold text-on-surface-variant">
-                    SCHEDULED
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <p className="font-data-lg text-data-lg text-accent-cyan">
-                    ~{hoursUntilNext}h
-                  </p>
-                  <p className="font-data-md text-[11px] text-on-surface-variant">
-                    06:00 UTC daily
-                  </p>
-                </div>
-                {/* Progress bar showing time elapsed until next check */}
-                <div className="h-1 w-full overflow-hidden rounded-full bg-outline-variant">
-                  <div
-                    className="h-full rounded-full bg-accent-cyan"
-                    style={{ width: `${Math.max(0, 100 - (hoursUntilNext / 24) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Scale info */}
-              <div className="rounded-lg border border-outline-variant bg-surface-container panel-gradient p-3">
-                <p className="mb-2 font-label-caps text-[10px] text-outline-variant">
-                  WEIGHING_SYSTEM
-                </p>
-                <div className="flex items-center gap-3">
-                  <Icon name="scale" className="text-accent-teal" />
-                  <div>
-                    <span className="block font-data-md text-data-md text-on-surface">
-                      AUTO_PLATFORM_SCALE
-                    </span>
-                    <span className="block font-data-md text-[10px] text-on-surface-variant">
-                      1x DAILY @ 06:00 UTC
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div className="mt-auto border-t border-outline-variant p-4">
-            <p className="mb-3 font-label-caps text-[10px] text-on-surface-variant">
-              SPATIAL_DISTRIBUTION
-            </p>
-            <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low panel-gradient">
-              <div className="absolute inset-0 grid grid-cols-4 grid-rows-4 opacity-20">
-                {Array.from({ length: 16 }).map((_, i) => (
-                  <div key={i} className="border border-outline-variant" />
-                ))}
-              </div>
-              <div className="h-16 w-16 rounded-full bg-accent-cyan/20 blur-xl" />
-              <div className="h-12 w-12 translate-x-12 translate-y-8 rounded-full bg-accent-cyan/10 blur-lg" />
-              <p className="relative z-10 font-data-md text-[9px] text-outline-variant">
-                {camera.planViewLabel}
-              </p>
-            </div>
-          </div>
-          <div className="border-t border-outline-variant p-4">
-            <button className="w-full rounded-lg border border-primary py-3 font-label-caps text-label-caps text-primary transition-all hover:bg-primary hover:text-background">
-              EXPORT_METRICS_REPORT
+            {/* Fullscreen Trigger Button */}
+            <button
+              type="button"
+              onClick={handleFullscreenToggle}
+              className="tactile-btn flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              title="Toggle Fullscreen"
+              aria-label="Toggle Fullscreen"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              </svg>
             </button>
           </div>
-        </aside>
-      </div>
+        </header>
 
-      <div className="flex h-40 flex-col gap-3 border-t border-outline-variant bg-surface-container-lowest px-6 py-4">
-        <div className="flex items-center justify-between">
-          <h4 className="font-label-caps text-label-caps text-on-surface-variant">
-            ANOMALY_TIMELINE: 24H_HISTORY
-          </h4>
-          <div className="flex gap-4">
-            <span className="flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant">
-              <span className="h-2 w-2 rounded-full bg-error" /> CRITICAL
-            </span>
-            <span className="flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant">
-              <span className="h-2 w-2 rounded-full bg-accent-amber" /> WARNING
-            </span>
-          </div>
-        </div>
-        <div
-          ref={timelineRef}
-          onClick={handleTimelineClick}
-          className="relative flex-1 cursor-pointer overflow-visible rounded-lg border border-outline-variant bg-surface-container panel-gradient"
-        >
-          {/* Time ticks */}
-          <div className="absolute inset-x-0 bottom-0 flex justify-between px-2 py-1">
-            {timelineTicks(timeline.windowStart, timeline.windowEnd).map((tick) => (
-              <span key={tick} className="font-data-md text-[9px] text-outline-variant">
-                {tick}
-              </span>
-            ))}
-          </div>
-          {/* Cursor */}
-          <div
-            className="absolute bottom-0 top-0 z-10 w-px bg-accent-cyan"
-            style={{
-              left: timelinePosition(timeline.cursorAt, timeline.windowStart, timeline.windowEnd),
-            }}
-          >
-            <div className="absolute top-0 h-2 w-2 -translate-x-1/2 rotate-45 bg-accent-cyan" />
-          </div>
-          {/* Events */}
-          {timeline.events.map((event) => {
-            const isActive = activeEvent?.id === event.id;
-            return (
-              <div
-                key={event.id}
-                className={`absolute top-1/4 h-1/2 w-1.5 rounded-full transition-all ${
-                  isActive ? "w-2 scale-y-150 z-20" : "hover:scale-y-125"
-                } ${
-                  event.severity === "critical"
-                    ? "border border-error bg-error-container"
-                    : "border border-accent-amber bg-accent-amber/30"
-                }`}
-                style={{
-                  left: timelinePosition(event.at, timeline.windowStart, timeline.windowEnd),
-                }}
-                onMouseEnter={() => setHoveredEvent(event)}
-                onMouseLeave={() => setHoveredEvent(null)}
-              />
-            );
-          })}
-          {/* Tooltip popup */}
-          {activeEvent && (
+        {/* Main Content Area: Video Viewports + Inspector Panel */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Video Feeds Grid */}
+          <main className="flex-1 overflow-y-auto p-3 lg:p-4">
             <div
-              className="absolute z-30 -translate-x-1/2 rounded-lg border border-outline-variant bg-surface-container-lowest shadow-xl panel-gradient px-3 py-2 pointer-events-none"
-              style={{
-                left: timelinePosition(activeEvent.at, timeline.windowStart, timeline.windowEnd),
-                bottom: "100%",
-                marginBottom: "8px",
-              }}
+              className={`grid h-full gap-3 lg:gap-4 ${layout === "dual"
+                  ? "grid-cols-1 xl:grid-cols-2"
+                  : "grid-cols-1"
+                }`}
             >
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    activeEvent.severity === "critical" ? "bg-error" : "bg-accent-amber"
-                  }`}
-                />
-                <span className="font-label-caps text-[10px] font-bold text-on-surface">
-                  {activeEvent.label}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-data-md text-[10px] text-on-surface-variant">
-                  {formatTimeUtc(activeEvent.at)}
-                </span>
-                <span
-                  className={`rounded px-1.5 py-0.5 font-label-caps text-[9px] font-bold ${
-                    activeEvent.severity === "critical"
-                      ? "bg-error/10 text-error"
-                      : "bg-accent-amber/10 text-accent-amber"
-                  }`}
-                >
-                  {statusLabel(activeEvent.severity).toUpperCase()}
-                </span>
-              </div>
-              <span className="mt-1 block font-data-md text-[9px] text-outline">
-                ID: {activeEvent.id}
-              </span>
+              {/* Feed 1: Dahua Overhead CCTV (YOLOv8 Detection) */}
+              {(layout === "dual" || layout === "dahua") && (
+                <div className="relative flex flex-col overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--surface-card)] elevation-2">
+                  {/* Viewport Header */}
+                  <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[var(--cv-accent)]" />
+                      <span className="font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
+                        CAM-01 : OVERHEAD CAMERA
+                      </span>
+                      <span className="rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)]">
+                        1280x720 @ 25fps
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Video Viewport Container */}
+                  <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+                    {!dahuaError ? (
+                      <img
+                        src={DAHUA_FEED_STREAM}
+                        alt="Dahua Overhead CCTV live camera feed"
+                        className="h-full w-full object-contain"
+                        onError={() => setDahuaError(true)}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-6 text-center">
+                        <div className="mb-2 rounded-full bg-[var(--status-amber-bg)] p-3 text-[var(--status-amber-text)]">
+                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                        </div>
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                          Local Stream Standby
+                        </h3>
+                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
+                          Vision service at localhost:5000 is waiting for client stream connection.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setDahuaError(false)}
+                          className="tactile-btn mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
+                        >
+                          Retry Connection
+                        </button>
+                      </div>
+                    )}
+
+                    {/* AI Bounding Box Overlays (SVG Composited Layer) */}
+                    {showOverlays && !dahuaError && (
+                      <div className="pointer-events-none absolute inset-0">
+                        {farm.detections.map((det) => {
+                          const bird = broilers.find((b) => b.id.replace("B-", "D") === det.id);
+                          const isHuddling = det.behavior === "HUDDLING";
+                          const isSelected = selectedBird?.id === bird?.id;
+
+                          return (
+                            <div
+                              key={det.id}
+                              style={{
+                                left: `${(det.box.x / 640) * 100}%`,
+                                top: `${(det.box.y / 360) * 100}%`,
+                                width: `${(det.box.width / 640) * 100}%`,
+                                height: `${(det.box.height / 360) * 100}%`,
+                              }}
+                              className={`pointer-events-auto absolute cursor-pointer rounded-sm border transition-all ${isSelected
+                                  ? "border-2 border-[var(--cv-accent)] shadow-[0_0_12px_var(--cv-accent)]"
+                                  : isHuddling
+                                    ? "border border-[var(--status-amber)] bg-[rgba(251,191,36,0.12)]"
+                                    : "border border-[var(--cv-accent)] bg-[rgba(163,230,53,0.08)]"
+                                }`}
+                              onClick={() => bird && setSelectedBird(bird)}
+                            >
+                              <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/80 px-1 py-0.5 text-[9px] font-mono font-medium text-[var(--cv-accent-text)]">
+                                <span>{det.id}</span>
+                                {showConfidence && (
+                                  <span className="text-[var(--text-tertiary)] tabular-nums">
+                                    {(det.weightConfidence * 100).toFixed(0)}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Pen Environment Overlay (Bottom Left) */}
+                    <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-2">
+                      <div className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-black/75 px-2.5 py-1 text-xs backdrop-blur-sm elevation-1">
+                        <span className="text-[10px] text-[var(--text-tertiary)]">TEMP</span>
+                        <span className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
+                          29.1°C
+                        </span>
+                        <span className="text-[var(--border-strong)]">|</span>
+                        <span className="text-[10px] text-[var(--text-tertiary)]">RH</span>
+                        <span className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
+                          63%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Active Birds Scanned Count Badge (Bottom Right) */}
+                    <div className="pointer-events-none absolute bottom-3 right-3 rounded-lg border border-[var(--border-subtle)] bg-black/75 px-2.5 py-1 text-xs font-mono text-[var(--text-secondary)] backdrop-blur-sm">
+                      <span className="text-[var(--cv-accent)] font-semibold tabular-nums">{totalBirds}</span> BIRDS MONITORED
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Feed 2: Microsoft Kinect 3D Depth Station */}
+              {(layout === "dual" || layout === "kinect") && (
+                <div className="relative flex flex-col overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--surface-card)] elevation-2">
+                  {/* Viewport Header */}
+                  <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[var(--brand)]" />
+                      <span className="font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
+                        CAM-02 : WEIGHING STATION
+                      </span>
+                      <span className="rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)]">
+                        Depth Station
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Video Viewport Container */}
+                  <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+                    {!kinectError ? (
+                      <img
+                        src={KINECT_FEED_STREAM}
+                        alt="Microsoft Kinect 3D depth sensor station feed"
+                        className="h-full w-full object-contain"
+                        onError={() => setKinectError(true)}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-6 text-center">
+                        <div className="mb-2 rounded-full bg-[var(--status-blue-bg)] p-3 text-[var(--status-blue-text)]">
+                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                            <polyline points="2 17 12 22 22 17" />
+                            <polyline points="2 12 12 17 22 12" />
+                          </svg>
+                        </div>
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                          Depth Station Live Channel
+                        </h3>
+                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
+                          Kinect sensor stream is active at port 5000 for depth-to-weight estimation.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setKinectError(false)}
+                          className="tactile-btn mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
+                        >
+                          Recheck Sensor
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Interactive Kinect Depth-Target Overlay */}
+                    {showOverlays && !kinectError && (
+                      <div className="pointer-events-none absolute inset-0">
+                        {kinectDetections.map((kd) => {
+                          const isTargetSelected = selectedKinect?.id === kd.id;
+                          return (
+                            <div
+                              key={kd.id}
+                              style={{
+                                left: `${kd.x}%`,
+                                top: `${kd.y}%`,
+                                width: `${kd.w}%`,
+                                height: `${kd.h}%`,
+                              }}
+                              className={`pointer-events-auto absolute cursor-pointer rounded border border-dashed transition-all ${isTargetSelected
+                                  ? "border-2 border-[var(--brand)] bg-[rgba(52,211,153,0.2)] shadow-[0_0_10px_var(--brand)]"
+                                  : "border-[var(--brand)] bg-[rgba(52,211,153,0.06)] hover:bg-[rgba(52,211,153,0.14)]"
+                                }`}
+                              onClick={() => setSelectedKinect(kd)}
+                            >
+                              <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-[9px] font-mono text-[var(--brand)]">
+                                <span>{kd.id}</span>
+                                <span className="text-[var(--text-primary)] tabular-nums">{kd.weightG}g</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Weight Telemetry HUD (Bottom Left) */}
+                    <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-2">
+                      <div className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-black/75 px-2.5 py-1 text-xs backdrop-blur-sm elevation-1">
+                        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">AVG WEIGHT</span>
+                        <span className="font-mono font-bold text-[var(--brand)] tabular-nums">
+                          {farm.weight.actualAvgG} g
+                        </span>
+                        <span className="text-[var(--border-strong)]">|</span>
+                        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">TARGET</span>
+                        <span className="font-mono font-semibold text-[var(--text-secondary)] tabular-nums">
+                          {farm.weight.standardG} g
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </main>
+
+          {/* Right Inspector & Analytics Drawer Panel */}
+          <aside className="w-72 shrink-0 overflow-y-auto border-l border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 flex flex-col gap-3">
+            {/* Selected Target Inspection Box */}
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
+              <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
+                <span className="label-section text-[11px] tracking-widest font-bold">
+                  {selectedBird ? "Bird Inspector" : selectedKinect ? "Depth Target" : "Target Selection"}
+                </span>
+                {(selectedBird || selectedKinect) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedBird(null);
+                      setSelectedKinect(null);
+                    }}
+                    className="tactile-btn text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {selectedBird ? (
+                <div className="mt-2.5 space-y-2 animate-spring-in">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-sm font-bold text-[var(--text-primary)]">
+                      {selectedBird.id}
+                    </span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        backgroundColor: `${BEHAVIOR_COLOR[effectiveBehavior(selectedBird, nightModeActive)]}20`,
+                        color: BEHAVIOR_COLOR[effectiveBehavior(selectedBird, nightModeActive)],
+                        border: `1px solid ${BEHAVIOR_COLOR[effectiveBehavior(selectedBird, nightModeActive)]}40`,
+                      }}
+                    >
+                      {effectiveBehavior(selectedBird, nightModeActive)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
+                      <div className="text-[10px] text-[var(--text-tertiary)]">EST. WEIGHT</div>
+                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--brand)]">
+                        {selectedBird.weightG} g
+                      </div>
+                      <div className="text-[10px] text-[var(--text-tertiary)]">
+                        {weightCategory(selectedBird.weightG)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
+                      <div className="text-[10px] text-[var(--text-tertiary)]">DETECTION CONF</div>
+                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--cv-accent)]">
+                        {(selectedBird.yoloConfidence * 100).toFixed(0)}%
+                      </div>
+                      <div className="text-[10px] text-[var(--text-tertiary)]">
+                        Weight: {(selectedBird.weightConfidence * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Morphometrics Detail */}
+                  <div className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs space-y-1">
+                    <div className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+                      Bird Dimensions
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-secondary)]">Breast Width:</span>
+                      <span className="font-mono tabular-nums text-[var(--text-primary)]">
+                        {selectedBird.breastWidthMm} mm
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-secondary)]">Total Length:</span>
+                      <span className="font-mono tabular-nums text-[var(--text-primary)]">
+                        {selectedBird.totalLengthMm} mm
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-secondary)]">Height / Depth:</span>
+                      <span className="font-mono tabular-nums text-[var(--text-primary)]">
+                        {selectedBird.depthZMm} mm
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedKinect ? (
+                <div className="mt-2.5 space-y-2 animate-spring-in">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-sm font-bold text-[var(--brand)]">
+                      {selectedKinect.id}
+                    </span>
+                    <span className="badge-cv">SCALE ZONE</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
+                      <div className="text-[10px] text-[var(--text-tertiary)]">ESTIMATED WEIGHT</div>
+                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--brand)]">
+                        {selectedKinect.weightG} g
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
+                      <div className="text-[10px] text-[var(--text-tertiary)]">DISTANCE / DEPTH</div>
+                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--text-primary)]">
+                        {selectedKinect.depthMm} mm
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-6 flex flex-col items-center gap-2 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-raised)] text-[var(--text-tertiary)]">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                  </div>
+                  <p className="text-xs text-[var(--text-tertiary)] leading-relaxed max-w-[180px]">
+                    Click any detection bounding box on either stream to inspect bird telemetry.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Behavior State Breakdown Widget */}
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
+              <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
+                <span className="label-section text-[11px] tracking-widest font-bold">Behavior Breakdown</span>
+                <button
+                  type="button"
+                  onClick={() => setNightModeActive(!nightModeActive)}
+                  className={`tactile-btn rounded px-1.5 py-0.5 text-[10px] font-mono ${nightModeActive
+                      ? "bg-[var(--status-blue-bg)] text-[var(--status-blue-text)] border border-[var(--status-blue-border)]"
+                      : "bg-[var(--surface-raised)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                    }`}
+                  title="Toggle 21:00-03:59 night cycle override simulation"
+                >
+                  Night: {nightModeActive ? "ON" : "OFF"}
+                </button>
+              </div>
+
+              <div className="mt-3.5 space-y-3 text-xs">
+                <div>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-[var(--text-secondary)]">Active / Standing</span>
+                    <span className="font-mono font-semibold tabular-nums text-[var(--text-primary)]">
+                      {totalBirds - bBreakdown.Inactivity - bBreakdown.Huddling - bBreakdown.Sleeping}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
+                    <div
+                      className="h-full bg-[var(--status-green)] transition-all duration-300"
+                      style={{
+                        width: `${((totalBirds - bBreakdown.Inactivity - bBreakdown.Huddling - bBreakdown.Sleeping) / totalBirds) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-[var(--text-secondary)]">Inactivity Alert</span>
+                    <span className="font-mono font-semibold tabular-nums text-[var(--status-red)]">
+                      {bBreakdown.Inactivity}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
+                    <div
+                      className="h-full bg-[var(--status-red)] transition-all duration-300"
+                      style={{
+                        width: `${(bBreakdown.Inactivity / totalBirds) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-[var(--text-secondary)]">Huddling Cluster</span>
+                    <span className="font-mono font-semibold tabular-nums text-[var(--status-amber)]">
+                      {bBreakdown.Huddling}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
+                    <div
+                      className="h-full bg-[var(--status-amber)] transition-all duration-300"
+                      style={{
+                        width: `${(bBreakdown.Huddling / totalBirds) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {nightModeActive && (
+                  <div>
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-[var(--text-secondary)]">Sleeping Cycle</span>
+                      <span className="font-mono font-semibold tabular-nums text-[var(--status-blue)]">
+                        {bBreakdown.Sleeping}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--status-blue)] transition-all duration-300"
+                        style={{
+                          width: `${(bBreakdown.Sleeping / totalBirds) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Weight Category Distribution */}
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
+              <span className="label-section text-[11px] tracking-widest font-bold block pb-2.5 border-b border-[var(--border-subtle)]">
+                Weight Classification
+              </span>
+
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                  <div className="text-[11px] font-semibold text-[var(--status-amber)]">Under</div>
+                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
+                    {wBreakdown.Underweight}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&lt;1.2 kg</div>
+                </div>
+
+                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                  <div className="text-[11px] font-semibold text-[var(--brand)]">Optimal</div>
+                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
+                    {wBreakdown.Optimal}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">1.2-1.9 kg</div>
+                </div>
+
+                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                  <div className="text-[11px] font-semibold text-[var(--status-blue)]">Over</div>
+                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
+                    {wBreakdown.Overweight}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&gt;1.9 kg</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Environment Telemetry */}
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
+              <span className="label-section text-[11px] tracking-widest font-bold block pb-2.5 border-b border-[var(--border-subtle)]">
+                Pen Sensor Telemetry
+              </span>
+
+              <div className="mt-3 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--text-secondary)] text-xs">Temperature:</span>
+                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+                    29.1°C <span className="text-[11px] text-[var(--status-green)] font-semibold">(Nominal)</span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--text-secondary)] text-xs">Humidity:</span>
+                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+                    63% <span className="text-[11px] text-[var(--status-green)] font-semibold">(Nominal)</span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--text-secondary)] text-xs">Ammonia (NH3):</span>
+                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+                    9 ppm <span className="text-[11px] text-[var(--status-green)] font-semibold">(Clean)</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </AppShell>

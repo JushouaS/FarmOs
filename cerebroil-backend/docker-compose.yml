@@ -1,0 +1,98 @@
+---
+# docker-compose.yml
+
+services:
+
+  # ── PostgreSQL 16 ────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     cerebroil
+      POSTGRES_PASSWORD: cerebroil_secret
+      POSTGRES_DB:       cerebroil
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cerebroil -d cerebroil"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Alembic migration runner (one-shot) ──────────────────────────────────────
+  migrate:
+    build:
+      context: .
+      target: runtime
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cerebroil:cerebroil_secret@db:5432/cerebroil
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+
+  # ── Demo seed (one-shot) ─────────────────────────────────────────────────────
+  seed:
+    build:
+      context: .
+      target: runtime
+    command: ["python", "scripts/seed_demo.py"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cerebroil:cerebroil_secret@db:5432/cerebroil
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+
+  # ── FastAPI application ───────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cerebroil:cerebroil_secret@db:5432/cerebroil
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MediaMTX WebRTC / RTSP Media Server (Phase 1) ───────────────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    restart: unless-stopped
+    ports:
+      - "8554:8554"   # RTSP
+      - "8889:8889"   # WebRTC / WHEP
+      - "8888:8888"   # HLS
+    environment:
+      - MTX_PATHS_DAHUA_SOURCE=${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      - MTX_PATHS_KINECT_SOURCE=${KINECT_RTSP_URL:-rtsp://localhost:8554/kinect_source}
+
+  # ── Dual Stream Server (Dahua + 3D Kinect MJPEG) ─────────────────────────────
+  stream:
+    build:
+      context: ../cerebroil-stream
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - DAHUA_RTSP_URL=${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      - KINECT_SOURCE=${KINECT_SOURCE:-simulated}
+
+volumes:
+  postgres_data:

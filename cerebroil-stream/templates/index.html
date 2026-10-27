@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cerebroil — Dual Camera Projection (Dahua IR & Kinect 3D)</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { DEFAULT: "#10b981", dark: "#059669" }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .live-dot { animation: livepulse 1.5s ease-in-out infinite; }
+    @keyframes livepulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    html { scroll-behavior: smooth; }
+  </style>
+</head>
+
+<body class="bg-gray-950 text-gray-100 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-30 bg-gray-900/90 backdrop-blur border-b border-gray-800 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+
+      <!-- Logo + title -->
+      <div class="flex items-center gap-2.5">
+        <div class="h-8 w-8 rounded-lg bg-emerald-500 flex items-center justify-center text-gray-950 font-bold text-sm">C</div>
+        <div class="leading-tight">
+          <p class="font-bold text-sm text-white tracking-tight">Cerebroil Vision Hub</p>
+          <p class="text-[10px] text-gray-400 font-mono">Dual-Feed CCTV & 3D Kinect Projection</p>
+        </div>
+      </div>
+
+      <!-- Projection Mode Selector -->
+      <div class="flex items-center gap-1 bg-gray-950 p-1 rounded-lg border border-gray-800 text-xs font-mono">
+        <button id="tab-dual" onclick="setMode('dual')" class="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 font-semibold transition-all">
+          Dual Grid
+        </button>
+        <button id="tab-dahua" onclick="setMode('dahua')" class="px-3 py-1 rounded text-gray-400 hover:text-white transition-all">
+          Dahua CCTV
+        </button>
+        <button id="tab-kinect" onclick="setMode('kinect')" class="px-3 py-1 rounded text-gray-400 hover:text-white transition-all">
+          Kinect 3D
+        </button>
+      </div>
+
+      <!-- Status badges -->
+      <div class="flex items-center gap-2">
+        <div id="dahua-badge" class="flex items-center gap-1.5 rounded-full bg-emerald-950 border border-emerald-800/80 px-2.5 py-0.5 text-[11px] font-mono font-medium text-emerald-400">
+          <span class="live-dot h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+          <span>Dahua CCTV</span>
+        </div>
+        <div id="kinect-badge" class="flex items-center gap-1.5 rounded-full bg-violet-950 border border-violet-800/80 px-2.5 py-0.5 text-[11px] font-mono font-medium text-violet-300">
+          <span class="live-dot h-1.5 w-1.5 rounded-full bg-violet-400"></span>
+          <span>Kinect 3D</span>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ── Main Projection Grid ─────────────────────────────────────────────── -->
+  <main class="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 py-4 space-y-4">
+
+    <!-- Cameras Container -->
+    <div id="grid-container" class="grid grid-cols-1 lg:grid-cols-2 gap-4 transition-all">
+
+      <!-- Camera 1: Dahua IR CCTV -->
+      <section id="panel-dahua" class="rounded-xl overflow-hidden border border-gray-800 bg-black relative shadow-2xl flex flex-col group">
+        <!-- Feed Container -->
+        <div class="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
+          <img id="feed-dahua" src="/video_feed/dahua" alt="Dahua IR CCTV Feed — Pen 1" class="w-full h-full object-cover select-none" />
+          
+          <!-- Top Badge -->
+          <div class="absolute top-3 left-3 flex items-center gap-2 rounded-lg bg-black/75 px-3 py-1 border border-white/10 font-mono text-xs text-white backdrop-blur">
+            <span class="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+            <span class="font-bold text-red-400">LIVE</span>
+            <span class="text-gray-400">CAM-01 · Overhead IR CCTV</span>
+          </div>
+
+          <!-- Fullscreen / Separate Window Projection Button -->
+          <div class="absolute top-3 right-3 flex gap-2">
+            <button onclick="projectWindow('/video_feed/dahua', 'Dahua IR CCTV Projector')"
+                    title="Pop-out onto separate projector/screen"
+                    class="rounded-lg bg-black/75 hover:bg-black/90 p-1.5 text-gray-300 hover:text-white border border-white/10 backdrop-blur transition-colors">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </button>
+            <button onclick="toggleFullscreen('panel-dahua')"
+                    title="Fullscreen projection"
+                    class="rounded-lg bg-black/75 hover:bg-black/90 p-1.5 text-gray-300 hover:text-white border border-white/10 backdrop-blur transition-colors">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Bottom HUD Bar -->
+          <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent px-4 py-3 flex items-end justify-between pointer-events-none">
+            <p class="font-mono text-xs text-gray-300">
+              Pen 1 Overhead Camera &middot; Activity & Cluster Tracking
+            </p>
+            <p class="font-mono text-xs text-emerald-400" id="fps-dahua">25 fps</p>
+          </div>
+        </div>
+
+        <!-- Metadata footer -->
+        <div class="px-4 py-2.5 bg-gray-900/80 border-t border-gray-800 flex items-center justify-between text-xs font-mono text-gray-400">
+          <span>Source: RTSP Main/Substream</span>
+          <span class="text-emerald-400">Night Vision IR: Active</span>
+        </div>
+      </section>
+
+      <!-- Camera 2: 3D Kinect Depth Camera -->
+      <section id="panel-kinect" class="rounded-xl overflow-hidden border border-gray-800 bg-black relative shadow-2xl flex flex-col group">
+        <!-- Feed Container -->
+        <div class="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
+          <img id="feed-kinect" src="/video_feed/kinect" alt="3D Kinect Depth Feed — Weighing Station" class="w-full h-full object-cover select-none" />
+          
+          <!-- Top Badge -->
+          <div class="absolute top-3 left-3 flex items-center gap-2 rounded-lg bg-black/75 px-3 py-1 border border-white/10 font-mono text-xs text-white backdrop-blur">
+            <span class="h-2 w-2 rounded-full bg-violet-400 animate-pulse"></span>
+            <span class="font-bold text-violet-300">3D DEPTH</span>
+            <span class="text-gray-400">Depth Scale &middot; Weighing Station</span>
+          </div>
+
+          <!-- Fullscreen / Separate Window Projection Button -->
+          <div class="absolute top-3 right-3 flex gap-2">
+            <button onclick="projectWindow('/video_feed/kinect', '3D Kinect Depth Projector')"
+                    title="Pop-out onto separate projector/screen"
+                    class="rounded-lg bg-black/75 hover:bg-black/90 p-1.5 text-gray-300 hover:text-white border border-white/10 backdrop-blur transition-colors">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </button>
+            <button onclick="toggleFullscreen('panel-kinect')"
+                    title="Fullscreen projection"
+                    class="rounded-lg bg-black/75 hover:bg-black/90 p-1.5 text-gray-300 hover:text-white border border-white/10 backdrop-blur transition-colors">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Bottom HUD Bar -->
+          <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent px-4 py-3 flex items-end justify-between pointer-events-none">
+            <p class="font-mono text-xs text-gray-300">
+              Depth-to-Weight 2D CNN &middot; Z-plane (600mm–1500mm)
+            </p>
+            <p class="font-mono text-xs text-violet-300" id="fps-kinect">25 fps</p>
+          </div>
+        </div>
+
+        <!-- Metadata footer -->
+        <div class="px-4 py-2.5 bg-gray-900/80 border-t border-gray-800 flex items-center justify-between text-xs font-mono text-gray-400">
+          <span>Sensor: Microsoft Kinect RGB-D</span>
+          <span class="text-violet-300">Turbo Depth Contour: Online</span>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Quick Stats Strip -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="rounded-xl bg-gray-900 border border-gray-800 px-4 py-3 text-center">
+        <p class="text-[10px] uppercase tracking-widest text-gray-500 font-semibold font-mono">Camera 1</p>
+        <p class="text-sm font-bold text-emerald-400 mt-0.5">Dahua IR CCTV</p>
+      </div>
+      <div class="rounded-xl bg-gray-900 border border-gray-800 px-4 py-3 text-center">
+        <p class="text-[10px] uppercase tracking-widest text-gray-500 font-semibold font-mono">Camera 2</p>
+        <p class="text-sm font-bold text-violet-400 mt-0.5">3D Kinect Depth</p>
+      </div>
+      <div class="rounded-xl bg-gray-900 border border-gray-800 px-4 py-3 text-center">
+        <p class="text-[10px] uppercase tracking-widest text-gray-500 font-semibold font-mono">Breed / Pen</p>
+        <p class="text-sm font-bold text-white mt-0.5">Ross 308 · Pen 1</p>
+      </div>
+      <div class="rounded-xl bg-gray-900 border border-gray-800 px-4 py-3 text-center">
+        <p class="text-[10px] uppercase tracking-widest text-gray-500 font-semibold font-mono">Backend Status</p>
+        <p class="text-sm font-bold text-emerald-400 mt-0.5">FastAPI & Docker Live</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── SUS Survey Section ───────────────────────────────────────────────── -->
+  <section id="sus-section" class="bg-gray-900 border-t border-gray-800 px-3 sm:px-4 py-10 mt-6">
+    <div class="max-w-2xl mx-auto space-y-6">
+      <div class="text-center space-y-1">
+        <h2 class="text-lg font-bold text-white">System Usability Scale (SUS)</h2>
+        <p class="text-sm text-gray-400">
+          Thesis evaluation questionnaire for the Cerebroil dual-camera monitoring system.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5" for="respondent">Your Name / Code</label>
+          <input id="respondent" type="text" placeholder="e.g. Respondent 1"
+                 class="w-full rounded-lg bg-gray-800 border border-gray-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5" for="role">Role</label>
+          <input id="role" type="text" placeholder="e.g. Farm Evaluator"
+                 class="w-full rounded-lg bg-gray-800 border border-gray-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-emerald-500" />
+        </div>
+      </div>
+
+      <div class="space-y-5" id="sus-questions"></div>
+
+      <button id="sus-submit" onclick="submitSUS()"
+              class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold text-sm transition-colors">
+        Submit Feedback
+      </button>
+
+      <div id="sus-result" class="hidden rounded-xl border border-emerald-700/50 bg-emerald-900/20 px-5 py-4 text-center">
+        <p class="text-sm text-gray-300">Your SUS Score</p>
+        <p id="sus-score-val" class="text-4xl font-bold text-emerald-400 my-1">–</p>
+        <p id="sus-interp" class="text-sm font-semibold text-emerald-300"></p>
+        <p class="mt-2 text-xs text-gray-500">Thank you for your feedback!</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Scripts ──────────────────────────────────────────────────────────── -->
+  <script>
+    // ── Projection Mode Switching ──────────────────────────────────────────
+    function setMode(mode) {
+      const container = document.getElementById("grid-container");
+      const pDahua = document.getElementById("panel-dahua");
+      const pKinect = document.getElementById("panel-kinect");
+
+      const tDual = document.getElementById("tab-dual");
+      const tDahua = document.getElementById("tab-dahua");
+      const tKinect = document.getElementById("tab-kinect");
+
+      [tDual, tDahua, tKinect].forEach(t => {
+        t.className = "px-3 py-1 rounded text-gray-400 hover:text-white transition-all";
+      });
+
+      if (mode === "dual") {
+        tDual.className = "px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 font-semibold transition-all";
+        container.className = "grid grid-cols-1 lg:grid-cols-2 gap-4 transition-all";
+        pDahua.classList.remove("hidden");
+        pKinect.classList.remove("hidden");
+      } else if (mode === "dahua") {
+        tDahua.className = "px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 font-semibold transition-all";
+        container.className = "grid grid-cols-1 gap-4 transition-all";
+        pDahua.classList.remove("hidden");
+        pKinect.classList.add("hidden");
+      } else if (mode === "kinect") {
+        tKinect.className = "px-3 py-1 rounded bg-violet-500/20 text-violet-300 font-semibold transition-all";
+        container.className = "grid grid-cols-1 gap-4 transition-all";
+        pDahua.classList.add("hidden");
+        pKinect.classList.remove("hidden");
+      }
+    }
+
+    // ── Pop-out onto separate projector/screen ─────────────────────────────
+    function projectWindow(streamUrl, title) {
+      const w = window.open("", "_blank", "width=1280,height=720,menubar=no,toolbar=no");
+      w.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            body { margin: 0; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+            img { width: 100%; height: 100%; object-fit: contain; }
+          </style>
+        </head>
+        <body>
+          <img src="${streamUrl}" />
+        </body>
+        </html>
+      `);
+    }
+
+    function toggleFullscreen(elementId) {
+      const el = document.getElementById(elementId);
+      if (!document.fullscreenElement) {
+        el.requestFullscreen().catch(err => alert(`Fullscreen failed: ${err.message}`));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    // ── SUS Questions Setup ────────────────────────────────────────────────
+    const SUS_QUESTIONS = [
+      "I think that I would like to use this system frequently.",
+      "I found the system unnecessarily complex.",
+      "I thought the system was easy to use.",
+      "I think that I would need the support of a technical person to be able to use this system.",
+      "I found the various functions in this system were well integrated.",
+      "I thought there was too much inconsistency in this system.",
+      "I would imagine that most people would learn to use this system very quickly.",
+      "I found the system very cumbersome to use.",
+      "I felt very confident using the system.",
+      "I needed to learn a lot of things before I could get going with this system.",
+    ];
+
+    const qContainer = document.getElementById("sus-questions");
+    SUS_QUESTIONS.forEach((q, idx) => {
+      const num = idx + 1;
+      const div = document.createElement("div");
+      div.className = "space-y-2";
+      div.innerHTML = `
+        <p class="text-sm text-gray-300">
+          <span class="inline-block w-5 font-bold text-emerald-400">${num}.</span> ${q}
+        </p>
+        <div class="flex gap-2 justify-center" role="radiogroup">
+          ${[1,2,3,4,5].map(v => `
+            <div>
+              <input type="radio" name="q${num}" id="q${num}v${v}" value="${v}" class="hidden peer" />
+              <label for="q${num}v${v}" class="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-sm font-semibold cursor-pointer text-gray-400 hover:border-emerald-500 peer-checked:border-emerald-500 peer-checked:bg-emerald-500/20 peer-checked:text-emerald-400 select-none">
+                ${v}
+              </label>
+            </div>
+          `).join("")}
+        </div>
+      `;
+      qContainer.appendChild(div);
+    });
+
+    async function submitSUS() {
+      const body = {
+        respondent: document.getElementById("respondent").value.trim() || "anonymous",
+        role: document.getElementById("role").value.trim(),
+      };
+      for (let i = 1; i <= 10; i++) {
+        const sel = document.querySelector(`input[name="q${i}"]:checked`);
+        if (!sel) return alert("Please answer all 10 questions.");
+        body[`q${i}`] = parseInt(sel.value);
+      }
+      const res = await fetch("/submit-sus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      document.getElementById("sus-score-val").textContent = data.sus_score;
+      document.getElementById("sus-interp").textContent = data.interpretation;
+      document.getElementById("sus-result").classList.remove("hidden");
+    }
+
+    // ── Status Polling ─────────────────────────────────────────────────────
+    async function pollStatus() {
+      try {
+        const res = await fetch("/status");
+        const data = await res.json();
+        const dahuaBadge = document.getElementById("dahua-badge");
+        const kinectBadge = document.getElementById("kinect-badge");
+
+        if (data.dahua_ok) {
+          dahuaBadge.className = "flex items-center gap-1.5 rounded-full bg-emerald-950 border border-emerald-800/80 px-2.5 py-0.5 text-[11px] font-mono text-emerald-400";
+        } else {
+          dahuaBadge.className = "flex items-center gap-1.5 rounded-full bg-red-950 border border-red-800/80 px-2.5 py-0.5 text-[11px] font-mono text-red-400";
+        }
+
+        if (data.kinect_ok) {
+          kinectBadge.className = "flex items-center gap-1.5 rounded-full bg-violet-950 border border-violet-800/80 px-2.5 py-0.5 text-[11px] font-mono text-violet-300";
+        } else {
+          kinectBadge.className = "flex items-center gap-1.5 rounded-full bg-red-950 border border-red-800/80 px-2.5 py-0.5 text-[11px] font-mono text-red-400";
+        }
+      } catch (_) {}
+    }
+    setInterval(pollStatus, 4000);
+    pollStatus();
+  </script>
+</body>
+</html>

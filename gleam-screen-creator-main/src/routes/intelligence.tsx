@@ -1,520 +1,203 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/farm/AppShell";
-import { Icon } from "@/components/farm/Icon";
-import { activeIncident } from "@/lib/farm/dataset";
-import {
-  READING_VERDICT,
-  STATUS_TONE,
-  barWidth,
-  formatDate,
-  formatDateTimeUtc,
-  formatDeltaVsBaseline,
-  formatDuration,
-  formatMb,
-  formatMeasurement,
-  formatRelative,
-  formatScore,
-  formatTimeUtc,
-  formatWindow,
-  statusLabel,
-} from "@/lib/farm/format";
 import { getMonitoringReport } from "@/lib/farm/repository";
-import {
-  fetchFeedbackAlerts,
-  fetchSituationBriefing,
-  type FeedbackAlert,
-} from "@/lib/intelligence";
-
-const TITLE = "Intelligence OS | CereBroiler Monitoring Report";
-const DESC =
-  "Formal auto-generated monitoring report on the current flock telemetry with grounded sensor, visual and reference evidence.";
-
-// `head()` runs before loader data exists, so the social preview reads the
-// dataset directly — the same still the evidence section renders.
-const EVIDENCE_IMAGE = activeIncident().evidence.imageUrl;
+import { fetchSituationBriefing, fetchFeedbackAlerts } from "@/lib/intelligence";
+import { farm } from "@/lib/farm/dataset";
 
 export const Route = createFileRoute("/intelligence")({
-  head: () => ({
-    meta: [
-      { title: TITLE },
-      { name: "description", content: DESC },
-      { property: "og:title", content: TITLE },
-      { property: "og:description", content: DESC },
-      { property: "og:image", content: EVIDENCE_IMAGE },
-      { name: "twitter:image", content: EVIDENCE_IMAGE },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Insights — CereBroiler" }] }),
   loader: () => getMonitoringReport(),
-  component: IntelligencePage,
+  component: InsightsPage,
 });
 
-/**
- * The engine grades its own findings on a narrower scale than the sensor
- * statuses, so triage severities keep their own tone map.
- */
-const SEVERITY_STYLES: Record<
-  FeedbackAlert["severity"],
-  { icon: string; text: string; border: string }
-> = {
-  critical: { icon: "error", text: "text-error", border: "border-l-error" },
-  warning: { icon: "warning", text: "text-accent-amber", border: "border-l-accent-amber" },
-  nominal: { icon: "check_circle", text: "text-accent-teal", border: "border-l-accent-teal" },
-};
+const RECOMMENDATIONS = [
+  { icon: "🌡️", title: "Maintain temperature between 26–32°C", why: "Broiler chickens are sensitive to heat. Temperatures above 32°C cause stress and reduce feed intake.", ok: true },
+  { icon: "💧", title: "Make sure clean water is always available", why: "Chickens drink 2–3× more water than they eat. Dehydration quickly leads to health problems.", ok: true },
+  { icon: "🐔", title: "Monitor the 2 inactive birds closely", why: "Long inactivity may indicate stress, illness, or injury. Early detection prevents losses.", ok: false },
+  { icon: "💨", title: "Keep ventilation adequate", why: "Good air circulation prevents ammonia buildup, which irritates the respiratory system.", ok: true },
+];
 
-function SectionHeading({
-  index,
-  title,
-  meta,
-  action,
-}: {
-  index: string;
-  title: string;
-  meta?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-6 flex items-center justify-between gap-4">
-      <div className="flex items-baseline gap-3">
-        <span className="font-data-md text-data-md text-accent-cyan">{index}</span>
-        <h2 className="font-label-caps text-label-caps uppercase tracking-widest text-primary">
-          {title}
-        </h2>
-        {meta && (
-          <span className="font-data-md text-[10px] uppercase text-on-surface-variant opacity-60">
-            {meta}
-          </span>
-        )}
-      </div>
-      {action}
-    </div>
-  );
-}
-
-function IntelligencePage() {
-  const { report, platform, facility, incident, findings, references, archive } =
-    Route.useLoaderData();
-
-  const briefingQuery = useQuery({
+function InsightsPage() {
+  const briefingQ = useQuery({
     queryKey: ["situation-briefing"],
-    queryFn: () => fetchSituationBriefing(),
-    staleTime: Infinity,
-    retry: false,
-    refetchOnWindowFocus: false,
+    queryFn: fetchSituationBriefing,
+    staleTime: Infinity, retry: false, refetchOnWindowFocus: false,
   });
-
-  const alertsQuery = useQuery({
+  const alertsQ = useQuery({
     queryKey: ["feedback-alerts"],
-    queryFn: () => fetchFeedbackAlerts(),
-    staleTime: Infinity,
-    retry: false,
-    refetchOnWindowFocus: false,
+    queryFn: fetchFeedbackAlerts,
+    staleTime: Infinity, retry: false, refetchOnWindowFocus: false,
   });
-
-  const platformTone = STATUS_TONE[platform.status];
-  const peak = incident.peak;
-  const peakMax = Math.max(...peak.series);
-  const masthead = [
-    ["REPORT_ID", report.id],
-    ["GENERATED", formatDateTimeUtc(report.generatedAt)],
-    ["ENGINE", `${platform.llm} / ML_MODEL_${platform.mlModel}`],
-    ["GROUNDING", report.groundingId],
-  ];
-  const archiveCards = archive.filter((entry) => !entry.featured);
-  const featured = archive.find((entry) => entry.featured);
 
   return (
-    <AppShell bare>
-      <section className="flex flex-1 flex-col overflow-hidden bg-background">
-        <div className="flex-1 overflow-y-auto px-6 py-10">
-          <div className="mx-auto max-w-4xl">
-            <h1 className="sr-only">CereBroiler Intelligence Monitoring Report</h1>
+    <AppShell>
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>Insights</h1>
+        <p className="mt-0.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
+          Recommendations based on your flock's current condition.
+        </p>
+      </div>
 
-            <article className="overflow-hidden rounded-xl border border-outline-variant clinical-card">
-              {/* Report masthead */}
-              <header className="border-b border-outline-variant p-8">
-                <div className="mb-6 flex items-center justify-between">
-                  <span className="font-label-caps text-[10px] uppercase tracking-widest text-on-surface-variant">
-                    {facility.name}
-                  </span>
-                  <span
-                    className={`rounded-md border border-outline-variant bg-surface-container-high px-2 py-1 font-label-caps text-[9px] uppercase tracking-widest ${platformTone.text}`}
-                  >
-                    System {statusLabel(platform.status)}
-                  </span>
-                </div>
-                <div className="mb-2 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg accent-gradient">
-                    <Icon name="psychology" size={20} filled className="text-on-primary" />
-                  </div>
-                  <div>
-                    <h2 className="font-headline-sm text-headline-sm text-primary">
-                      Intelligence Monitoring Report
-                    </h2>
-                    <p className="font-label-caps text-label-caps text-on-surface-variant">
-                      Automated flock surveillance — {facility.houseRange}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-outline-variant pt-4 md:grid-cols-4">
-                  {masthead.map(([label, value]) => (
-                    <div key={label}>
-                      <span className="block font-label-caps text-[9px] uppercase tracking-widest text-on-surface-variant opacity-60">
-                        {label}
-                      </span>
-                      <span className="font-data-md text-data-md text-primary">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </header>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main */}
+        <div className="space-y-6 lg:col-span-2">
 
-              {/* 01 — Executive summary */}
-              <section className="border-b border-outline-variant p-8">
-                <SectionHeading
-                  index="01"
-                  title="Executive Summary"
-                  meta="Auto-generated"
-                  action={
-                    <button
-                      onClick={() => briefingQuery.refetch()}
-                      disabled={briefingQuery.isFetching}
-                      className="flex items-center gap-2 rounded-lg border border-outline-variant px-3 py-1.5 font-label-caps text-[10px] uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
-                      title="Regenerate summary"
-                    >
-                      <Icon
-                        name="refresh"
-                        size={14}
-                        className={briefingQuery.isFetching ? "animate-spin" : ""}
-                      />
-                      Regenerate
-                    </button>
-                  }
-                />
-                {briefingQuery.isFetching ? (
-                  <div className="flex items-center gap-3">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-accent-cyan" />
-                    <span className="font-data-md text-data-md uppercase text-on-surface-variant">
-                      {platform.llm} compiling situation briefing...
-                    </span>
-                  </div>
-                ) : briefingQuery.isError ? (
-                  <p className="font-body-md text-body-md leading-relaxed text-error">
-                    {briefingQuery.error instanceof Error
-                      ? briefingQuery.error.message
-                      : "Briefing generation failed."}
+          {/* AI Insight */}
+          <div className="cb-card overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)" }}>
+              <span className="text-2xl">🤖</span>
+              <div className="flex-1">
+                <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>AI Insight</h2>
+                <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>Auto-generated from your flock's current data</p>
+              </div>
+              <button onClick={() => briefingQ.refetch()} disabled={briefingQ.isFetching} className="btn-ghost text-xs gap-1.5">
+                <svg className={`h-3.5 w-3.5 ${briefingQ.isFetching ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0113.9-3.4M20 15a9 9 0 01-13.9 3.4"/>
+                </svg>
+                Refresh
+              </button>
+            </div>
+            <div className="p-6">
+              {briefingQ.isFetching ? (
+                <div className="flex items-center gap-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+                  <svg className="h-4 w-4 animate-spin" style={{ color: "var(--brand)" }} viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Generating insight from your flock's data…
+                </div>
+              ) : briefingQ.isError ? (
+                <div className="rounded-lg p-4" style={{ background: "var(--status-amber-bg)", border: "1px solid var(--status-amber-border)" }}>
+                  <p className="text-sm font-medium" style={{ color: "var(--status-amber-text)" }}>AI insight unavailable</p>
+                  <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                    {briefingQ.error instanceof Error ? briefingQ.error.message : "Check your GROQ_API_KEY in the .env file."}
                   </p>
-                ) : (
-                  <>
-                    <p className="whitespace-pre-wrap font-body-md text-body-md leading-relaxed text-on-surface-variant">
-                      {briefingQuery.data?.briefing}
-                    </p>
-                    {briefingQuery.data && (
-                      <p className="mt-4 font-data-md text-[10px] uppercase text-on-surface-variant opacity-50">
-                        MODEL: {briefingQuery.data.model} | LATENCY:{" "}
-                        {(briefingQuery.data.latencyMs / 1000).toFixed(1)}s
-                      </p>
-                    )}
-                  </>
-                )}
-              </section>
-
-              {/* 02 — Alert triage */}
-              <section className="border-b border-outline-variant p-8">
-                <SectionHeading
-                  index="02"
-                  title="Alert Triage"
-                  meta={platform.llm}
-                  action={
-                    <button
-                      onClick={() => alertsQuery.refetch()}
-                      disabled={alertsQuery.isFetching}
-                      className="p-1 text-on-surface-variant transition-colors hover:text-on-surface disabled:opacity-40"
-                      title="Re-run analysis"
-                    >
-                      <Icon
-                        name="refresh"
-                        size={14}
-                        className={alertsQuery.isFetching ? "animate-spin" : ""}
-                      />
-                    </button>
-                  }
-                />
-                {alertsQuery.isFetching ? (
-                  <div className="flex items-center gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest panel-gradient p-4">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-accent-cyan" />
-                    <span className="font-data-md text-data-md uppercase text-on-surface-variant">
-                      Running telemetry triage...
-                    </span>
-                  </div>
-                ) : alertsQuery.isError ? (
-                  <div className="rounded-lg border border-outline-variant border-l-2 border-l-error bg-surface-container-lowest p-4">
-                    <p className="font-data-md text-data-md leading-snug text-error">
-                      {alertsQuery.error instanceof Error
-                        ? alertsQuery.error.message
-                        : "Alert analysis failed."}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {alertsQuery.data?.alerts.map((alert, i) => {
-                      const style = SEVERITY_STYLES[alert.severity];
-                      return (
-                        <div
-                          key={alert.title}
-                          className={`rounded-lg border border-outline-variant border-l-2 ${style.border} bg-surface-container-lowest panel-gradient p-4`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <Icon name={style.icon} size={14} className={style.text} />
-                              <span
-                                className={`font-label-caps text-[10px] uppercase tracking-wider ${style.text}`}
-                              >
-                                {alert.title}
-                              </span>
-                            </div>
-                            <span className="font-data-md text-[10px] uppercase text-on-surface-variant opacity-60">
-                              FINDING {String(i + 1).padStart(2, "0")} / {alert.severity}
-                            </span>
-                          </div>
-                          <p className="mt-2 font-body-md text-[12px] leading-snug text-on-surface-variant">
-                            {alert.detail}
-                          </p>
-                          <p className="mt-1 font-data-md text-[10px] uppercase leading-snug text-primary opacity-80">
-                            RECOMMENDED ACTION: {alert.action}
-                          </p>
-                        </div>
-                      );
-                    })}
-                    {alertsQuery.data && (
-                      <p className="font-data-md text-[10px] uppercase text-on-surface-variant opacity-50">
-                        MODEL: {alertsQuery.data.model} | {alertsQuery.data.latencyMs}ms
-                      </p>
-                    )}
-                  </div>
-                )}
-              </section>
-
-              {/* 03 — Sensor findings */}
-              <section className="border-b border-outline-variant p-8">
-                <SectionHeading index="03" title="Sensor Findings" meta="Environmental telemetry" />
-                <div className="overflow-hidden rounded-lg border border-outline-variant">
-                  <table className="w-full border-collapse text-left">
-                    <thead>
-                      <tr className="border-b border-outline-variant bg-surface-container-high">
-                        {["PARAMETER", "SOURCE", "READING", "BOUNDS", "STATUS"].map((h) => (
-                          <th
-                            key={h}
-                            className="px-4 py-2 font-label-caps text-[9px] uppercase tracking-widest text-on-surface-variant"
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {findings.map((finding) => (
-                        <tr
-                          key={finding.id}
-                          className="border-b border-outline-variant bg-surface-container-lowest last:border-b-0"
-                        >
-                          <td className="px-4 py-2.5 font-body-md text-[12px] text-primary">
-                            {finding.parameter}
-                          </td>
-                          <td className="px-4 py-2.5 font-data-md text-[11px] text-on-surface-variant">
-                            {finding.source}
-                          </td>
-                          <td className="px-4 py-2.5 font-data-md text-data-md text-primary">
-                            {formatMeasurement(finding.value, finding.unit)}
-                          </td>
-                          <td className="px-4 py-2.5 font-data-md text-[11px] text-on-surface-variant">
-                            {finding.boundsLabel}
-                          </td>
-                          <td
-                            className={`px-4 py-2.5 font-label-caps text-[10px] tracking-wider ${
-                              STATUS_TONE[finding.status].text
-                            }`}
-                          >
-                            {READING_VERDICT[finding.status]}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <button onClick={() => briefingQ.refetch()} className="mt-2 text-xs font-semibold hover:underline" style={{ color: "var(--brand)" }}>
+                    Try again
+                  </button>
                 </div>
-                <div className="mt-6 grid gap-6 md:grid-cols-2">
-                  <div className="relative h-40 w-full overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest panel-gradient">
-                    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4">
-                      <div className="flex items-start justify-between">
-                        <span className="font-data-md text-[18px] text-error">
-                          {formatMeasurement(peak.value, peak.unit)}
-                        </span>
-                        <span className="font-data-md text-[10px] text-on-surface-variant">
-                          NH3 PEAK | {formatDeltaVsBaseline(peak.value, peak.baseline)} vs Baseline
-                        </span>
-                      </div>
-                      <div className="flex h-12 w-full items-end gap-[2px]">
-                        {peak.series.map((value, i) => (
-                          <div
-                            key={i}
-                            className={`flex-1 ${
-                              value > peak.threshold
-                                ? "bg-error"
-                                : "bg-outline-variant opacity-20"
-                            }`}
-                            style={{ height: barWidth(value, peakMax) }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="self-center font-data-md text-data-md leading-relaxed text-on-surface-variant opacity-80">
-                    Observation: sensor <span className="text-primary">{peak.sensorId}</span>{" "}
-                    reported critical ammonia levels exceeding the {peak.threshold}{" "}
-                    {peak.unit.toLowerCase()} threshold for{" "}
-                    {formatDuration(incident.exceedanceMinutes)} during the {incident.houseLabel}{" "}
-                    incident window ({formatWindow(incident.startedAt, incident.endedAt)}).{" "}
-                    {incident.resolution}.
-                  </p>
-                </div>
-              </section>
-
-              {/* 04 — Visual evidence */}
-              <section className="border-b border-outline-variant p-8">
-                <SectionHeading index="04" title="Visual Evidence" meta={incident.evidence.clipId} />
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="group relative aspect-video w-full cursor-pointer overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
-                    <img
-                      src={incident.evidence.imageUrl}
-                      alt="Night vision camera replay of poultry house with movement tracking overlays"
-                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-background/40 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Icon name="play_circle" size={40} filled className="text-primary" />
-                    </div>
-                    <div className="absolute left-2 top-2 rounded-md bg-error px-2 py-0.5 font-data-md text-[10px] text-on-error">
-                      REPLAY: {formatTimeUtc(incident.evidence.capturedAt)}
-                    </div>
-                  </div>
-                  <div className="self-center space-y-3">
-                    <p className="font-data-md text-data-md leading-relaxed text-on-surface-variant opacity-80">
-                      Exhibit A: camera unit{" "}
-                      <span className="text-primary">{incident.evidence.cameraId}</span> flagged a{" "}
-                      {incident.evidence.detectionLabel.toLowerCase().replace(/_/g, " ")} warning in
-                      the {incident.houseLabel} replay at{" "}
-                      {formatTimeUtc(incident.evidence.capturedAt)}, consistent with elevated
-                      ammonia exposure.
-                    </p>
-                    <div className="flex items-center gap-4 font-data-md text-[10px] uppercase text-on-surface-variant opacity-60">
-                      <span>
-                        DETECTION CONF: {formatScore(incident.evidence.detectionConfidence)}
-                      </span>
-                      <span>SOURCE: CAMERA_AI</span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* 05 — Reference standards */}
-              <section className="p-8">
-                <SectionHeading index="05" title="Reference Standards" meta="Cited literature" />
-                <div className="space-y-4">
-                  {references.map((reference) => (
-                    <div
-                      key={reference.id}
-                      className="rounded-r-lg border-l-2 border-accent-cyan bg-surface-container panel-gradient p-4"
-                    >
-                      <p className="font-body-md text-body-md italic text-on-surface-variant">
-                        "{reference.quote}"
-                      </p>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="font-label-caps text-[9px] text-primary">
-                          {reference.id}
-                        </span>
-                        <Icon name="open_in_new" size={16} className="text-on-surface-variant" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Report sign-off */}
-              <footer className="flex flex-col gap-4 border-t border-outline-variant bg-surface-container-lowest p-8 md:flex-row md:items-center md:justify-between">
+              ) : briefingQ.data ? (
                 <div>
-                  <p className="font-label-caps text-[10px] uppercase tracking-widest text-on-surface-variant">
-                    Compiled automatically by the Intelligence Engine
-                  </p>
-                  <p className="font-data-md text-[10px] uppercase text-on-surface-variant opacity-50">
-                    No operator input | End of report {report.id}
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>{briefingQ.data.briefing}</p>
+                  <p className="mt-3 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                    Generated from current flock data
                   </p>
                 </div>
-                <button className="rounded-lg border border-primary px-6 py-3 font-label-caps text-label-caps tracking-widest text-primary transition-all hover:bg-primary hover:text-on-primary">
-                  GENERATE INCIDENT REPORT
-                </button>
-              </footer>
-            </article>
+              ) : (
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                  Your flock is generally healthy. Average weight is increasing normally and environmental conditions are within the recommended range. Monitor the 2 inactive birds closely and ensure ventilation is adequate.
+                </p>
+              )}
+            </div>
+          </div>
 
-            {/* Appendix — report archive */}
-            <div className="mt-12">
-              <div className="mb-8 flex items-end justify-between">
-                <div>
-                  <h3 className="font-headline-sm text-headline-sm text-primary">
-                    Appendix — Report Archive
-                  </h3>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant">
-                    Scheduled analytical summaries
-                  </p>
-                </div>
-                <button className="font-label-caps text-label-caps text-primary transition-all hover:underline">
-                  VIEW ARCHIVE
+          {/* AI Alert Analysis */}
+          {(alertsQ.data || alertsQ.isFetching || alertsQ.isError) && (
+            <div className="cb-card overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>AI Alert Analysis</h2>
+                <button onClick={() => alertsQ.refetch()} disabled={alertsQ.isFetching}
+                  className="text-xs hover:underline" style={{ color: "var(--brand)" }}>
+                  Refresh
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {archiveCards.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="group cursor-pointer rounded-xl border border-outline-variant bg-surface-container-lowest panel-gradient p-4 transition-all hover:border-primary"
-                  >
-                    <div className="mb-4 flex items-start justify-between">
-                      <Icon
-                        name={entry.icon}
-                        className="text-on-surface-variant transition-colors group-hover:text-primary"
-                      />
-                      <span className="rounded-md border border-outline-variant px-1 font-data-md text-[10px] text-on-surface-variant">
-                        {entry.format}
-                      </span>
-                    </div>
-                    <h4 className="mb-1 font-label-caps text-label-caps text-primary">
-                      {entry.title}
-                    </h4>
-                    <p className="font-data-md text-data-md text-on-surface-variant opacity-60">
-                      {formatDate(entry.generatedAt)} | {formatMb(entry.sizeMb)}
+              <div className="p-6 space-y-3">
+                {alertsQ.isFetching ? (
+                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Analyzing your flock data…</p>
+                ) : alertsQ.isError ? (
+                  <p className="text-sm" style={{ color: "var(--status-amber-text)" }}>Could not load AI analysis.</p>
+                ) : alertsQ.data?.alerts.map((a: any, i: number) => (
+                  <div key={i} className="rounded-lg p-4"
+                    style={a.severity === "critical"
+                      ? { background: "var(--status-red-bg)", border: "1px solid var(--status-red-border)" }
+                      : a.severity === "warning"
+                        ? { background: "var(--status-amber-bg)", border: "1px solid var(--status-amber-border)" }
+                        : { background: "var(--status-green-bg)", border: "1px solid var(--status-green-border)" }}>
+                    <p className="text-sm font-semibold"
+                      style={{ color: a.severity === "critical" ? "var(--status-red-text)" : a.severity === "warning" ? "var(--status-amber-text)" : "var(--status-green-text)" }}>
+                      {a.title}
                     </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{a.detail}</p>
+                    <p className="mt-2 text-xs font-medium" style={{ color: "var(--text-primary)" }}>→ {a.action}</p>
                   </div>
                 ))}
-                {featured && (
-                  <div className="group relative col-span-2 cursor-pointer overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest panel-gradient p-4 transition-all hover:border-primary">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="mb-1 font-label-caps text-label-caps text-primary">
-                          {featured.title}
-                        </h4>
-                        <p className="font-data-md text-data-md text-on-surface-variant opacity-60">
-                          {featured.note ?? featured.format} | Generated{" "}
-                          {formatRelative(featured.generatedAt, report.generatedAt)}
-                        </p>
-                      </div>
-                      <Icon
-                        name="arrow_forward_ios"
-                        className="text-on-surface-variant group-hover:text-primary"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
+            </div>
+          )}
+
+          {/* Recommendations */}
+          <div className="cb-card overflow-hidden">
+            <div className="px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Recommendations</h2>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--text-tertiary)" }}>What you should do to keep your flock healthy</p>
+            </div>
+            <div style={{ borderBottom: "none" }}>
+              {RECOMMENDATIONS.map((rec) => (
+                <div key={rec.title} className="flex items-start gap-4 px-6 py-5"
+                  style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                  <span className="text-2xl shrink-0">{rec.icon}</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{rec.title}</p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{rec.why}</p>
+                  </div>
+                  <span className={rec.ok ? "badge-green shrink-0" : "badge-amber shrink-0"}>
+                    {rec.ok ? "✓ Good" : "⚠ Attention"}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
-      </section>
+
+        {/* Sidebar */}
+        <div className="space-y-4">
+          <div className="cb-card p-5">
+            <h3 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Key Observations</h3>
+            <ul className="space-y-2 text-sm">
+              {[
+                { ok: true,  text: "Average weight is on track" },
+                { ok: true,  text: "Activity level is normal" },
+                { ok: true,  text: "Ammonia level is safe (9 ppm)" },
+                { ok: false, text: "2 birds inactive — monitor closely" },
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="shrink-0" style={{ color: item.ok ? "var(--status-green)" : "var(--status-amber)" }}>
+                    {item.ok ? "✓" : "⚠"}
+                  </span>
+                  <span style={{ color: "var(--text-secondary)" }}>{item.text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="cb-card p-5">
+            <h3 className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Next Focus</h3>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Prepare for the next weight check in the coming days.
+            </p>
+            <div className="mt-3 rounded-lg px-3 py-2 text-xs font-medium"
+              style={{ background: "var(--status-green-bg)", color: "var(--status-green-text)", border: "1px solid var(--status-green-border)" }}>
+              Day {farm.cycle.day} of grow-out — on track for harvest
+            </div>
+          </div>
+
+          <div className="cb-card p-5 space-y-2">
+            <h3 className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Quick Actions</h3>
+            {[
+              { to: "/visuals", icon: "📹", label: "View Live Camera" },
+              { to: "/alerts",  icon: "🔔", label: "View All Alerts"  },
+            ].map((item) => (
+              <Link key={item.to} to={item.to as any}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[color:var(--surface-raised)]"
+                style={{ border: "1px solid var(--border-default)", color: "var(--text-primary)" }}>
+                <span>{item.icon}</span>
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
     </AppShell>
   );
 }

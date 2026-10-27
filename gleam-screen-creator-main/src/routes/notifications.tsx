@@ -111,7 +111,7 @@ function NotificationsPage() {
               <Icon name="notifications" size={22} className="text-primary" />
             </div>
             <div>
-              <h1 className="font-headline-md text-headline-md font-bold text-on-surface">
+              <h1 className="font-display font-headline-md text-headline-md font-bold text-on-surface">
                 Notification Center
               </h1>
               <p className="font-body-md text-body-md text-on-surface-variant">

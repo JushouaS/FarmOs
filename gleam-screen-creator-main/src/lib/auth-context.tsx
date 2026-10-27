@@ -13,8 +13,11 @@ import {
  * Falls back to `http://localhost:4000` which matches the default
  * `packages/api` configuration.
  *
- * Authentication is now carried in httpOnly, Secure, SameSite=Strict cookies
+ * Authentication is carried in httpOnly, Secure, SameSite=Strict cookies
  * issued by the API. The frontend never stores tokens in localStorage.
+ * Exception: the local admin account (below) persists its demo session
+ * profile (not a token) so a page refresh keeps the user signed in while
+ * no backend is running.
  */
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -22,6 +25,36 @@ const API_BASE =
   "http://localhost:4000";
 
 const fetchOpts: RequestInit = { credentials: "include" };
+
+/* ── Local admin account ────────────────────────────────────────
+ * Checked before the API so the dashboard is reachable even when
+ * no backend is running. Username "admin", password "admin". */
+const LOCAL_USERNAME = "admin";
+const LOCAL_PASSWORD = "admin";
+const SESSION_KEY = "cb-auth-session";
+
+function readLocalSession(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AuthUser;
+    if (parsed && typeof parsed.id === "string" && typeof parsed.email === "string") {
+      return parsed;
+    }
+  } catch {
+    /* corrupt or unavailable storage — treat as no session */
+  }
+  return null;
+}
+
+function writeLocalSession(user: AuthUser | null) {
+  try {
+    if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* storage unavailable — session just won't survive a refresh */
+  }
+}
 
 export interface AuthUser {
   id: string;
@@ -66,7 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Hydrate from the session cookie on first mount.
+  // Hydrate from the session cookie on first mount, falling back to the
+  // persisted local admin session when the API is unreachable.
   useEffect(() => {
     (async () => {
       try {
@@ -80,17 +114,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             roles: data.roles,
             permissions: data.permissions,
           });
+          setIsLoading(false);
+          return;
         }
       } catch {
-        // Network down — keep null, the login page will surface the error.
+        // Network down — fall through to the local session.
       }
+      const local = readLocalSession();
+      if (local) setUser(local);
       setIsLoading(false);
     })();
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    // DEV BYPASS: if the API is unreachable, allow a demo login so the UI
-    // can be previewed without a running backend. Remove before production.
+    // Local admin account: works with or without a running backend.
+    const username = email.trim().toLowerCase();
+    if (username === LOCAL_USERNAME) {
+      if (password !== LOCAL_PASSWORD) {
+        const err: LoginError = new Error("invalid_credentials");
+        throw err;
+      }
+      const adminUser: AuthUser = {
+        id: "admin",
+        email: "admin",
+        fullName: "Farm Administrator",
+        roles: ["ADMIN"],
+        permissions: [],
+      };
+      writeLocalSession(adminUser);
+      setUser(adminUser);
+      return;
+    }
+
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/auth/login`, {
@@ -100,16 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
     } catch {
-      // Network error — backend is not running. Use demo credentials.
-      if (email === "demo@cerebroiler.dev" && password === "Demo@CereBroiler1") {
-        setUser({
-          id: "demo-user",
-          email,
-          roles: ["ADMIN"],
-          permissions: [],
-        });
-        return;
-      }
       throw new Error("login_failed");
     }
 
@@ -184,6 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* swallow — server cookie clearing is best-effort */
     }
+    writeLocalSession(null);
     setUser(null);
   }, []);
 

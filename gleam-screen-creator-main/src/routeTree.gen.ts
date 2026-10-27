@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AlertsRouteImport } from './routes/alerts'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as FlockMonitoringRouteImport } from './routes/flock-monitoring'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as NotificationsRouteImport } from './routes/notifications'
@@ -26,6 +28,16 @@ const IndexRoute = IndexRouteImport.update({
 const AlertsRoute = AlertsRouteImport.update({
   id: '/alerts',
   path: '/alerts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FlockMonitoringRoute = FlockMonitoringRouteImport.update({
+  id: '/flock-monitoring',
+  path: '/flock-monitoring',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntelligenceRoute = IntelligenceRouteImport.update({
@@ -62,6 +74,8 @@ const VisualsRoute = VisualsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/alerts': typeof AlertsRoute
+  '/contact': typeof ContactRoute
+  '/flock-monitoring': typeof FlockMonitoringRoute
   '/intelligence': typeof IntelligenceRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
@@ -72,6 +86,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/alerts': typeof AlertsRoute
+  '/contact': typeof ContactRoute
+  '/flock-monitoring': typeof FlockMonitoringRoute
   '/intelligence': typeof IntelligenceRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
@@ -83,6 +99,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/alerts': typeof AlertsRoute
+  '/contact': typeof ContactRoute
+  '/flock-monitoring': typeof FlockMonitoringRoute
   '/intelligence': typeof IntelligenceRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
@@ -95,6 +113,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/alerts'
+    | '/contact'
+    | '/flock-monitoring'
     | '/intelligence'
     | '/login'
     | '/notifications'
@@ -105,6 +125,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/alerts'
+    | '/contact'
+    | '/flock-monitoring'
     | '/intelligence'
     | '/login'
     | '/notifications'
@@ -115,6 +137,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/alerts'
+    | '/contact'
+    | '/flock-monitoring'
     | '/intelligence'
     | '/login'
     | '/notifications'
@@ -126,6 +150,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AlertsRoute: typeof AlertsRoute
+  ContactRoute: typeof ContactRoute
+  FlockMonitoringRoute: typeof FlockMonitoringRoute
   IntelligenceRoute: typeof IntelligenceRoute
   LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
@@ -148,6 +174,20 @@ declare module '@tanstack/react-router' {
       path: '/alerts'
       fullPath: '/alerts'
       preLoaderRoute: typeof AlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/flock-monitoring': {
+      id: '/flock-monitoring'
+      path: '/flock-monitoring'
+      fullPath: '/flock-monitoring'
+      preLoaderRoute: typeof FlockMonitoringRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/intelligence': {
@@ -198,6 +238,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AlertsRoute: AlertsRoute,
+  ContactRoute: ContactRoute,
+  FlockMonitoringRoute: FlockMonitoringRoute,
   IntelligenceRoute: IntelligenceRoute,
   LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
