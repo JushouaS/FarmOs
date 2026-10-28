@@ -45,3 +45,6 @@ __pycache__/
 *.njsproj
 *.sln
 *.sw?
+
+# Local PostgreSQL data directory (packages/api/scripts/local-db.ts)
+.pgdata/
