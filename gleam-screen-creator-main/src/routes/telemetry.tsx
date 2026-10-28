@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { getGrowthAnalytics } from "@/lib/farm/repository";
 import { broilers, farm, behaviorBreakdown, weightBreakdown } from "@/lib/farm/dataset";
@@ -62,7 +62,9 @@ function AxisLineChart({
   const [containerWidth, setContainerWidth] = useState<number>(900);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  useEffect(() => {
+  // Layout effect: measure before the first paint, so a freshly mounted chart
+  // (e.g. after switching tabs) never flashes at the 900px default width.
+  useLayoutEffect(() => {
     if (!containerRef.current) return;
     const updateWidth = () => {
       if (containerRef.current) {
@@ -82,9 +84,12 @@ function AxisLineChart({
   }, []);
 
   if (series.length < 2) return null;
-  const W = Math.max(containerWidth, 400);
+  // Draw at the container's real width so text stays at its true size on
+  // phones (a wider viewBox would be scaled down and letterboxed).
+  const W = Math.max(containerWidth, 260);
   const H = height;
-  const LEFT = 56, BOT = 34, RIGHT = 24, TOP = 16;
+  const narrow = W < 480;
+  const LEFT = narrow ? 48 : 56, BOT = 34, RIGHT = narrow ? 12 : 24, TOP = 16;
   const plotW = W - LEFT - RIGHT, plotH = H - TOP - BOT;
 
   const allX = series.map((p) => p.x);
@@ -134,6 +139,9 @@ function AxisLineChart({
   const projTicks = visibleTargets
     .filter((p) => !actualPts.find((s) => s.x === p.x))
     .map((p) => ({ x: p.x, px: xS(p.x) }));
+  const allXTicks = [...xTicks, ...projTicks].sort((a, b) => a.x - b.x);
+  // Thin the labels so each gets ~30px; the last one always shows.
+  const labelEvery = Math.max(1, Math.ceil((allXTicks.length * 30) / plotW));
 
   const gradId = `grad-${color.replace(/[^a-z0-9]/gi, "")}`;
   const clipId = `clip-${gradId}`;
@@ -200,11 +208,14 @@ function AxisLineChart({
 
   return (
     <div ref={containerRef} className="relative w-full select-none">
+      {/* touchAction pan-y keeps vertical page scrolling on touch screens;
+          a tap or a sideways drag still scrubs the curve. */}
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full cursor-crosshair overflow-visible block"
-        style={{ width: "100%", height: H, touchAction: "none" }}
+        style={{ width: "100%", height: H, touchAction: "pan-y" }}
         onMouseMove={handlePointerMove}
+        onPointerDown={handlePointerMove}
         onPointerMove={handlePointerMove}
         onMouseLeave={handlePointerLeave}
         onPointerLeave={handlePointerLeave}
@@ -301,8 +312,14 @@ function AxisLineChart({
         />
 
         {/* X ticks */}
-        {[...xTicks, ...projTicks].map(({ x, px }) => {
+        {allXTicks.map(({ x, px }, i) => {
           const isHovered = hoveredPoint?.x === x;
+          const isLast = i === allXTicks.length - 1;
+          // Skip a label that would crowd the always-shown last label.
+          const showLabel =
+            isHovered ||
+            isLast ||
+            (i % labelEvery === 0 && allXTicks.length - 1 - i >= labelEvery);
           return (
             <g key={x}>
               <line
@@ -313,17 +330,19 @@ function AxisLineChart({
                 stroke={isHovered ? color : "var(--border-default)"}
                 strokeWidth={isHovered ? "2" : "1.5"}
               />
-              <text
-                x={px}
-                y={H - 8}
-                textAnchor="middle"
-                fontSize={isHovered ? "10.5" : "10"}
-                fill={isHovered ? "var(--text-primary)" : "var(--text-tertiary)"}
-                fontFamily="JetBrains Mono, monospace"
-                fontWeight={isHovered ? "700" : "500"}
-              >
-                {xLabel === "Day" ? `D${x}` : x}
-              </text>
+              {showLabel && (
+                <text
+                  x={px}
+                  y={H - 8}
+                  textAnchor="middle"
+                  fontSize={isHovered ? "10.5" : "10"}
+                  fill={isHovered ? "var(--text-primary)" : "var(--text-tertiary)"}
+                  fontFamily="JetBrains Mono, monospace"
+                  fontWeight={isHovered ? "700" : "500"}
+                >
+                  {xLabel === "Day" ? `D${x}` : x}
+                </text>
+              )}
             </g>
           );
         })}
@@ -391,7 +410,10 @@ function AxisLineChart({
           const lp = actualPts[actualPts.length - 1]!;
           return (
             <g>
-              <circle cx={xS(lp.x)} cy={yS(lp.y)} r="9" fill={color} opacity="0.2" className="animate-ping" />
+              {/* fill-box origin: without it the ping scales from the SVG's
+                  top-left corner and the ring drifts out of the chart */}
+              <circle cx={xS(lp.x)} cy={yS(lp.y)} r="9" fill={color} opacity="0.2" className="animate-ping"
+                style={{ transformBox: "fill-box", transformOrigin: "center" }} />
               <text
                 x={xS(lp.x)}
                 y={yS(lp.y) - 10}
@@ -667,7 +689,7 @@ function FlockWeightDistribution() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
           <p className="label-section text-[10px]">Min Scanned</p>
-          <div className="flex items-baseline gap-1.5 mt-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
             <span className="font-mono text-base font-bold" style={{ color: "var(--status-amber)" }}>{minWeight} g</span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(239, 68, 68, 0.15)", color: "var(--status-red)" }}>B-023</span>
           </div>
@@ -676,7 +698,7 @@ function FlockWeightDistribution() {
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
           <p className="label-section text-[10px]">Flock Median</p>
-          <div className="flex items-baseline gap-1.5 mt-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
             <span className="font-mono text-base font-bold" style={{ color: "var(--brand)" }}>{medianWeight} g</span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(52, 211, 153, 0.15)", color: "var(--brand)" }}>+40g</span>
           </div>
@@ -685,7 +707,7 @@ function FlockWeightDistribution() {
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
           <p className="label-section text-[10px]">Max Scanned</p>
-          <div className="flex items-baseline gap-1.5 mt-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
             <span className="font-mono text-base font-bold" style={{ color: "var(--status-blue)" }}>{maxWeight} g</span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(59, 130, 246, 0.15)", color: "var(--status-blue)" }}>B-028</span>
           </div>
@@ -694,7 +716,7 @@ function FlockWeightDistribution() {
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
           <p className="label-section text-[10px]">Flock Uniformity</p>
-          <div className="flex items-baseline gap-1.5 mt-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
             <span className="font-mono text-base font-bold" style={{ color: "var(--cv-accent)" }}>{uniformityPct}%</span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(163, 230, 53, 0.15)", color: "var(--cv-accent)" }}>Grade A</span>
           </div>
@@ -722,8 +744,8 @@ function FlockWeightDistribution() {
                   borderColor: isHovered ? bin.color : "transparent",
                 }}
               >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span className="font-mono text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
                       {bin.label}
                     </span>
@@ -807,21 +829,21 @@ function FlockWeightDistribution() {
 
             {/* Cohort Breakdown Summary */}
             <div className="mt-4 pt-3 border-t space-y-2" style={{ borderColor: "var(--border-subtle)" }}>
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
                   <span className="h-2 w-2 rounded-full" style={{ background: "var(--brand)" }} />
                   Target Cohort (1.2–1.5 kg)
                 </span>
                 <span className="font-mono font-bold" style={{ color: "var(--brand)" }}>25 birds (89%)</span>
               </div>
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
                   <span className="h-2 w-2 rounded-full" style={{ background: "var(--status-amber)" }} />
                   Underweight Cohort (&lt; 1.2 kg)
                 </span>
                 <span className="font-mono font-bold" style={{ color: "var(--status-amber)" }}>2 birds (7%)</span>
               </div>
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
                   <span className="h-2 w-2 rounded-full" style={{ background: "var(--status-blue)" }} />
                   Heavy Tier (&ge; 1.5 kg)
@@ -902,8 +924,8 @@ function GrowthAnalysisSection({
       {analysisState === "idle" && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-2">
           <div className="space-y-1.5 max-w-xl">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg"
+            <div className="flex items-start gap-2 sm:items-center">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
                 style={{ background: "rgba(16, 185, 129, 0.15)", color: "var(--brand)" }}>
                 <Cpu className="h-4 w-4" />
               </span>
@@ -928,7 +950,7 @@ function GrowthAnalysisSection({
 
           <button
             onClick={handleRunAnalysis}
-            className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+            className="tap w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
             style={{
               background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
               color: "#ffffff",
@@ -1004,7 +1026,7 @@ function GrowthAnalysisSection({
 
             <button
               onClick={handleRunAnalysis}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150 hover:bg-surface-raised active:scale-[0.98]"
+              className="tap flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150 hover:bg-surface-raised active:scale-[0.98]"
               style={{
                 background: "var(--surface-sunken)",
                 borderColor: "var(--border-subtle)",
@@ -1150,7 +1172,7 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
 /* ── Chart Legend ────────────────────────────────────────────── */
 function ChartLegend({ items }: { items: { color: string; label: string; dashed?: boolean }[] }) {
   return (
-    <div className="flex items-center gap-4 font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
       {items.map((item) => (
         <span key={item.label} className="flex items-center gap-1.5">
           {item.dashed
@@ -1215,11 +1237,14 @@ function AnalyticsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 w-fit rounded-xl p-1 overflow-x-auto"
+      {/* max-w-full lets the strip scroll sideways on phones instead of
+          pushing the page wider than the screen */}
+      <div className="mb-6 flex gap-1 w-fit max-w-full rounded-xl p-1 overflow-x-auto"
         style={{ background: "var(--surface-card)", border: "1px solid var(--border-subtle)" }}>
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className="rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap transition-all duration-150"
+            aria-pressed={tab === t.id}
+            className="tap shrink-0 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-all duration-150 sm:px-4"
             style={tab === t.id
               ? { background: "var(--brand)", color: "var(--text-inverse)", boxShadow: "0 1px 4px rgba(0,0,0,0.25)" }
               : { color: "var(--text-secondary)" }}>
@@ -1238,7 +1263,7 @@ function AnalyticsPage() {
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
                 <p className="label-section text-[10px]">Avg Weight</p>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--cv-accent)" }}>
                     {(avgW / 1000).toFixed(3)} kg
                   </span>
@@ -1252,7 +1277,7 @@ function AnalyticsPage() {
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
                 <p className="label-section text-[10px]">vs Ross 308</p>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--status-green)" }}>
                     {wDelta >= 0 ? "+" : ""}{wDelta} g
                   </span>
@@ -1266,7 +1291,7 @@ function AnalyticsPage() {
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
                 <p className="label-section text-[10px]">Est. Confidence</p>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--brand)" }}>
                     {farm.weight.estimationConfidencePercent}%
                   </span>
@@ -1280,7 +1305,7 @@ function AnalyticsPage() {
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
                 <p className="label-section text-[10px]">Sample Size</p>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--status-blue)" }}>
                     {farm.weight.sampleSize} / {total}
                   </span>
@@ -1298,8 +1323,8 @@ function AnalyticsPage() {
             {/* Growth Trajectory Section */}
             <div>
               <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                <div>
-                  <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
                       {growthRange === "to-date" ? "Flock Growth Trajectory (Day 1–14)" : "Full Cycle Growth Curve (Day 1–42)"}
                     </h2>
@@ -1314,18 +1339,18 @@ function AnalyticsPage() {
                   </div>
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
                     {growthRange === "to-date"
-                      ? "Hover along the curve to inspect daily weight, standard variance, and growth gain."
+                      ? "Hover or tap along the curve to inspect daily weight, standard variance, and growth gain."
                       : "Complete 42-day cycle projection with Ross 308 standard target benchmark."}
                   </p>
                 </div>
 
-                <div className="flex items-center flex-wrap gap-3">
+                <div className="flex w-full items-center flex-wrap gap-3 sm:w-auto">
                   {/* Range Switcher */}
-                  <div className="flex rounded-lg p-0.5 border"
+                  <div className="flex w-full rounded-lg p-0.5 border sm:w-auto"
                     style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
                     <button
                       onClick={() => setGrowthRange("to-date")}
-                      className="px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150"
+                      className="tap flex-1 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 sm:flex-none"
                       style={growthRange === "to-date"
                         ? { background: "var(--brand)", color: "var(--text-inverse)", fontWeight: 600, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }
                         : { color: "var(--text-secondary)" }}
@@ -1334,7 +1359,7 @@ function AnalyticsPage() {
                     </button>
                     <button
                       onClick={() => setGrowthRange("full")}
-                      className="px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150"
+                      className="tap flex-1 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 sm:flex-none"
                       style={growthRange === "full"
                         ? { background: "var(--brand)", color: "var(--text-inverse)", fontWeight: 600, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }
                         : { color: "var(--text-secondary)" }}

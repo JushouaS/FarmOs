@@ -39,26 +39,26 @@ function InsightsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Main */}
         <div className="space-y-6 lg:col-span-2">
 
           {/* AI Insight */}
           <div className="cb-card overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)" }}>
+            <div className="flex items-center gap-3 px-4 py-4 sm:px-6" style={{ borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-raised)" }}>
               <span className="text-2xl">🤖</span>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>AI Insight</h2>
                 <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>Auto-generated from your flock's current data</p>
               </div>
-              <button onClick={() => briefingQ.refetch()} disabled={briefingQ.isFetching} className="btn-ghost text-xs gap-1.5">
+              <button onClick={() => briefingQ.refetch()} disabled={briefingQ.isFetching} className="btn-ghost tap shrink-0 text-xs gap-1.5">
                 <svg className={`h-3.5 w-3.5 ${briefingQ.isFetching ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0113.9-3.4M20 15a9 9 0 01-13.9 3.4"/>
                 </svg>
                 Refresh
               </button>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {briefingQ.isFetching ? (
                 <div className="flex items-center gap-3 text-sm" style={{ color: "var(--text-secondary)" }}>
                   <svg className="h-4 w-4 animate-spin" style={{ color: "var(--brand)" }} viewBox="0 0 24 24" fill="none">
@@ -73,7 +73,7 @@ function InsightsPage() {
                   <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                     {briefingQ.error instanceof Error ? briefingQ.error.message : "Check your GROQ_API_KEY in the .env file."}
                   </p>
-                  <button onClick={() => briefingQ.refetch()} className="mt-2 text-xs font-semibold hover:underline" style={{ color: "var(--brand)" }}>
+                  <button onClick={() => briefingQ.refetch()} className="tap mt-2 text-xs font-semibold hover:underline" style={{ color: "var(--brand)" }}>
                     Try again
                   </button>
                 </div>
@@ -95,14 +95,14 @@ function InsightsPage() {
           {/* AI Alert Analysis */}
           {(alertsQ.data || alertsQ.isFetching || alertsQ.isError) && (
             <div className="cb-card overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+              <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
                 <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>AI Alert Analysis</h2>
                 <button onClick={() => alertsQ.refetch()} disabled={alertsQ.isFetching}
-                  className="text-xs hover:underline" style={{ color: "var(--brand)" }}>
+                  className="tap text-xs hover:underline" style={{ color: "var(--brand)" }}>
                   Refresh
                 </button>
               </div>
-              <div className="p-6 space-y-3">
+              <div className="p-4 sm:p-6 space-y-3">
                 {alertsQ.isFetching ? (
                   <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Analyzing your flock data…</p>
                 ) : alertsQ.isError ? (
@@ -128,22 +128,30 @@ function InsightsPage() {
 
           {/* Recommendations */}
           <div className="cb-card overflow-hidden">
-            <div className="px-6 py-4" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+            <div className="px-4 py-4 sm:px-6" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
               <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Recommendations</h2>
               <p className="mt-0.5 text-xs" style={{ color: "var(--text-tertiary)" }}>What you should do to keep your flock healthy</p>
             </div>
             <div style={{ borderBottom: "none" }}>
               {RECOMMENDATIONS.map((rec) => (
-                <div key={rec.title} className="flex items-start gap-4 px-6 py-5"
+                <div key={rec.title} className="flex items-start gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5"
                   style={{ borderBottom: "1px solid var(--border-subtle)" }}>
                   <span className="text-2xl shrink-0">{rec.icon}</span>
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{rec.title}</p>
                     <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{rec.why}</p>
+                    {/* Status sits under the text on phones so it can't squeeze the title */}
+                    <div className="mt-2 sm:hidden">
+                      <span className={rec.ok ? "badge-green" : "badge-amber"}>
+                        {rec.ok ? "✓ Good" : "⚠ Attention"}
+                      </span>
+                    </div>
                   </div>
-                  <span className={rec.ok ? "badge-green shrink-0" : "badge-amber shrink-0"}>
-                    {rec.ok ? "✓ Good" : "⚠ Attention"}
-                  </span>
+                  <div className="hidden shrink-0 sm:block">
+                    <span className={rec.ok ? "badge-green" : "badge-amber"}>
+                      {rec.ok ? "✓ Good" : "⚠ Attention"}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

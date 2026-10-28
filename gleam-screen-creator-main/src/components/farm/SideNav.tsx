@@ -77,13 +77,13 @@ export function SideNav({
 
   // Modern inset rounded pill navigation items
   const base = [
-    "flex items-center gap-3 py-2.5 text-sm font-medium transition-all duration-150 rounded-lg group",
+    "flex items-center gap-3 py-2.5 pointer-coarse:py-3 text-sm font-medium transition-all duration-150 rounded-lg group",
     "text-[color:var(--sidebar-text)] hover:bg-[color:var(--sidebar-hover-bg)] hover:text-[color:var(--sidebar-hover-text)]",
     collapsed ? "mx-2 px-0 justify-center" : "mx-2.5 px-3",
   ].join(" ");
 
   const active = [
-    "flex items-center gap-3 py-2.5 text-sm font-semibold rounded-lg",
+    "flex items-center gap-3 py-2.5 pointer-coarse:py-3 text-sm font-semibold rounded-lg",
     "text-[color:var(--sidebar-active-text)] bg-[color:var(--sidebar-active-bg)]",
     "border border-emerald-500/20 shadow-xs",
     collapsed ? "mx-2 px-0 justify-center" : "mx-2.5 px-3",
@@ -143,7 +143,7 @@ export function SideNav({
 
               <button
                 onClick={onMobileClose}
-                className="flex lg:hidden h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--sidebar-hover-bg)] hover:text-[color:var(--sidebar-hover-text)]"
+                className="tap flex lg:hidden h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--sidebar-hover-bg)] hover:text-[color:var(--sidebar-hover-text)]"
                 style={{ color: "var(--sidebar-muted)" }}
                 title="Close navigation"
                 aria-label="Close navigation"
@@ -279,7 +279,7 @@ export function SideNav({
           {!collapsed ? (
             <button
               onClick={handleLogout}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--sidebar-muted)] hover:text-[var(--sidebar-hover-text)] hover:bg-[var(--surface-raised)] transition-colors shrink-0"
+              className="tap flex h-7 w-7 items-center justify-center rounded-md text-[var(--sidebar-muted)] hover:text-[var(--sidebar-hover-text)] hover:bg-[var(--surface-raised)] transition-colors shrink-0"
               title="Sign out"
               aria-label="Sign out"
             >

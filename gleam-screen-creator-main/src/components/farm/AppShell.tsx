@@ -51,7 +51,7 @@ function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
+      className="tap flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
       style={{ color: "var(--text-secondary)" }}
       aria-label="Toggle theme"
       title={isLight ? "Switch to dark mode" : "Switch to light mode"}
@@ -69,7 +69,7 @@ function ThemeToggle() {
 function LocationStatus() {
   return (
     <div
-      className="hidden sm:flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs"
+      className="hidden sm:flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-1 text-xs"
       style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)" }}
     >
       <span className="relative flex h-2 w-2 shrink-0">
@@ -78,7 +78,7 @@ function LocationStatus() {
       </span>
       <span className="font-semibold text-[var(--text-primary)]">Pen 1</span>
       <span style={{ color: "var(--border-strong)" }}>·</span>
-      <span style={{ color: "var(--text-secondary)" }}>House 1 (Ross 308)</span>
+      <span className="truncate" style={{ color: "var(--text-secondary)" }}>House 1 (Ross 308)</span>
     </div>
   );
 }
@@ -99,14 +99,15 @@ function TopBar({
 
   return (
     <div
-      className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4"
+      className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 sm:px-5 lg:px-6"
     >
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {/* Mobile hamburger menu button */}
         <button
           onClick={onMenuOpen}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all lg:hidden"
+          className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all lg:hidden"
           aria-label="Open navigation menu"
+          aria-controls="app-sidenav"
           title="Open menu"
         >
           <Menu className="h-4.5 w-4.5" />
@@ -125,13 +126,13 @@ function TopBar({
         <LocationStatus />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         <ThemeToggle />
 
         {/* Alert bell with badge */}
         <Link
           to="/alerts"
-          className="relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
+          className="tap relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
           style={{ color: "var(--text-secondary)" }}
           aria-label="View alerts"
           title="View alerts"
@@ -149,7 +150,7 @@ function TopBar({
 
         {/* User avatar */}
         <div
-          className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white select-none shadow-xs"
+          className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white select-none shadow-xs"
           style={{
             background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
             border: "1px solid rgba(52,211,153,0.3)",
@@ -176,7 +177,8 @@ function BottomNav() {
   const alertCount = unacknowledgedAlerts();
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 flex lg:hidden"
+      aria-label="Primary"
+      className="pb-safe fixed bottom-0 inset-x-0 z-20 flex lg:hidden"
       style={{ background: "var(--surface-card)", borderTop: "1px solid var(--border-subtle)" }}
     >
       {BOTTOM_ROUTES.map((r) => (
@@ -184,7 +186,7 @@ function BottomNav() {
           key={r.to}
           to={r.to}
           activeOptions={{ exact: r.to === "/" }}
-          className="relative flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium transition-colors"
+          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors"
           style={{ color: "var(--text-tertiary)" }}
           activeProps={{ style: { color: "var(--brand)" } }}
         >
@@ -218,6 +220,27 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
   });
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // While the drawer is open: Escape closes it (R-32) and the page behind
+  // it stops scrolling, so a swipe on the drawer doesn't move the page.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    // The drawer is lg:hidden, so a resize past the breakpoint must release it.
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const onDesktop = () => desktop.matches && setMobileOpen(false);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    desktop.addEventListener("change", onDesktop);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+      desktop.removeEventListener("change", onDesktop);
+    };
+  }, [mobileOpen]);
+
   const toggleCollapsed = () =>
     setCollapsed((prev) => {
       const next = !prev;
@@ -238,7 +261,7 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
 
   return (
     <AppShellContext.Provider value={contextValue}>
-      <div className="flex min-h-screen" style={{ background: "var(--surface-page)" }}>
+      <div className="flex min-h-dvh" style={{ background: "var(--surface-page)" }}>
         {/* Mobile/tablet backdrop overlay */}
         {mobileOpen && (
           <div
@@ -250,23 +273,28 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
 
         {/* Sidebar — hidden on mobile by default, slide-in on mobileOpen */}
         <div
+          id="app-sidenav"
           className={`
             fixed left-0 top-0 z-40 h-full transition-[width,transform] duration-200
             ${sidebarW}
-            ${mobileOpen ? "translate-x-0 w-60 shadow-2xl" : "-translate-x-full lg:translate-x-0"}
+            ${mobileOpen ? "translate-x-0 w-[min(18rem,85vw)] shadow-2xl" : "-translate-x-full lg:translate-x-0"}
           `}
         >
+          {/* The drawer always opens expanded: the desktop collapse preference
+              would otherwise leave phones with an icon-only menu. */}
           <SideNav
-            collapsed={collapsed}
+            collapsed={collapsed && !mobileOpen}
             onToggle={toggleCollapsed}
             onMobileClose={() => setMobileOpen(false)}
           />
         </div>
 
         {/* Main layout container */}
-        <div className={`flex flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
+        <div className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
           {bare ? (
-            <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
+            <main className="flex flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:overflow-hidden lg:pb-0">
+              {children}
+            </main>
           ) : (
             <>
               <TopBar
@@ -274,15 +302,15 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
                 onToggleSidebar={toggleCollapsed}
                 collapsed={collapsed}
               />
-              <main className="flex-1 overflow-auto p-4 pb-20 sm:p-5 lg:p-6 lg:pb-6">
+              <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-5 sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:p-6 lg:pb-6">
                 {children}
               </main>
             </>
           )}
         </div>
 
-        {/* Bottom nav — mobile only */}
-        {!bare && <BottomNav />}
+        {/* Bottom nav — below lg, on every page including the bare camera view */}
+        <BottomNav />
       </div>
     </AppShellContext.Provider>
   );

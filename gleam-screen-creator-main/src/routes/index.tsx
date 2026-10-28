@@ -24,6 +24,54 @@ function SBadge({ s }: { s: "critical" | "warning" | "nominal" | "optimal" }) {
   return <span className={cls}>{lbl}</span>;
 }
 
+/* ── KPI icon chip ───────────────────────────────────────────
+ * One accent (brand green tint) across every chip, varying only the
+ * glyph (R-29: stays inside the existing 1-accent system instead of
+ * adding a new color per metric; Liveliness Toolkit "one deliberate
+ * accent"). Each glyph is drawn for what the metric actually is — a
+ * bird, a scale, a thermometer, a droplet, a flask — not a generic
+ * sparkle/library icon (R-04). */
+function KpiIcon({ path }: { path: React.ReactNode }) {
+  return (
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10"
+      style={{ background: "var(--brand-muted)" }}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth={1.6}
+        strokeLinecap="round" strokeLinejoin="round">
+        {path}
+      </svg>
+    </span>
+  );
+}
+
+const KPI_ICON_PATHS = {
+  flock: (
+    <>
+      <path d="M12 3c-3 0-5 2-5 4.5S8.5 11 10 11h.5l-.7 3.2c-.2.9.5 1.8 1.4 1.8.7 0 1.3-.5 1.4-1.2L13.5 11H14c1.5 0 3-1.5 3-3.5S15 3 12 3Z" />
+      <circle cx="13.3" cy="6" r="0.6" fill="var(--brand)" />
+      <path d="M7 14.5 5 17m12-2.5 2 2.5M9.5 20.5h5" />
+    </>
+  ),
+  scale: (
+    <>
+      <path d="M12 4v16M8 20h8M5 7h6M5 7 3 11.5a2.2 2.2 0 0 0 4.3 0L5 7Zm13 0h-6m6 0 2 4.5a2.2 2.2 0 0 1-4.3 0L18 7Z" />
+    </>
+  ),
+  thermometer: (
+    <>
+      <path d="M12 14.5V5a2 2 0 1 0-4 0v9.5a3.5 3.5 0 1 0 4 0Z" />
+      <circle cx="10" cy="17" r="1" fill="var(--brand)" />
+    </>
+  ),
+  droplet: (
+    <path d="M12 3s6 6.5 6 11a6 6 0 1 1-12 0c0-4.5 6-11 6-11Z" />
+  ),
+  flask: (
+    <path d="M9 3h6M10 3v5.5L5.8 16a2 2 0 0 0 1.75 3h8.9a2 2 0 0 0 1.75-3L14 8.5V3M8 14h8" />
+  ),
+} as const;
+
 /* ── Active / Inactive donut (2 slices only) ────────────────── */
 const BEHAVIOR_COLORS = {
   Active:   "var(--status-green)",
@@ -124,17 +172,17 @@ function Dashboard() {
   return (
     <AppShell>
       {/* Header */}
-      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+          <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
             Dashboard
           </h1>
-          <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
             {data.facility.name} &middot; {data.cluster?.houseLabel ?? "Pen 1"} &middot; Grow-out Day{" "}
             <TV>{data.cycle?.day ?? "—"}</TV>/42 &middot; {data.facility.breed ?? "Ross 308"}
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg px-3 py-1.5 self-start shrink-0"
+        <div className="flex items-center gap-2 rounded-full px-3.5 py-1.5 self-start shrink-0"
           style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)" }}>
           <span className="h-1.5 w-1.5 rounded-full"
             style={{ background: "var(--status-green)", boxShadow: "0 0 4px var(--status-green)" }} />
@@ -144,12 +192,18 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ── KPI grid — responsive ───────────────────────────── */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {/* ── KPI grid — responsive ───────────────────────────────
+           Flock count is the page's focal metric, so it takes the wide
+           slot whenever the grid can't fit all five in one row
+           (phone: 1 + 2×2, tablet/laptop: 2+1 / 3, wide desktop: 5). */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5">
         {/* Flock */}
-        <div className="cb-card p-4 flex flex-col gap-1">
-          <p className="label-section">Flock Count</p>
-          <div className="flex items-baseline gap-1 mt-1">
+        <div className="cb-card col-span-2 xl:col-span-1 p-4 sm:p-5 flex min-w-0 flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="label-section min-w-0">Flock Count</p>
+            <KpiIcon path={KPI_ICON_PATHS.flock} />
+          </div>
+          <div className="flex items-baseline gap-1 mt-2">
             <span className="font-mono text-2xl font-bold" style={{ color: "var(--cv-accent)" }}>{total}</span>
             <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>birds</span>
           </div>
@@ -166,9 +220,12 @@ function Dashboard() {
         </div>
 
         {/* Avg Weight */}
-        <div className="cb-card p-4 flex flex-col gap-1">
-          <p className="label-section">Avg Weight</p>
-          <div className="flex items-baseline gap-1 mt-1">
+        <div className="cb-card p-4 sm:p-5 flex min-w-0 flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="label-section min-w-0">Avg Weight</p>
+            <KpiIcon path={KPI_ICON_PATHS.scale} />
+          </div>
+          <div className="flex items-baseline gap-1 mt-2">
             <span className="font-mono text-2xl font-bold" style={{ color: "var(--cv-accent)" }}>
               {(avgWeight / 1000).toFixed(3)}
             </span>
@@ -180,9 +237,12 @@ function Dashboard() {
         </div>
 
         {/* Temperature */}
-        <div className="cb-card p-4 flex flex-col gap-1">
-          <p className="label-section">Temperature</p>
-          <div className="flex items-baseline gap-1 mt-1">
+        <div className="cb-card p-4 sm:p-5 flex min-w-0 flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="label-section min-w-0">Temperature</p>
+            <KpiIcon path={KPI_ICON_PATHS.thermometer} />
+          </div>
+          <div className="flex items-baseline gap-1 mt-2">
             <span className="font-mono text-2xl font-bold" style={{ color: "var(--cv-accent)" }}>
               {temp?.value ?? 29.1}
             </span>
@@ -194,9 +254,12 @@ function Dashboard() {
         </div>
 
         {/* Humidity */}
-        <div className="cb-card p-4 flex flex-col gap-1">
-          <p className="label-section">Humidity</p>
-          <div className="flex items-baseline gap-1 mt-1">
+        <div className="cb-card p-4 sm:p-5 flex min-w-0 flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="label-section min-w-0">Humidity</p>
+            <KpiIcon path={KPI_ICON_PATHS.droplet} />
+          </div>
+          <div className="flex items-baseline gap-1 mt-2">
             <span className="font-mono text-2xl font-bold" style={{ color: "var(--cv-accent)" }}>
               {humid?.value ?? 63}
             </span>
@@ -208,9 +271,12 @@ function Dashboard() {
         </div>
 
         {/* Ammonia */}
-        <div className="cb-card p-4 flex flex-col gap-1">
-          <p className="label-section">Ammonia NH₃</p>
-          <div className="flex items-baseline gap-1 mt-1">
+        <div className="cb-card p-4 sm:p-5 flex min-w-0 flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="label-section min-w-0">Ammonia NH₃</p>
+            <KpiIcon path={KPI_ICON_PATHS.flask} />
+          </div>
+          <div className="flex items-baseline gap-1 mt-2">
             <span className="font-mono text-2xl font-bold" style={{ color: "var(--cv-accent)" }}>
               {nh3?.value ?? 9}
             </span>
@@ -223,10 +289,10 @@ function Dashboard() {
       </div>
 
       {/* ── Mid row ─────────────────────────────────────────── */}
-      <div className="mb-5 grid gap-4 lg:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
         {/* Weight sparkline */}
-        <div className="cb-card p-5 lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="cb-card p-5 sm:p-6 xl:col-span-2">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                 Weight Trend
@@ -235,7 +301,7 @@ function Dashboard() {
                 Actual scans vs Ross 308 &middot; Day {data.cycle?.day ?? "—"}/42
               </p>
             </div>
-            <Link to="/telemetry" className="text-xs font-semibold hover:underline"
+            <Link to="/telemetry" className="tap inline-flex shrink-0 items-center justify-end text-xs font-semibold hover:underline"
               style={{ color: "var(--brand)" }}>
               Full Analytics →
             </Link>
@@ -259,7 +325,7 @@ function Dashboard() {
         </div>
 
         {/* Activity donut */}
-        <div className="cb-card p-5">
+        <div className="cb-card p-5 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               Activity Status
@@ -284,10 +350,10 @@ function Dashboard() {
 
       {/* ── Recent alerts ───────────────────────────────────── */}
       <div className="cb-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4"
+        <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5"
           style={{ borderBottom: "1px solid var(--border-subtle)" }}>
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Recent Alerts</h2>
-          <Link to="/alerts" className="text-xs font-semibold hover:underline" style={{ color: "var(--brand)" }}>
+          <Link to="/alerts" className="tap inline-flex items-center justify-end text-xs font-semibold hover:underline" style={{ color: "var(--brand)" }}>
             View all →
           </Link>
         </div>
@@ -303,7 +369,7 @@ function Dashboard() {
         ) : (
           <>
             {/* Table header */}
-            <div className="hidden sm:grid grid-cols-12 gap-3 px-5 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
+            <div className="hidden sm:grid grid-cols-12 gap-3 px-6 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-wide"
               style={{ color: "var(--text-tertiary)", borderBottom: "1px solid var(--border-subtle)" }}>
               <div className="col-span-1" />
               <div className="col-span-3">Type</div>
@@ -313,7 +379,7 @@ function Dashboard() {
             </div>
             {topAlerts.map((a, i) => (
               <div key={a.id}
-                className="flex flex-col gap-1 px-5 py-3.5 sm:grid sm:grid-cols-12 sm:items-center sm:gap-3 transition-colors"
+                className="flex flex-col gap-1 px-4 py-3.5 sm:grid sm:grid-cols-12 sm:items-center sm:gap-3 sm:px-6 transition-colors"
                 style={{
                   borderBottom: i < topAlerts.length - 1 ? "1px solid var(--border-subtle)" : "none",
                   background: "transparent",
@@ -331,9 +397,9 @@ function Dashboard() {
                     {a.kind.slice(0, 2).toUpperCase()}
                   </div>
                 </div>
-                <div className="sm:col-span-3 flex items-center gap-2">
-                  <SBadge s={a.severity as "critical" | "warning" | "nominal"} />
-                  <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                <div className="sm:col-span-3 flex min-w-0 items-center gap-2">
+                  <span className="shrink-0 sm:hidden"><SBadge s={a.severity as "critical" | "warning" | "nominal"} /></span>
+                  <p className="min-w-0 text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                     {a.kind}
                   </p>
                 </div>

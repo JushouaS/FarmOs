@@ -38,6 +38,17 @@ export function VisualsDashboardPage() {
   const [flashNotice, setFlashNotice] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const inspectorRef = useRef<HTMLDivElement>(null);
+
+  // Below lg the inspector sits under the feeds, out of view; bring it up
+  // after a tap so the selection visibly does something.
+  const revealInspector = () => {
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      requestAnimationFrame(() =>
+        inspectorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+      );
+    }
+  };
 
   const bBreakdown = behaviorBreakdown(nightModeActive);
   const wBreakdown = weightBreakdown();
@@ -59,18 +70,20 @@ export function VisualsDashboardPage() {
 
   return (
     <AppShell bare>
+      {/* Below lg the page scrolls as a document (feeds, then the inspector);
+          from lg it is a fixed-height workspace with its own scroll regions. */}
       <div
         ref={containerRef}
-        className="flex h-[calc(100vh-56px)] flex-col bg-[var(--surface-page)] text-[var(--text-primary)]"
+        className="flex flex-col bg-[var(--surface-page)] text-[var(--text-primary)] lg:h-dvh [&:fullscreen]:h-dvh [&:fullscreen]:overflow-y-auto"
       >
-        {/* Top Control Bar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 elevation-1">
-          <div className="flex items-center gap-3">
+        {/* Top Control Bar — wraps to two rows on narrow screens */}
+        <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 py-2 sm:px-5 lg:flex-nowrap lg:px-6 elevation-1">
+          <div className="flex min-w-0 items-center gap-3">
             {/* Mobile hamburger */}
             <button
               type="button"
               onClick={() => shell?.openMobileMenu()}
-              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)] lg:hidden"
+              className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)] lg:hidden"
               style={{ color: "var(--text-secondary)" }}
               aria-label="Open menu"
             >
@@ -86,20 +99,20 @@ export function VisualsDashboardPage() {
             >
               <PanelLeft className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-3 w-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="relative flex h-3 w-3 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--cv-accent)] opacity-75"></span>
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-[var(--cv-accent)]"></span>
               </span>
-              <h1 className="font-display text-sm font-semibold tracking-tight text-[var(--text-primary)] text-balance">
+              <h1 className="truncate font-display text-sm font-semibold tracking-tight text-[var(--text-primary)]">
                 Live Camera Feeds
               </h1>
             </div>
 
-            <div className="hidden h-4 w-px bg-[var(--border-default)] sm:block" />
+            <div className="hidden h-4 w-px bg-[var(--border-default)] xl:block" />
 
             {/* Farm & Pen Info Tag */}
-            <div className="hidden items-center gap-1.5 text-xs text-[var(--text-secondary)] sm:flex">
+            <div className="hidden items-center gap-1.5 text-xs text-[var(--text-secondary)] xl:flex">
               <span className="rounded bg-[var(--surface-raised)] px-2 py-0.5 font-medium">
                 {farm.facility.houses[0].label}
               </span>
@@ -109,56 +122,68 @@ export function VisualsDashboardPage() {
           </div>
 
           {/* Controls: View Layout Switcher, Overlays, Actions */}
-          <div className="flex items-center gap-2">
-            {/* Notification Toast */}
+          {/* Full-width second row on phones; inline from sm */}
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            {/* Notification Toast — floats above the bottom nav on phones */}
             {flashNotice && (
-              <div className="animate-spring-in hidden items-center rounded-lg border border-[var(--status-green-border)] bg-[var(--status-green-bg)] px-2.5 py-1 text-xs font-medium text-[var(--status-green-text)] md:flex">
+              <div
+                role="status"
+                className="animate-spring-in fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-center rounded-lg border border-[var(--status-green-border)] bg-[var(--status-green-bg)] px-3 py-2 text-xs font-medium text-[var(--status-green-text)] shadow-lg md:static md:inset-auto md:z-auto md:px-2.5 md:py-1 md:shadow-none"
+              >
                 {flashNotice}
               </div>
             )}
 
             {/* Layout Mode Selector (Concentric: outer rounded-lg p-0.5, inner rounded-md) */}
-            <div className="flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-0.5">
+            <div className="flex flex-1 items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-0.5 sm:flex-none">
               <button
                 type="button"
                 onClick={() => setLayout("dual")}
-                className={`tactile-btn rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${layout === "dual"
+                aria-pressed={layout === "dual"}
+                className={`tactile-btn tap flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:flex-none ${layout === "dual"
                     ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                   }`}
                 aria-label="Dual camera split layout"
               >
-                Split (Dual)
+                <span className="sm:hidden">Split</span>
+                <span className="hidden sm:inline">Split (Dual)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setLayout("dahua")}
-                className={`tactile-btn rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${layout === "dahua"
+                aria-pressed={layout === "dahua"}
+                className={`tactile-btn tap flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:flex-none ${layout === "dahua"
                     ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                   }`}
                 aria-label="Dahua overhead view only"
               >
-                Dahua CCTV
+                <span className="sm:hidden">Dahua</span>
+                <span className="hidden sm:inline">Dahua CCTV</span>
               </button>
               <button
                 type="button"
                 onClick={() => setLayout("kinect")}
-                className={`tactile-btn rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${layout === "kinect"
+                aria-pressed={layout === "kinect"}
+                className={`tactile-btn tap flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:flex-none ${layout === "kinect"
                     ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                   }`}
                 aria-label="Kinect 3D depth view only"
               >
-                Kinect 3D
+                <span className="sm:hidden">Kinect</span>
+                <span className="hidden sm:inline">Kinect 3D</span>
               </button>
             </div>
 
-            {/* Toggle Overlay Button */}
+            {/* Toggle Overlay Button — icon-only on phones */}
             <button
               type="button"
               onClick={() => setShowOverlays(!showOverlays)}
-              className={`tactile-btn hidden items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium md:flex ${showOverlays
+              aria-pressed={showOverlays}
+              aria-label="Toggle detection overlays"
+              className={`tactile-btn tap flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${showOverlays
                   ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
                   : "border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 }`}
@@ -168,28 +193,29 @@ export function VisualsDashboardPage() {
                 <rect x="3" y="3" width="18" height="18" rx="2" />
                 <path d="M9 9h6v6H9z" />
               </svg>
-              <span>Detections</span>
+              <span className="hidden md:inline">Detections</span>
             </button>
 
             {/* Snapshot Trigger Button */}
             <button
               type="button"
               onClick={handleSnapshot}
-              className="tactile-btn flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+              aria-label="Capture snapshot"
+              className="tactile-btn tap flex shrink-0 items-center justify-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
               title="Capture instantaneous frame"
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                 <circle cx="12" cy="13" r="4" />
               </svg>
-              <span className="hidden sm:inline">Snapshot</span>
+              <span className="hidden md:inline">Snapshot</span>
             </button>
 
             {/* Fullscreen Trigger Button */}
             <button
               type="button"
               onClick={handleFullscreenToggle}
-              className="tactile-btn flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              className="tactile-btn tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               title="Toggle Fullscreen"
               aria-label="Toggle Fullscreen"
             >
@@ -201,12 +227,12 @@ export function VisualsDashboardPage() {
         </header>
 
         {/* Main Content Area: Video Viewports + Inspector Panel */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row lg:overflow-hidden">
           {/* Video Feeds Grid */}
-          <main className="flex-1 overflow-y-auto p-3 lg:p-4">
+          <main className="p-3 sm:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <div
-              className={`grid h-full gap-3 lg:gap-4 ${layout === "dual"
-                  ? "grid-cols-1 xl:grid-cols-2"
+              className={`grid gap-3 lg:h-full lg:gap-4 ${layout === "dual"
+                  ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"
                   : "grid-cols-1"
                 }`}
             >
@@ -215,19 +241,20 @@ export function VisualsDashboardPage() {
                 <div className="relative flex flex-col overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--surface-card)] elevation-2">
                   {/* Viewport Header */}
                   <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[var(--cv-accent)]" />
-                      <span className="font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--cv-accent)]" />
+                      <span className="truncate font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
                         CAM-01 : OVERHEAD CAMERA
                       </span>
-                      <span className="rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)]">
+                      <span className="hidden shrink-0 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)] sm:inline">
                         1280x720 @ 25fps
                       </span>
                     </div>
                   </div>
 
-                  {/* Video Viewport Container */}
-                  <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+                  {/* Video Viewport Container — 16:9 box when the page scrolls,
+                      fills the available height in the lg workspace */}
+                  <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
                     {!dahuaError ? (
                       <img
                         src={DAHUA_FEED_STREAM}
@@ -236,7 +263,7 @@ export function VisualsDashboardPage() {
                         onError={() => setDahuaError(true)}
                       />
                     ) : (
-                      <div className="flex flex-col items-center justify-center p-6 text-center">
+                      <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
                         <div className="mb-2 rounded-full bg-[var(--status-amber-bg)] p-3 text-[var(--status-amber-text)]">
                           <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <circle cx="12" cy="12" r="10" />
@@ -253,7 +280,7 @@ export function VisualsDashboardPage() {
                         <button
                           type="button"
                           onClick={() => setDahuaError(false)}
-                          className="tactile-btn mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
+                          className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
                         >
                           Retry Connection
                         </button>
@@ -283,7 +310,12 @@ export function VisualsDashboardPage() {
                                     ? "border border-[var(--status-amber)] bg-[rgba(251,191,36,0.12)]"
                                     : "border border-[var(--cv-accent)] bg-[rgba(163,230,53,0.08)]"
                                 }`}
-                              onClick={() => bird && setSelectedBird(bird)}
+                              onClick={() => {
+                                if (!bird) return;
+                                setSelectedBird(bird);
+                                setSelectedKinect(null);
+                                revealInspector();
+                              }}
                             >
                               <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/80 px-1 py-0.5 text-[9px] font-mono font-medium text-[var(--cv-accent-text)]">
                                 <span>{det.id}</span>
@@ -316,7 +348,7 @@ export function VisualsDashboardPage() {
 
                     {/* Active Birds Scanned Count Badge (Bottom Right) */}
                     <div className="pointer-events-none absolute bottom-3 right-3 rounded-lg border border-[var(--border-subtle)] bg-black/75 px-2.5 py-1 text-xs font-mono text-[var(--text-secondary)] backdrop-blur-sm">
-                      <span className="text-[var(--cv-accent)] font-semibold tabular-nums">{totalBirds}</span> BIRDS MONITORED
+                      <span className="text-[var(--cv-accent)] font-semibold tabular-nums">{totalBirds}</span> BIRDS<span className="hidden sm:inline"> MONITORED</span>
                     </div>
                   </div>
                 </div>
@@ -327,19 +359,20 @@ export function VisualsDashboardPage() {
                 <div className="relative flex flex-col overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--surface-card)] elevation-2">
                   {/* Viewport Header */}
                   <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[var(--brand)]" />
-                      <span className="font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--brand)]" />
+                      <span className="truncate font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
                         CAM-02 : WEIGHING STATION
                       </span>
-                      <span className="rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)]">
+                      <span className="hidden shrink-0 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)] sm:inline">
                         Depth Station
                       </span>
                     </div>
                   </div>
 
-                  {/* Video Viewport Container */}
-                  <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+                  {/* Video Viewport Container — 16:9 box when the page scrolls,
+                      fills the available height in the lg workspace */}
+                  <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
                     {!kinectError ? (
                       <img
                         src={KINECT_FEED_STREAM}
@@ -348,7 +381,7 @@ export function VisualsDashboardPage() {
                         onError={() => setKinectError(true)}
                       />
                     ) : (
-                      <div className="flex flex-col items-center justify-center p-6 text-center">
+                      <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
                         <div className="mb-2 rounded-full bg-[var(--status-blue-bg)] p-3 text-[var(--status-blue-text)]">
                           <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polygon points="12 2 2 7 12 12 22 7 12 2" />
@@ -365,7 +398,7 @@ export function VisualsDashboardPage() {
                         <button
                           type="button"
                           onClick={() => setKinectError(false)}
-                          className="tactile-btn mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
+                          className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
                         >
                           Recheck Sensor
                         </button>
@@ -390,7 +423,11 @@ export function VisualsDashboardPage() {
                                   ? "border-2 border-[var(--brand)] bg-[rgba(52,211,153,0.2)] shadow-[0_0_10px_var(--brand)]"
                                   : "border-[var(--brand)] bg-[rgba(52,211,153,0.06)] hover:bg-[rgba(52,211,153,0.14)]"
                                 }`}
-                              onClick={() => setSelectedKinect(kd)}
+                              onClick={() => {
+                                setSelectedKinect(kd);
+                                setSelectedBird(null);
+                                revealInspector();
+                              }}
                             >
                               <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-[9px] font-mono text-[var(--brand)]">
                                 <span>{kd.id}</span>
@@ -423,9 +460,10 @@ export function VisualsDashboardPage() {
           </main>
 
           {/* Right Inspector & Analytics Drawer Panel */}
-          <aside className="w-72 shrink-0 overflow-y-auto border-l border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 flex flex-col gap-3">
+          {/* Stacks under the feeds below lg (2-up on tablets), docks right from lg */}
+          <aside className="grid gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 sm:grid-cols-2 sm:p-4 lg:flex lg:w-72 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-t-0 lg:border-l lg:p-3">
             {/* Selected Target Inspection Box */}
-            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
+            <div ref={inspectorRef} className="scroll-mt-4 scroll-mb-20 rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
                 <span className="label-section text-[11px] tracking-widest font-bold">
                   {selectedBird ? "Bird Inspector" : selectedKinect ? "Depth Target" : "Target Selection"}
@@ -437,7 +475,7 @@ export function VisualsDashboardPage() {
                       setSelectedBird(null);
                       setSelectedKinect(null);
                     }}
-                    className="tactile-btn text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                    className="tactile-btn tap -my-2 px-1 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                   >
                     Clear
                   </button>
@@ -537,7 +575,7 @@ export function VisualsDashboardPage() {
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
                   </div>
                   <p className="text-xs text-[var(--text-tertiary)] leading-relaxed max-w-[180px]">
-                    Click any detection bounding box on either stream to inspect bird telemetry.
+                    Tap or click any detection box on either stream to inspect bird telemetry.
                   </p>
                 </div>
               )}
@@ -550,7 +588,8 @@ export function VisualsDashboardPage() {
                 <button
                   type="button"
                   onClick={() => setNightModeActive(!nightModeActive)}
-                  className={`tactile-btn rounded px-1.5 py-0.5 text-[10px] font-mono ${nightModeActive
+                  aria-pressed={nightModeActive}
+                  className={`tactile-btn tap -my-2 rounded px-1.5 py-0.5 text-[10px] font-mono ${nightModeActive
                       ? "bg-[var(--status-blue-bg)] text-[var(--status-blue-text)] border border-[var(--status-blue-border)]"
                       : "bg-[var(--surface-raised)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                     }`}

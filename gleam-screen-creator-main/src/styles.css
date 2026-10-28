@@ -253,12 +253,18 @@
   html { color-scheme: dark; }
   html.light { color-scheme: light; }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     background-color: var(--surface-page);
     color: var(--text-primary);
     font-family: "Inter", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* JetBrains Mono — telemetry only (FPS, ms, %, g values) */
@@ -274,12 +280,23 @@
  * Component utilities
  * ============================================================ */
 
-/* Card — slate-900 bg, subtle border */
+/* Card — slate-900 bg, subtle border.
+ * Radius raised to 1.25rem (R-11: deliberate, one step up from the
+ * 0.5rem used by inputs/buttons and the full-pill badges, not "everything
+ * is a pill" — this is the one card-level radius in the system). Light
+ * mode gets its own softer, larger-spread shadow (R-12: cards are the
+ * dashboard's focal content, so they get the elevated "resting on the
+ * page" look the reference uses; dark mode keeps its tighter shadow
+ * since that mode's identity is the CV/telemetry surface, not this one). */
 @utility cb-card {
   background-color: var(--surface-card);
   border: 1px solid var(--border-default);
-  border-radius: 0.75rem;
+  border-radius: 1.25rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.light .cb-card {
+  box-shadow: var(--shadow-elev-1);
 }
 
 /* Input */
@@ -355,6 +372,20 @@
   letter-spacing: 0.05em;
   font-family: "JetBrains Mono", monospace;
   display: inline-block;
+}
+
+/* Touch hit area (R-03: 44px minimum tap target). Only on coarse pointers,
+ * so mouse users keep the dense desktop controls the dashboard is built on. */
+@utility tap {
+  @media (pointer: coarse) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Clears the iOS home indicator under fixed bottom UI. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Section label */
@@ -489,6 +520,89 @@
 .animate-ticker-in    { animation: tickerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-success-pop  { animation: successPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+/* Chicken mascot (src/components/farm/Chicken.tsx). Pivots are in viewBox
+ * units, so the motion scales with the bird at every size. */
+@keyframes chickBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(1.6px); }
+}
+
+@keyframes chickPeck {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  66% { transform: rotate(-8deg); }
+  73% { transform: rotate(44deg); }
+  77% { transform: rotate(32deg); }
+  81% { transform: rotate(44deg); }
+  90% { transform: rotate(0deg); }
+}
+
+@keyframes chickBlink {
+  0%, 93%, 100% { transform: scaleY(1); }
+  96%           { transform: scaleY(0.1); }
+}
+
+@keyframes chickShake {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-14deg); }
+  40% { transform: rotate(12deg); }
+  60% { transform: rotate(-9deg); }
+  80% { transform: rotate(6deg); }
+}
+
+@keyframes chickHop {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-16px); }
+  50% { transform: translateY(0); }
+  70% { transform: translateY(-7px); }
+}
+
+@keyframes chickFlap {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-26deg); }
+}
+
+.chick-body {
+  transform-box: view-box;
+  transform-origin: 104px 182px;
+  animation: chickBob 2.6s ease-in-out infinite;
+  /* Silhouette edge so the white bird still reads on the light theme */
+  filter: drop-shadow(0 2px 5px rgba(15, 23, 42, 0.22));
+}
+
+.chick-head {
+  transform-box: view-box;
+  transform-origin: 124px 88px;
+  animation: chickPeck 5.5s var(--ease-standard) infinite;
+  transition: transform 0.3s var(--ease-spring);
+}
+
+.chick-wing {
+  transform-box: view-box;
+  transform-origin: 118px 102px;
+}
+
+.chick-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chickBlink 4.2s ease-in-out infinite;
+}
+
+.chick[data-mood="shy"] .chick-head   { animation: none; transform: rotate(-16deg); }
+.chick[data-mood="error"] .chick-head { animation: chickShake 0.5s ease-in-out both; }
+.chick[data-mood="happy"] .chick-head { animation: none; }
+.chick[data-mood="happy"] .chick-body { animation: chickHop 0.9s var(--ease-spring) both; }
+.chick[data-mood="happy"] .chick-wing { animation: chickFlap 0.3s ease-in-out 3; }
+
+/* iOS Safari zooms the page when a focused field's text is under 16px.
+ * Unlayered so it outranks the text-xs/text-sm utilities on inputs. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-spring-in,
   .animate-drift-slow,
@@ -496,6 +610,10 @@
   .animate-card-shake,
   .animate-ticker-in,
   .animate-success-pop,
+  .chick-body,
+  .chick-head,
+  .chick-wing,
+  .chick-eye,
   .tactile-btn {
     animation: none !important;
     transition: none !important;

@@ -15,7 +15,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="relative h-6 w-11 rounded-full transition-colors shrink-0"
+      className="relative h-6 w-11 rounded-full transition-colors shrink-0 before:absolute before:-inset-2.5 before:content-['']"
       style={{
         background: checked ? "var(--brand)" : "var(--surface-raised)",
         border: "1px solid var(--border-default)",
@@ -44,7 +44,9 @@ function Row({ label, sub, children }: { label: string; sub?: string; children: 
         <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{label}</p>
         {sub && <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{sub}</p>}
       </div>
-      <div className="shrink-0">{children}</div>
+      {/* Long values (model names, unit lists) wrap right-aligned instead of
+          squeezing the label column on phones */}
+      <div className="flex min-w-0 max-w-[55%] justify-end text-right [overflow-wrap:anywhere]">{children}</div>
     </div>
   );
 }
@@ -186,13 +188,13 @@ function SettingsPage() {
       </div>
 
       {/* Save row */}
-      <div className="mt-6 flex items-center justify-end gap-3">
+      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
         {saved && (
-          <span className="font-mono text-sm font-semibold" style={{ color: "var(--status-green)" }}>
+          <span role="status" className="text-center font-mono text-sm font-semibold sm:text-left" style={{ color: "var(--status-green)" }}>
             ✓ Changes saved
           </span>
         )}
-        <button onClick={handleSave} className="btn-primary">Save Changes</button>
+        <button onClick={handleSave} className="btn-primary tap">Save Changes</button>
       </div>
     </AppShell>
   );

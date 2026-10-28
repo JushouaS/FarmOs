@@ -50,7 +50,7 @@ function ContactPage() {
             ].map((c) => (
               <div key={c.label} className="flex items-start gap-3">
                 <span className="text-xl shrink-0">{c.icon}</span>
-                <div>
+                <div className="min-w-0 [overflow-wrap:anywhere]">
                   <p className="label-section mb-0.5">{c.label}</p>
                   <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{c.value}</p>
                 </div>
@@ -87,7 +87,7 @@ function ContactPage() {
 
         {/* Form */}
         <div className="lg:col-span-2">
-          <div className="cb-card p-6">
+          <div className="cb-card p-5 sm:p-6">
             <h2 className="mb-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Send Us a Message</h2>
             <p className="mb-5 text-sm" style={{ color: "var(--text-tertiary)" }}>Describe your issue and we'll get back to you shortly.</p>
 
@@ -127,7 +127,7 @@ function ContactPage() {
                   placeholder="Describe your issue in detail…"
                   className="cb-input resize-none" />
               </div>
-              <button type="submit" className="btn-primary gap-2">
+              <button type="submit" className="btn-primary tap w-full gap-2 sm:w-auto">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                 </svg>

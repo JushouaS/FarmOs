@@ -103,7 +103,7 @@ function NotificationsPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6 lg:p-8">
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 lg:py-2">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -124,7 +124,7 @@ function NotificationsPage() {
           <button
             onClick={load}
             disabled={isLoading}
-            className="flex items-center gap-2 self-start rounded-lg border border-outline-variant px-4 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-50"
+            className="tap flex items-center gap-2 self-start rounded-lg border border-outline-variant px-4 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-50"
           >
             <Icon name="refresh" size={16} />
             Refresh
@@ -139,7 +139,7 @@ function NotificationsPage() {
               <button
                 key={f.value}
                 onClick={() => setFilter(f.value)}
-                className={`relative px-3 pb-2 text-sm font-medium transition-colors ${
+                className={`tap relative px-3 pb-2 text-sm font-medium transition-colors ${
                   active ? "text-primary" : "text-on-surface-variant hover:text-on-surface"
                 }`}
               >
@@ -220,7 +220,7 @@ function NotificationFeed({
         return (
           <div
             key={notif.id}
-            className={`group flex items-start gap-4 p-4 transition-colors hover:bg-surface-container/50 ${
+            className={`group flex items-start gap-3 p-3 transition-colors hover:bg-surface-container/50 sm:gap-4 sm:p-4 ${
               isUnread ? "bg-surface-container-low/40" : ""
             }`}
           >
@@ -234,7 +234,7 @@ function NotificationFeed({
             </div>
 
             {/* Channel icon */}
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant">
+            <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant sm:flex">
               <Icon name={channelIcon} size={18} />
             </div>
 
@@ -261,12 +261,15 @@ function NotificationFeed({
 
             {/* Action */}
             <div className="shrink-0 pt-0.5">
+              {/* Hover-reveal only where hover exists; touch screens and
+                  keyboard focus always see the button. */}
               {isUnread ? (
                 <button
                   onClick={() => onMarkRead(notif.id)}
                   disabled={isMarking}
-                  className="rounded-md p-2 text-on-surface-variant opacity-0 transition-all hover:bg-primary/10 hover:text-primary group-hover:opacity-100 disabled:opacity-50"
+                  className="tap rounded-md p-2 text-on-surface-variant transition-all hover:bg-primary/10 hover:text-primary focus-visible:opacity-100 disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                   title="Mark as read"
+                  aria-label="Mark as read"
                 >
                   <Icon name="done" size={18} />
                 </button>

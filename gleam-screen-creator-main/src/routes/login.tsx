@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo, useRef, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useAuth, MfaRequiredError, type LoginError } from "@/lib/auth-context";
-import { broilers, flockPopulation, modelTelemetry } from "@/lib/farm/dataset";
+import { CerebroilLogo } from "@/components/farm/SideNav";
+import { Chicken, type ChickenMood } from "@/components/farm/Chicken";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -13,167 +14,35 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-/* ── Themed tokens: resolves to the correct palette in both modes ─── */
-const T = {
-  pageBg: "var(--surface-page)",
-  cardBg: "var(--surface-card)",
-  raised: "var(--surface-raised)",
-  sunken: "var(--surface-sunken)",
-  borderSubtle: "var(--border-subtle)",
-  borderDefault: "var(--border-default)",
-  borderStrong: "var(--border-strong)",
-  textPrimary: "var(--text-primary)",
-  textSecondary: "var(--text-secondary)",
-  textTertiary: "var(--text-tertiary)",
-  textDisabled: "var(--text-disabled)",
-  textInverse: "var(--text-inverse)",
-  brand: "var(--brand)",
-  brandHover: "var(--brand-hover)",
-  brandMuted: "var(--brand-muted)",
-  cvAccent: "var(--cv-accent)",
-  sidebarBg: "var(--sidebar-bg)",
-  sidebarText: "var(--sidebar-text)",
-  sidebarMuted: "var(--sidebar-muted)",
-  sidebarActiveText: "var(--sidebar-active-text)",
-  statusRedBg: "var(--status-red-bg)",
-  statusRedBorder: "var(--status-red-border)",
-  statusRed: "var(--status-red)",
-  statusRedText: "var(--status-red-text)",
+/* Design read: sign-in for farm staff, minimal frosted-glass language over a
+ * calm emerald field. Dials ENERGY 2 / RHYTHM 1 / MOTION 2.
+ *
+ * Glass is used on exactly two elements (R-10): the sign-in card and the
+ * theme toggle. The two blurred colour fields behind them exist so the glass
+ * has something to frost (R-01); both reuse the brand emerald and the CV lime
+ * accent, no new colours. The chicken is the identity motif and its motion
+ * reports sign-in state (see Chicken.tsx). */
+
+const glassCard = {
+  background: "color-mix(in srgb, var(--surface-card) 58%, transparent)",
+  border: "1px solid color-mix(in srgb, var(--text-primary) 10%, transparent)",
+  boxShadow:
+    "var(--shadow-elev-3), inset 0 1px 0 color-mix(in srgb, #ffffff 10%, transparent)",
+  WebkitBackdropFilter: "blur(24px) saturate(150%)",
+  backdropFilter: "blur(24px) saturate(150%)",
 } as const;
 
-/* ── Live telemetry ticker ─────────────────────────────────────────
- * Cycles stats from the same farm dataset the dashboard renders, so
- * the numbers stay consistent with the product's data (no invented
- * figures). Purpose: show the real-time stream this product delivers. */
-interface TickerStat {
-  label: string;
-  value: string;
-}
+const fieldClass =
+  "w-full rounded-xl border px-4 py-3 text-sm outline-none transition-[border-color,box-shadow] duration-150 " +
+  "border-[color:var(--border-default)] bg-[color:color-mix(in_srgb,var(--surface-sunken)_55%,transparent)] " +
+  "text-[color:var(--text-primary)] placeholder:text-[color:var(--text-tertiary)] placeholder:opacity-70 " +
+  "focus:border-[color:var(--brand)] focus:ring-4 focus:ring-[color:var(--brand-muted)]";
 
-function useTelemetryTicker(): TickerStat {
-  const stats = useMemo<TickerStat[]>(() => {
-    const avgWeightG = Math.round(
-      broilers.reduce((sum, b) => sum + b.weightG, 0) / broilers.length,
-    );
-    return [
-      { label: "BIRDS TRACKED", value: `${flockPopulation()}` },
-      { label: "AVG WEIGHT", value: `${avgWeightG} g` },
-      { label: "INFERENCE", value: `${modelTelemetry.inferenceMs} ms` },
-      { label: "STREAM", value: `${modelTelemetry.fps} fps` },
-    ];
-  }, []);
+const primaryBtnClass =
+  "tactile-btn tap w-full rounded-xl py-3 text-sm font-semibold transition-[background-color,opacity] duration-150 " +
+  "bg-[color:var(--brand)] text-[color:var(--text-inverse)] hover:bg-[color:var(--brand-hover)] disabled:opacity-70";
 
-  const [index, setIndex] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(
-      () => setIndex((v) => (v + 1) % stats.length),
-      2600,
-    );
-    return () => clearInterval(id);
-  }, [stats.length]);
-
-  return stats[index % stats.length]!;
-}
-
-function TelemetryStrip() {
-  const stat = useTelemetryTicker();
-  const pipelineLive = modelTelemetry.pipelineStatus === "ACTIVE";
-
-  return (
-    <div
-      className="flex items-center gap-2 rounded-lg px-3 py-2 animate-spring-in"
-      style={{
-        animationDelay: "440ms",
-        background: `color-mix(in srgb, ${T.sidebarActiveText} 8%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${T.sidebarActiveText} 14%, transparent)`,
-      }}
-      aria-label={`Pipeline ${modelTelemetry.pipelineStatus.toLowerCase()}, streaming telemetry`}
-    >
-      <span className="relative flex h-2.5 w-2.5 shrink-0">
-        {pipelineLive && (
-          <span
-            className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
-            style={{ background: T.sidebarActiveText }}
-          />
-        )}
-        <span
-          className="relative inline-flex h-2.5 w-2.5 rounded-full"
-          style={{ background: T.sidebarActiveText }}
-        />
-      </span>
-      <span
-        className="font-mono text-[11px] font-semibold tracking-wide"
-        style={{ color: T.sidebarActiveText }}
-      >
-        {`PIPELINE ${modelTelemetry.pipelineStatus}`}
-      </span>
-      <span style={{ color: T.sidebarMuted }}>|</span>
-      {/* key remount replays the ticker-in animation on each new value */}
-      <span
-        key={stat.label}
-        className="animate-ticker-in inline-block min-w-[19ch] font-mono text-[11px] font-semibold tabular-nums"
-        style={{ color: T.sidebarText }}
-      >
-        {stat.label} {stat.value}
-      </span>
-    </div>
-  );
-}
-
-/* ── Animated Metric Pill ────────────────────────────────────────── */
-function MetricPill({
-  tag,
-  desc,
-  delay,
-}: {
-  tag: string;
-  desc: string;
-  delay: number;
-}) {
-  return (
-    <li
-      className="flex items-start gap-3 animate-spring-in"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <span
-        className="mt-0.5 shrink-0 rounded-md px-2 py-0.5 font-mono text-[10px] font-bold tracking-wide tabular-nums"
-        style={{
-          background: `color-mix(in srgb, ${T.sidebarActiveText} 14%, transparent)`,
-          color: T.sidebarActiveText,
-          border: `1px solid color-mix(in srgb, ${T.sidebarActiveText} 22%, transparent)`,
-        }}
-      >
-        {tag}
-      </span>
-      <span
-        className="text-sm leading-snug text-pretty"
-        style={{ color: T.sidebarText }}
-      >
-        {desc}
-      </span>
-    </li>
-  );
-}
-
-/* ── Floating Grid Dot Pattern (identity motif: monitoring grid) ─── */
-function GridPattern() {
-  return (
-    <svg
-      className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.035]"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-          <circle cx="1" cy="1" r="0.8" fill="currentColor" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#grid)" />
-    </svg>
-  );
-}
-
-/* ── Theme Toggle ────────────────────────────────────────────────── */
+/* ── Theme toggle (glass, top right) ─────────────────────────────── */
 function ThemeToggle() {
   const [isLight, setIsLight] = useState(false);
 
@@ -195,14 +64,10 @@ function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="tactile-btn absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-xl transition-colors"
-      style={{
-        color: T.textTertiary,
-        background: T.raised,
-        border: `1px solid ${T.borderSubtle}`,
-      }}
-      aria-label="Toggle theme"
-      title="Toggle light/dark mode"
+      className="tactile-btn tap flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:text-[color:var(--text-primary)]"
+      style={{ ...glassCard, boxShadow: "none", color: "var(--text-secondary)" }}
+      aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+      title={isLight ? "Switch to dark mode" : "Switch to light mode"}
     >
       {isLight ? (
         <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -231,18 +96,23 @@ function LoginPage() {
   const [hint, setHint] = useState<string | null>(null);
   const [shaking, setShaking] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [pwFocused, setPwFocused] = useState(false);
   // Set before login() resolves so the routing effect below can tell a
   // fresh sign-in (show the success beat first) from a user who was
   // already signed in when they opened /login (route away immediately).
   const signedInHere = useRef(false);
+  const usernameRef = useRef<HTMLInputElement>(null);
 
   const [mfaPending, setMfaPending] = useState(false);
   const [mfaToken, setMfaToken] = useState("");
   const [useBackup, setUseBackup] = useState(false);
   const [backupCode, setBackupCode] = useState("");
 
-  const [usernameFocused, setUsernameFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
+  // Focus the first field on mouse/keyboard devices only: on phones an
+  // autofocus throws the keyboard over the page before anyone asked for it.
+  useEffect(() => {
+    if (window.matchMedia("(pointer: fine)").matches) usernameRef.current?.focus();
+  }, []);
 
   // Route away once authenticated. A fresh sign-in gets a short success
   // beat first so the confirmation state is actually visible.
@@ -259,6 +129,11 @@ function LoginPage() {
     e.preventDefault();
     setError(null);
     setHint(null);
+    if (!username.trim() || !password) {
+      setError("Enter your username and password.");
+      setShaking(true);
+      return;
+    }
     setLoading(true);
     try {
       signedInHere.current = true;
@@ -274,19 +149,14 @@ function LoginPage() {
       const msgs: Record<string, string> = {
         invalid_credentials: "Incorrect username or password.",
         user_disabled: "This account is disabled. Contact your administrator.",
-        account_locked:
-          "Account temporarily locked due to too many failed attempts.",
+        account_locked: "Account temporarily locked due to too many failed attempts.",
+        rate_limit_exceeded: "Too many attempts. Wait a minute and try again.",
         login_failed: "Could not reach the server. Check your connection.",
       };
       setError(msgs[code] ?? `Login failed (${code})`);
       const le = err as LoginError;
-      if (
-        le.attemptsRemaining !== undefined &&
-        le.attemptsRemaining >= 0
-      )
-        setHint(
-          `${le.attemptsRemaining} attempt${le.attemptsRemaining !== 1 ? "s" : ""} remaining.`
-        );
+      if (le.attemptsRemaining !== undefined && le.attemptsRemaining >= 0)
+        setHint(`${le.attemptsRemaining} attempt${le.attemptsRemaining !== 1 ? "s" : ""} remaining.`);
       setShaking(true);
     } finally {
       setLoading(false);
@@ -308,7 +178,7 @@ function LoginPage() {
           ? "Incorrect code. Try again."
           : code === "invalid_backup_code"
             ? "Incorrect backup code."
-            : "Verification failed. Try again."
+            : "Verification failed. Try again.",
       );
       setShaking(true);
     } finally {
@@ -316,634 +186,277 @@ function LoginPage() {
     }
   };
 
-  const inputStyle = {
-    background: T.sunken,
-    color: T.textPrimary,
-    border: `1px solid ${T.borderDefault}`,
-  };
-
-  const inputFocusStyle = {
-    background: T.sunken,
-    color: T.textPrimary,
-    border: `1px solid ${T.brand}`,
-    boxShadow: `0 0 0 3px ${T.brandMuted}`,
-  };
+  const mood: ChickenMood = signedIn
+    ? "happy"
+    : shaking
+      ? "error"
+      : pwFocused && !showPw
+        ? "shy"
+        : "idle";
 
   return (
-    <div
-      className="relative flex min-h-screen"
-      style={{ background: T.pageBg }}
-    >
-      {/* ─── Left Panel: Brand Showcase ─────────────────────────────── */}
-      <div
-        className="hidden lg:flex lg:w-5/12 flex-col justify-between relative overflow-hidden p-12"
-        style={{
-          background: T.sidebarBg,
-          borderRight: `1px solid color-mix(in srgb, ${T.sidebarActiveText} 10%, transparent)`,
-        }}
-      >
-        {/* Subtle grid texture */}
-        <GridPattern />
-
-        {/* Drifting ambient glows (2 elements only, slow loop) */}
+    <div className="relative min-h-dvh overflow-hidden" style={{ background: "var(--surface-page)" }}>
+      {/* Colour fields for the glass to frost */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div
-          className="animate-drift-slow pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full blur-3xl"
-          style={{
-            background: `radial-gradient(circle, color-mix(in srgb, ${T.sidebarActiveText} 8%, transparent), transparent 70%)`,
-          }}
+          className="animate-drift-slow absolute -left-24 top-[12%] h-[26rem] w-[26rem] rounded-full blur-3xl sm:h-[34rem] sm:w-[34rem]"
+          style={{ background: "color-mix(in srgb, var(--brand) 20%, transparent)" }}
         />
         <div
-          className="animate-drift-slower pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full blur-3xl"
-          style={{
-            background: `radial-gradient(circle, color-mix(in srgb, ${T.sidebarActiveText} 5%, transparent), transparent 70%)`,
-          }}
+          className="animate-drift-slower absolute -bottom-32 -right-24 h-[24rem] w-[24rem] rounded-full blur-3xl sm:h-[30rem] sm:w-[30rem]"
+          style={{ background: "color-mix(in srgb, var(--cv-accent) 12%, transparent)" }}
         />
-
-        {/* Brand Header */}
-        <div className="relative z-10 flex items-center gap-3 animate-spring-in">
-          <div
-            className="flex h-11 w-11 items-center justify-center rounded-xl elevation-1"
-            style={{
-              background: `linear-gradient(135deg, ${T.sidebarActiveText}, color-mix(in srgb, ${T.sidebarActiveText} 75%, #059669))`,
-            }}
-          >
-            <svg
-              className="h-6 w-6"
-              style={{ color: "#020617" }}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.2}
-              viewBox="0 0 24 24"
-            >
-              <circle cx="12" cy="12" r="4" />
-              <path
-                strokeLinecap="round"
-                d="M3 9l2-3h14l2 3M3 9v9a2 2 0 002 2h14a2 2 0 002-2V9"
-              />
-              <circle
-                cx="12"
-                cy="12"
-                r="1.5"
-                fill="currentColor"
-                stroke="none"
-              />
-            </svg>
-          </div>
-          <div>
-            <div className="font-display text-xl font-bold tracking-tight text-white text-balance">
-              Cerebroil
-            </div>
-            <div
-              className="text-[11px] tracking-wide"
-              style={{ color: T.sidebarMuted }}
-            >
-              Flock Monitor
-            </div>
-          </div>
-        </div>
-
-        {/* Feature Showcase */}
-        <div className="relative z-10 space-y-8">
-          <div>
-            <h1 className="animate-spring-in text-[2.25rem] font-display font-extrabold leading-[1.15] tracking-tight text-white text-balance" style={{ animationDelay: "60ms" }}>
-              Precision flock intelligence,
-              <br />
-              powered by smart monitoring.
-            </h1>
-            <p
-              className="animate-spring-in mt-3 max-w-md text-sm leading-relaxed text-pretty"
-              style={{ animationDelay: "120ms", color: T.sidebarText }}
-            >
-              Continuous bird tracking, weight estimation, and welfare telemetry in a single stream.
-            </p>
-          </div>
-
-          {/* Animated capability list */}
-          <ul className="space-y-2.5">
-            <MetricPill tag="Detection" desc="Real-time multi-bird tracking and counting" delay={180} />
-            <MetricPill tag="Weighing" desc="Continuous non-invasive weight estimation" delay={260} />
-            <MetricPill tag="Activity" desc="Spatial localization & movement monitoring" delay={340} />
-            <MetricPill tag="Alerts" desc="Automated anomaly & welfare alerts" delay={420} />
-          </ul>
-
-          {/* Live telemetry strip */}
-          <TelemetryStrip />
-        </div>
-
-        {/* Footer */}
-        <p
-          className="relative z-10 font-mono text-[11px]"
-          style={{ color: T.sidebarMuted }}
-        >
-          2025 Cerebroil // Thesis Project // Ross 308 Broiler Monitor
-        </p>
       </div>
 
-      {/* ─── Right Panel: Login Form ────────────────────────────────── */}
-      <div className="relative flex flex-1 items-center justify-center p-6 lg:p-12">
-        {/* Theme toggle */}
+      {/* Top bar: wordmark + theme */}
+      <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-4 pt-4 sm:px-8 sm:pt-6">
+        <div className="flex items-center gap-2.5">
+          <CerebroilLogo size={32} />
+          <span className="font-display text-base font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+            Cerebroil
+          </span>
+        </div>
         <ThemeToggle />
+      </header>
 
-        {/* Subtle background radial gradient */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: `radial-gradient(ellipse at 50% 30%, color-mix(in srgb, ${T.brand} 4%, transparent), transparent 60%)`,
-          }}
-        />
+      <main className="relative z-10 mx-auto flex min-h-dvh w-full max-w-5xl flex-col items-center justify-center px-4 pb-10 pt-24 lg:flex-row lg:gap-20 lg:px-8 lg:py-16">
+        {/* Phones/tablets: perched on the card's top edge. Desktop: stands beside it. */}
+        <div className="relative z-20 -mb-[9px] w-28 sm:w-32 lg:mb-0 lg:w-[22rem]">
+          <div className="lg:hidden">
+            <Chicken mood={mood} showGround={false} />
+          </div>
+          <div className="hidden lg:block">
+            <Chicken mood={mood} />
+          </div>
+        </div>
 
         <div className="relative z-10 w-full max-w-[380px]">
-          {/* Mobile logo */}
-          <div className="mb-10 flex items-center gap-3 lg:hidden animate-spring-in">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl"
-              style={{
-                background: `linear-gradient(135deg, ${T.brand}, ${T.brandHover})`,
-              }}
-            >
-              <svg
-                className="h-5 w-5"
-                style={{ color: T.textInverse }}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.2}
-                viewBox="0 0 24 24"
-              >
-                <circle cx="12" cy="12" r="4" />
-                <path
-                  strokeLinecap="round"
-                  d="M3 9l2-3h14l2 3M3 9v9a2 2 0 002 2h14a2 2 0 002-2V9"
-                />
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="1.5"
-                  fill="currentColor"
-                  stroke="none"
-                />
-              </svg>
-            </div>
-            <div>
-              <div
-                className="font-display text-lg font-bold tracking-tight"
-                style={{ color: T.textPrimary }}
-              >
-                Cerebroil
-              </div>
-              <div
-                className="font-mono text-[11px]"
-                style={{ color: T.textTertiary }}
-              >
-                CV Flock Monitor
-              </div>
-            </div>
-          </div>
-
-          {/* Login Card: outer div runs the entrance, inner div the shake */}
-          <div className="animate-spring-in" style={{ animationDelay: "200ms" }}>
-            <div
-              className={`rounded-2xl p-8 elevation-2 ${shaking ? "animate-card-shake" : ""}`}
-              style={{
-                background: T.cardBg,
-                border: `1px solid ${T.borderDefault}`,
-              }}
-              onAnimationEnd={(e) => {
-                if (e.animationName === "cardShake") setShaking(false);
-              }}
-            >
-              {signedIn ? (
-                /* ── Success state: confirm the action landed ──────── */
-                <div className="flex flex-col items-center gap-4 py-6 text-center">
-                  <div
-                    className="animate-success-pop flex h-14 w-14 items-center justify-center rounded-full"
-                    style={{
-                      background: T.brandMuted,
-                      border: `1px solid color-mix(in srgb, ${T.brand} 20%, transparent)`,
-                    }}
-                  >
-                    <svg
-                      className="h-7 w-7"
-                      style={{ color: T.brand }}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2.4}
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.5l5 5 10-11" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2
-                      className="font-display text-xl font-bold tracking-tight text-balance"
-                      style={{ color: T.textPrimary }}
-                    >
-                      Signed in
-                    </h2>
-                    <p
-                      className="mt-1.5 text-sm"
-                      style={{ color: T.textTertiary }}
-                    >
-                      Opening your dashboard...
-                    </p>
-                  </div>
+          <div
+            className={`rounded-3xl p-6 sm:p-8 ${shaking ? "animate-card-shake" : ""}`}
+            style={glassCard}
+            onAnimationEnd={(e) => {
+              if (e.animationName === "cardShake") setShaking(false);
+            }}
+          >
+            {signedIn ? (
+              /* ── Success ── */
+              <div role="status" className="flex flex-col items-center gap-3 py-8 text-center">
+                <div
+                  className="animate-success-pop flex h-14 w-14 items-center justify-center rounded-full"
+                  style={{ background: "var(--brand-muted)" }}
+                >
+                  <svg className="h-7 w-7" style={{ color: "var(--brand)" }} fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.5l5 5 10-11" />
+                  </svg>
                 </div>
-              ) : !mfaPending ? (
-                <>
-                  {/* Header */}
-                  <div className="mb-6">
-                    <h2
-                      className="font-display text-2xl font-bold tracking-tight text-balance"
-                      style={{ color: T.textPrimary }}
-                    >
-                      Welcome back
-                    </h2>
-                    <p
-                      className="mt-1.5 text-sm text-pretty"
-                      style={{ color: T.textTertiary }}
-                    >
-                      Sign in to access your Cerebroil monitoring dashboard.
-                    </p>
-                  </div>
+                <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+                  Signed in
+                </h1>
+              </div>
+            ) : !mfaPending ? (
+              <>
+                <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+                  Sign in
+                </h1>
+                <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  Demo access{" "}
+                  <span className="font-mono text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                    admin / admin
+                  </span>
+                </p>
 
-                  {/* Demo access: the credentials this deployment accepts */}
+                {error && (
                   <div
-                    className="mb-6 flex items-center justify-between gap-3 rounded-lg px-3 py-2 animate-spring-in"
-                    style={{
-                      animationDelay: "480ms",
-                      background: T.sunken,
-                      border: `1px solid ${T.borderSubtle}`,
-                    }}
+                    role="alert"
+                    className="mt-5 rounded-xl px-3.5 py-3 text-sm animate-spring-in"
+                    style={{ background: "var(--status-red-bg)", border: "1px solid var(--status-red-border)" }}
                   >
-                    <span className="label-section">Demo access</span>
-                    <span
-                      className="font-mono text-[11px] font-semibold tabular-nums"
-                      style={{ color: T.textSecondary }}
-                    >
-                      admin / admin
-                    </span>
+                    <p className="font-medium" style={{ color: "var(--status-red-text)" }}>{error}</p>
+                    {hint && (
+                      <p className="mt-0.5 font-mono text-[11px] tabular-nums" style={{ color: "var(--status-red)" }}>
+                        {hint}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
+                  <div>
+                    <label htmlFor="login-username" className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Username
+                    </label>
+                    <input
+                      ref={usernameRef}
+                      id="login-username"
+                      type="text"
+                      required
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="admin"
+                      className={fieldClass}
+                    />
                   </div>
 
-                  {/* Error Alert */}
-                  {error && (
-                    <div
-                      role="alert"
-                      className="mb-5 flex items-start gap-3 rounded-xl p-3.5 animate-spring-in"
-                      style={{
-                        background: T.statusRedBg,
-                        border: `1px solid ${T.statusRedBorder}`,
-                      }}
-                    >
-                      <svg
-                        className="mt-0.5 h-4 w-4 shrink-0"
-                        style={{ color: T.statusRed }}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        viewBox="0 0 24 24"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M12 8v4m0 4h.01"
-                        />
-                      </svg>
-                      <div>
-                        <p
-                          className="text-sm font-medium"
-                          style={{ color: T.statusRedText }}
-                        >
-                          {error}
-                        </p>
-                        {hint && (
-                          <p
-                            className="mt-0.5 font-mono text-[11px] tabular-nums"
-                            style={{ color: T.statusRed }}
-                          >
-                            {hint}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-                    {/* Username Field */}
-                    <div className="animate-spring-in" style={{ animationDelay: "320ms" }}>
-                      <label
-                        htmlFor="login-username"
-                        className="mb-2 block text-sm font-semibold"
-                        style={{ color: T.textPrimary }}
-                      >
-                        Username
-                      </label>
+                  <div>
+                    <label htmlFor="login-password" className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                      Password
+                    </label>
+                    <div className="relative">
                       <input
-                        id="login-username"
-                        type="text"
+                        id="login-password"
+                        type={showPw ? "text" : "password"}
                         required
-                        autoFocus
-                        autoComplete="username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        onFocus={() => setUsernameFocused(true)}
-                        onBlur={() => setUsernameFocused(false)}
-                        placeholder="admin"
-                        className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-150"
-                        style={usernameFocused ? inputFocusStyle : inputStyle}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onFocus={() => setPwFocused(true)}
+                        onBlur={() => setPwFocused(false)}
+                        placeholder="••••••••"
+                        className={`${fieldClass} pr-12`}
                       />
-                    </div>
-
-                    {/* Password Field */}
-                    <div className="animate-spring-in" style={{ animationDelay: "400ms" }}>
-                      <label
-                        htmlFor="login-password"
-                        className="mb-2 block text-sm font-semibold"
-                        style={{ color: T.textPrimary }}
+                      <button
+                        type="button"
+                        onClick={() => setShowPw((p) => !p)}
+                        className="tactile-btn absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg transition-colors hover:text-[color:var(--text-primary)]"
+                        style={{ color: "var(--text-tertiary)" }}
+                        aria-label={showPw ? "Hide password" : "Show password"}
+                        aria-pressed={showPw}
                       >
-                        Password
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="login-password"
-                          type={showPw ? "text" : "password"}
-                          required
-                          autoComplete="current-password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          onFocus={() => setPasswordFocused(true)}
-                          onBlur={() => setPasswordFocused(false)}
-                          placeholder="Enter your password"
-                          className="w-full rounded-xl px-4 py-3 pr-11 text-sm outline-none transition-all duration-150"
-                          style={
-                            passwordFocused ? inputFocusStyle : inputStyle
-                          }
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPw((p) => !p)}
-                          className="tactile-btn absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
-                          style={{ color: T.textTertiary }}
-                          aria-label={showPw ? "Hide password" : "Show password"}
-                        >
-                          {showPw ? <EyeOffIcon /> : <EyeIcon />}
-                        </button>
-                      </div>
+                        {showPw ? <EyeOffIcon /> : <EyeIcon />}
+                      </button>
                     </div>
-
-                    {/* Submit Button */}
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="tactile-btn animate-spring-in w-full rounded-xl py-3 text-sm font-semibold transition-all duration-150"
-                      style={{
-                        animationDelay: "480ms",
-                        background: loading
-                          ? T.brandHover
-                          : `linear-gradient(135deg, ${T.brand}, ${T.brandHover})`,
-                        color: T.textInverse,
-                        opacity: loading ? 0.8 : 1,
-                        boxShadow: `0 2px 8px color-mix(in srgb, ${T.brand} 30%, transparent)`,
-                      }}
-                    >
-                      {loading ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <svg
-                            className="h-4 w-4 animate-spin"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                            />
-                          </svg>
-                          Signing in...
-                        </span>
-                      ) : (
-                        "Sign In"
-                      )}
-                    </button>
-                  </form>
-
-                  {/* Separator */}
-                  <div className="my-6 flex items-center gap-3">
-                    <div
-                      className="h-px flex-1"
-                      style={{ background: T.borderSubtle }}
-                    />
-                    <span
-                      className="text-[11px] font-medium uppercase tracking-wider"
-                      style={{ color: T.textDisabled }}
-                    >
-                      or
-                    </span>
-                    <div
-                      className="h-px flex-1"
-                      style={{ background: T.borderSubtle }}
-                    />
                   </div>
 
-                  {/* Contact Admin */}
-                  <p
-                    className="text-center text-xs"
-                    style={{ color: T.textTertiary }}
+                  <button type="submit" disabled={loading} className={`${primaryBtnClass} mt-2`}>
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Spinner />
+                        Signing in
+                      </span>
+                    ) : (
+                      "Sign in"
+                    )}
+                  </button>
+                </form>
+              </>
+            ) : (
+              /* ── Two-step verification ── */
+              <>
+                <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
+                  Verify it's you
+                </h1>
+                <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  {useBackup ? "Enter a backup code." : "Enter the 6-digit code from your authenticator."}
+                </p>
+
+                {error && (
+                  <div
+                    role="alert"
+                    className="mt-5 rounded-xl px-3.5 py-3 text-sm font-medium animate-spring-in"
+                    style={{ background: "var(--status-red-bg)", border: "1px solid var(--status-red-border)", color: "var(--status-red-text)" }}
                   >
-                    No account?{" "}
-                    <a
-                      href="mailto:support@cerebroil.dev?subject=Account%20Request"
-                      className="tactile-btn font-medium hover:underline"
-                      style={{ color: T.brand }}
-                    >
-                      Contact administrator
-                    </a>
-                  </p>
-                </>
-              ) : (
-                /* ── MFA / Two-Step Verification ──────────────────────── */
-                <>
-                  <div className="mb-7">
-                    <div className="mb-3 flex items-center gap-2">
-                      <div
-                        className="flex h-9 w-9 items-center justify-center rounded-xl"
-                        style={{
-                          background: T.brandMuted,
-                          border: `1px solid color-mix(in srgb, ${T.brand} 20%, transparent)`,
-                        }}
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          style={{ color: T.brand }}
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                          viewBox="0 0 24 24"
-                        >
-                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                          <path d="M7 11V7a5 5 0 0110 0v4" />
-                        </svg>
-                      </div>
-                    </div>
-                    <h2
-                      className="font-display text-xl font-bold tracking-tight text-balance"
-                      style={{ color: T.textPrimary }}
-                    >
-                      Two-Step Verification
-                    </h2>
-                    <p
-                      className="mt-1.5 text-sm text-pretty"
-                      style={{ color: T.textTertiary }}
-                    >
-                      {useBackup
-                        ? "Enter a backup code to continue."
-                        : "Enter the 6-digit code from your authenticator app."}
-                    </p>
+                    {error}
                   </div>
+                )}
 
-                  {error && (
-                    <div
-                      className="mb-5 rounded-xl p-3.5 text-sm font-medium animate-spring-in"
-                      style={{
-                        background: T.statusRedBg,
-                        border: `1px solid ${T.statusRedBorder}`,
-                        color: T.statusRedText,
-                      }}
-                    >
-                      {error}
-                    </div>
+                <form onSubmit={handleMfa} className="mt-6 space-y-4">
+                  <label htmlFor="login-mfa" className="sr-only">
+                    {useBackup ? "Backup code" : "Verification code"}
+                  </label>
+                  {useBackup ? (
+                    <input
+                      id="login-mfa"
+                      type="text"
+                      required
+                      autoComplete="off"
+                      value={backupCode}
+                      onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
+                      placeholder="XXXXXXXXXX"
+                      className={`${fieldClass} text-center font-mono tracking-widest`}
+                    />
+                  ) : (
+                    <input
+                      id="login-mfa"
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={9}
+                      value={mfaToken}
+                      onChange={(e) => setMfaToken(e.target.value.replace(/\D/g, ""))}
+                      placeholder="000 000"
+                      className={`${fieldClass} text-center font-mono text-lg tracking-[0.3em] tabular-nums`}
+                    />
                   )}
 
-                  <form onSubmit={handleMfa} className="space-y-5">
-                    <div>
-                      <label
-                        className="mb-2 block text-sm font-semibold"
-                        style={{ color: T.textPrimary }}
-                      >
-                        {useBackup ? "Backup Code" : "Verification Code"}
-                      </label>
-                      {useBackup ? (
-                        <input
-                          type="text"
-                          required
-                          autoComplete="off"
-                          value={backupCode}
-                          onChange={(e) =>
-                            setBackupCode(e.target.value.toUpperCase())
-                          }
-                          placeholder="XXXXXXXXXX"
-                          className="w-full rounded-xl px-4 py-3 text-center font-mono text-sm tracking-widest outline-none transition-all duration-150"
-                          style={inputStyle}
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          required
-                          inputMode="numeric"
-                          maxLength={9}
-                          value={mfaToken}
-                          onChange={(e) =>
-                            setMfaToken(e.target.value.replace(/\D/g, ""))
-                          }
-                          placeholder="000 000"
-                          className="w-full rounded-xl px-4 py-3.5 text-center font-mono text-lg tracking-[0.3em] outline-none transition-all duration-150 tabular-nums"
-                          style={inputStyle}
-                        />
-                      )}
-                    </div>
+                  <button type="submit" disabled={loading} className={primaryBtnClass}>
+                    {loading ? "Verifying" : "Verify"}
+                  </button>
 
+                  <div className="flex justify-between text-xs">
                     <button
-                      type="submit"
-                      disabled={loading}
-                      className="tactile-btn w-full rounded-xl py-3 text-sm font-semibold transition-all duration-150"
-                      style={{
-                        background: `linear-gradient(135deg, ${T.brand}, ${T.brandHover})`,
-                        color: T.textInverse,
-                        opacity: loading ? 0.8 : 1,
-                        boxShadow: `0 2px 8px color-mix(in srgb, ${T.brand} 30%, transparent)`,
+                      type="button"
+                      onClick={() => {
+                        setUseBackup((v) => !v);
+                        setError(null);
                       }}
+                      className="tap font-medium hover:underline"
+                      style={{ color: "var(--brand)" }}
                     >
-                      {loading ? "Verifying..." : "Verify and Sign In"}
+                      {useBackup ? "Use authenticator" : "Use backup code"}
                     </button>
-
-                    <div className="flex justify-between text-xs">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUseBackup((v) => !v);
-                          setError(null);
-                        }}
-                        className="tactile-btn font-medium hover:underline"
-                        style={{ color: T.brand }}
-                      >
-                        {useBackup ? "Use authenticator" : "Use backup code"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMfaPending(false);
-                          setError(null);
-                        }}
-                        className="tactile-btn font-medium hover:underline"
-                        style={{ color: T.statusRed }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                </>
-              )}
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMfaPending(false);
+                        setError(null);
+                      }}
+                      className="tap font-medium hover:underline"
+                      style={{ color: "var(--text-tertiary)" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
 
-          {/* Security notice */}
-          <div className="mt-5 flex items-center justify-center gap-2">
-            <svg
-              className="h-3.5 w-3.5 shrink-0"
-              style={{ color: T.textDisabled }}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0110 0v4" />
-            </svg>
-            <span
-              className="text-[11px]"
-              style={{ color: T.textDisabled }}
-            >
-              Your session stays on this device until you sign out.
-            </span>
-          </div>
+          {!signedIn && !mfaPending && (
+            <p className="mt-5 text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
+              No account?{" "}
+              <a
+                href="mailto:support@cerebroil.dev?subject=Account%20Request"
+                className="font-medium hover:underline"
+                style={{ color: "var(--brand)" }}
+              >
+                Contact admin
+              </a>
+            </p>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
-/* ── Icon Components ─────────────────────────────────────────────── */
+/* ── Icons ───────────────────────────────────────────────────────── */
+function Spinner() {
+  return (
+    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
 function EyeIcon() {
   return (
-    <svg
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-      />
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -955,13 +468,7 @@ function EyeIcon() {
 
 function EyeOffIcon() {
   return (
-    <svg
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-    >
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -10,8 +10,9 @@ import {
 
 /**
  * The API base URL is read from the Vite env variable `VITE_API_URL`.
- * Falls back to `http://localhost:4000` which matches the default
- * `packages/api` configuration.
+ * Falls back to port 4000 on whatever host served the page, so opening the
+ * app from another device on the network (http://<lan-ip>:8080) reaches
+ * this machine's API rather than that device's own localhost.
  *
  * Authentication is carried in httpOnly, Secure, SameSite=Strict cookies
  * issued by the API. The frontend never stores tokens in localStorage.
@@ -22,7 +23,9 @@ import {
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
-  "http://localhost:4000";
+  (typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    : "http://localhost:4000");
 
 const fetchOpts: RequestInit = { credentials: "include" };
 

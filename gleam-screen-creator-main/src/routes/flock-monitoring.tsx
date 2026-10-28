@@ -38,7 +38,7 @@ function ConfCell({ value }: { value: number }) {
   const warn  = pct < 75;
   return (
     <div className="flex items-center gap-2">
-      <div className="h-1.5 w-16 rounded-full overflow-hidden" style={{ background: "var(--surface-sunken)" }}>
+      <div className="h-1.5 w-12 shrink-0 rounded-full overflow-hidden sm:w-16" style={{ background: "var(--surface-sunken)" }}>
         <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: color }} />
       </div>
       <span className="font-mono text-[11px] font-semibold" style={{ color }}>
@@ -62,9 +62,9 @@ function BirdCard({ b }: { b: typeof broilers[number] }) {
           : {}}
     >
       {/* Header row */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-mono text-base font-bold" style={{ color: "var(--cv-accent)" }}>{b.id}</span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold"
             style={{
               background: `${BCOLOR[b.behavior]}18`,
@@ -79,7 +79,7 @@ function BirdCard({ b }: { b: typeof broilers[number] }) {
         </div>
       </div>
       {/* Data rows */}
-      <div className="grid grid-cols-2 gap-y-2 text-xs">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <div>
           <p className="label-section">Est. Weight</p>
           <p className="font-mono font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>
@@ -150,9 +150,11 @@ function FlockTrackingPage() {
           </p>
         </div>
         <input
+          type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search B-001…"
+          aria-label="Search birds by ID"
           className="cb-input w-full sm:w-44 font-mono text-sm"
         />
       </div>
@@ -176,7 +178,8 @@ function FlockTrackingPage() {
       <div className="mb-4 flex gap-2 flex-wrap">
         {(["All", "Active", "Inactive"] as (BehaviorState | "All")[]).map((b) => (
           <button key={b} onClick={() => setFilterB(b)}
-            className="rounded-full px-3 py-1 font-mono text-[11px] font-semibold transition-all"
+            aria-pressed={filterB === b}
+            className="tap rounded-full px-3 py-1 font-mono text-[11px] font-semibold transition-all"
             style={filterB === b
               ? { background: "var(--brand)", color: "var(--text-inverse)" }
               : { background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
@@ -213,7 +216,7 @@ function FlockTrackingPage() {
                 <th key={label} className={`${w} px-4 py-3 text-left`}>
                   {k ? (
                     <button onClick={() => handleSort(k)}
-                      className="flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition-colors hover:text-[color:var(--text-primary)]"
+                      className="tap flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition-colors hover:text-[color:var(--text-primary)]"
                       style={{ color: "var(--text-tertiary)" }}>
                       {label}
                       <span style={{ color: sortKey === k ? "var(--brand)" : "var(--text-disabled)" }}>

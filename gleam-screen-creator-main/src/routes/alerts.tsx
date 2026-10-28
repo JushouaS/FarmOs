@@ -85,8 +85,8 @@ function AlertsPage() {
   return (
     <AppShell>
       {/* Header */}
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0">
           <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
             Alerts
           </h1>
@@ -100,13 +100,13 @@ function AlertsPage() {
           {unread > 0 && (
             <button
               onClick={handleMarkAllRead}
-              className="text-xs font-semibold hover:underline"
+              className="tap px-1 text-xs font-semibold hover:underline"
               style={{ color: "var(--brand)" }}
             >
               Mark all read
             </button>
           )}
-          <button onClick={load} disabled={loading} className="btn-ghost text-xs gap-1.5">
+          <button onClick={load} disabled={loading} className="btn-ghost tap text-xs gap-1.5">
             <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0113.9-3.4M20 15a9 9 0 01-13.9 3.4"/>
             </svg>
@@ -117,14 +117,14 @@ function AlertsPage() {
 
       {/* Filter tabs */}
       <div
-        className="mb-5 flex gap-1 w-fit rounded-xl p-1"
+        className="mb-5 flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl p-1"
         style={{ background: "var(--surface-card)", border: "1px solid var(--border-subtle)" }}
       >
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setFilter(t.id)}
-            className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors"
+            className="tap flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-3.5"
             style={filter === t.id
               ? { background: "var(--brand)", color: "var(--text-inverse)" }
               : { color: "var(--text-secondary)" }}
@@ -186,7 +186,7 @@ function AlertsPage() {
         <div className="cb-card overflow-hidden">
           {/* Table header */}
           <div
-            className="grid grid-cols-12 gap-3 px-5 py-3 font-mono text-[10px] font-semibold uppercase tracking-wide"
+            className="hidden md:grid grid-cols-12 gap-3 px-5 py-3 font-mono text-[10px] font-semibold uppercase tracking-wide"
             style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-tertiary)" }}
           >
             <div className="col-span-1" />
@@ -207,8 +207,10 @@ function AlertsPage() {
 
               return (
                 <div key={a.id}>
+                  {/* Below md each alert stacks as a card (severity + type,
+                      message, then time and actions); from md it is a table row. */}
                   <div
-                    className="grid grid-cols-12 gap-3 items-center px-5 py-3.5 transition-colors cursor-default"
+                    className="flex flex-col gap-2 px-4 py-3.5 transition-colors cursor-default md:grid md:grid-cols-12 md:items-center md:gap-3 md:px-5"
                     style={{
                       borderLeft: `3px solid ${a.acknowledged ? "transparent" : accentColor}`,
                       background: a.acknowledged ? "transparent" : `${accentColor}06`,
@@ -217,7 +219,7 @@ function AlertsPage() {
                     onMouseLeave={(e) => (e.currentTarget.style.background = a.acknowledged ? "transparent" : `${accentColor}06`)}
                   >
                     {/* Icon */}
-                    <div className="col-span-1">
+                    <div className="hidden md:block md:col-span-1">
                       <div
                         className="h-8 w-8 rounded-lg flex items-center justify-center font-mono text-[10px] font-bold"
                         style={{
@@ -229,41 +231,45 @@ function AlertsPage() {
                       </div>
                     </div>
 
-                    {/* Severity badge */}
-                    <div className="col-span-2">
-                      <span className={isCrit ? "badge-red" : isWarn ? "badge-amber" : "badge-blue"}>
-                        {isCrit ? "Critical" : isWarn ? "Warning" : "Info"}
-                      </span>
-                      {a.acknowledged && (
-                        <span className="ml-1.5 badge-green">Read</span>
-                      )}
-                    </div>
+                    {/* Severity + type share a line on phones; md:contents
+                        dissolves the wrapper so both become grid cells. */}
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 md:contents">
+                      {/* Severity badge */}
+                      <div className="flex shrink-0 items-center gap-1.5 md:col-span-2">
+                        <span className={isCrit ? "badge-red" : isWarn ? "badge-amber" : "badge-blue"}>
+                          {isCrit ? "Critical" : isWarn ? "Warning" : "Info"}
+                        </span>
+                        {a.acknowledged && (
+                          <span className="badge-green">Read</span>
+                        )}
+                      </div>
 
-                    {/* Type */}
-                    <div className="col-span-3">
-                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {a.kind}
-                      </p>
+                      {/* Type */}
+                      <div className="min-w-0 md:col-span-3">
+                        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          {a.kind}
+                        </p>
+                      </div>
                     </div>
 
                     {/* Message */}
-                    <div className="col-span-4">
-                      <p className="text-xs line-clamp-2" style={{ color: "var(--text-secondary)" }}>
+                    <div className="md:col-span-4">
+                      <p className="text-xs line-clamp-3 md:line-clamp-2" style={{ color: "var(--text-secondary)" }}>
                         {a.message}
                       </p>
                     </div>
 
                     {/* Time */}
-                    <div className="col-span-2 flex flex-col items-end gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-2 md:flex-col md:items-end md:gap-1.5">
                       <p className="font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
                         {new Date(a.raisedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
                         {!a.acknowledged && (
                           <button
                             onClick={() => handleAck(a.id)}
                             disabled={isMut}
-                            className="btn-ghost text-[11px] py-0.5 px-2"
+                            className="btn-ghost tap text-[11px] py-0.5 px-2"
                           >
                             {isMut ? "…" : "Mark read"}
                           </button>
@@ -271,7 +277,8 @@ function AlertsPage() {
                         {help && (
                           <button
                             onClick={() => setExpanded((p) => p === a.id ? null : a.id)}
-                            className="text-[11px] font-medium hover:underline"
+                            aria-expanded={isExp}
+                            className="tap px-1 text-[11px] font-medium hover:underline"
                             style={{ color: "var(--brand)" }}
                           >
                             {isExp ? "Hide" : "Details"}
@@ -284,7 +291,7 @@ function AlertsPage() {
                   {/* Expanded detail */}
                   {isExp && help && (
                     <div
-                      className="px-5 pb-4 pt-3 space-y-3"
+                      className="px-4 pb-4 pt-3 space-y-3 md:px-5"
                       style={{ background: "var(--surface-raised)", borderLeft: `3px solid ${accentColor}` }}
                     >
                       <div>
@@ -298,7 +305,7 @@ function AlertsPage() {
                       {isCrit && (
                         <Link
                           to="/visuals"
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold hover:underline"
+                          className="tap inline-flex items-center gap-1.5 text-xs font-semibold hover:underline"
                           style={{ color: "var(--cv-accent)" }}
                         >
                           Open Live Camera →

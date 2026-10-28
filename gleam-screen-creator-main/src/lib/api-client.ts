@@ -12,7 +12,10 @@
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
-  "http://localhost:4000";
+  // Same host that served the page, so LAN devices reach this machine's API.
+  (typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    : "http://localhost:4000");
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
