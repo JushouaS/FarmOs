@@ -163,9 +163,16 @@ function Dashboard() {
   const houses: { id: string; population: number }[] = data.houses ?? [];
   const total = houses.find((h) => h.id === data.cluster?.houseId)?.population
     ?? houses.reduce((s, h) => s + h.population, 0);
-  const actPct    = Math.round(data.activity?.value ?? 0);
-  const active    = Math.round((total * actPct) / 100);
-  const inactive  = total - active;
+  // The API sends null when no activity has been recorded; show that as
+  // "no data" rather than turning it into 0% (every bird inactive).
+  const actPct: number | null = data.activity?.value != null ? Math.round(data.activity.value) : null;
+  const active    = actPct != null ? Math.round((total * actPct) / 100) : null;
+  const inactive  = active != null ? total - active : null;
+  // Day N is measured to the latest reading; say so when that isn't today.
+  const dataAsOf: string | null = data.cycle?.dataAsOf ?? null;
+  const staleSince = dataAsOf && dataAsOf < new Date().toISOString().slice(0, 10)
+    ? new Date(`${dataAsOf}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
   const avgWeight = data.weight?.actualAvgG ?? 0;
   const topAlerts = (data.alerts as any[]).filter((a) => !a.acknowledged).slice(0, 4);
 
@@ -181,6 +188,11 @@ function Dashboard() {
             {data.facility.name} &middot; {data.cluster?.houseLabel ?? "Pen 1"} &middot; Grow-out Day{" "}
             <TV>{data.cycle?.day ?? "—"}</TV>/42 &middot; {data.facility.breed ?? "Ross 308"}
           </p>
+          {staleSince && (
+            <p className="mt-1 text-xs" style={{ color: "var(--status-amber-text)" }}>
+              Latest sensor data is from {staleSince}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 rounded-full px-3.5 py-1.5 self-start shrink-0"
           style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)" }}>
@@ -207,16 +219,20 @@ function Dashboard() {
             <span className="font-mono text-2xl font-bold" style={{ color: "var(--cv-accent)" }}>{total}</span>
             <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>birds</span>
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap mt-1">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--status-green)" }} />
-            <span className="font-mono text-xs" style={{ color: "var(--status-green-text)" }}>{active} active</span>
-            {inactive > 0 && (
-              <>
-                <span style={{ color: "var(--border-strong)" }}>·</span>
-                <span className="font-mono text-xs" style={{ color: "var(--status-red-text)" }}>{inactive} inactive</span>
-              </>
-            )}
-          </div>
+          {active != null && inactive != null ? (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--status-green)" }} />
+              <span className="font-mono text-xs" style={{ color: "var(--status-green-text)" }}>{active} active</span>
+              {inactive > 0 && (
+                <>
+                  <span style={{ color: "var(--border-strong)" }}>·</span>
+                  <span className="font-mono text-xs" style={{ color: "var(--status-red-text)" }}>{inactive} inactive</span>
+                </>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>Activity not recorded yet</p>
+          )}
         </div>
 
         {/* Avg Weight */}
@@ -334,17 +350,33 @@ function Dashboard() {
               last scan
             </span>
           </div>
-          <ActivityDonut active={active} inactive={inactive} total={total} />
-          <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-            <div className="mb-1 flex items-center justify-between text-xs">
-              <span style={{ color: "var(--text-secondary)" }}>Activity rate</span>
-              <span className="font-mono font-bold" style={{ color: "var(--cv-accent)" }}>{actPct}%</span>
+          {actPct != null && active != null && inactive != null ? (
+            <>
+              <ActivityDonut active={active} inactive={inactive} total={total} />
+              <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span style={{ color: "var(--text-secondary)" }}>Activity rate</span>
+                  <span className="font-mono font-bold" style={{ color: "var(--cv-accent)" }}>{actPct}%</span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-sunken)" }}>
+                  <div className="h-2 rounded-full transition-all"
+                    style={{ width: `${actPct}%`, background: "var(--brand)" }} />
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Empty state (R-27): no activity samples recorded for this cycle */
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+              <svg className="h-8 w-8" style={{ color: "var(--text-tertiary)" }} fill="none" stroke="currentColor"
+                strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l3-8 4 16 3-8h4" />
+              </svg>
+              <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>No activity data yet</p>
+              <p className="max-w-[16rem] text-xs" style={{ color: "var(--text-tertiary)" }}>
+                Appears once the camera pipeline records movement for this cycle.
+              </p>
             </div>
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-sunken)" }}>
-              <div className="h-2 rounded-full transition-all"
-                style={{ width: `${actPct}%`, background: "var(--brand)" }} />
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

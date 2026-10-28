@@ -8,6 +8,9 @@ import { requireAuth } from "../auth/middleware.js";
 // real per-day stored standard.
 const FCR_TARGET = 1.70;
 
+// Ross 308 grow-out length the UI measures progress against ("Day N/42").
+const GROW_OUT_DAYS = 42;
+
 /**
  * GET /operations/overview
  * Mirrors the `getOperationsOverview` server function — this is the full
@@ -28,16 +31,28 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       FROM houses WHERE facility_id = ${f.id} AND is_active = true
       ORDER BY sort_order`;
 
+    // The grow-out day is measured to the facility's latest sensor reading,
+    // not the wall clock: a cycle whose data stops (seed snapshot, offline
+    // sensors) would otherwise keep counting into nonsense like "Day 929/42".
+    // Live data keeps this at today. Capped to the grow-out length.
     const cycle = await app.sqlRead`
-      SELECT id, label,
-             start_date::text AS "startDate",
-             projected_yield_date::text AS "projectedYieldDate",
-             (CURRENT_DATE - start_date)::int AS day,
-             (start_date + interval '6 days')::text AS "windowStart",
-             (start_date + interval '41 days')::text AS "windowEnd",
+      WITH latest AS (
+        SELECT LEAST(CURRENT_DATE, COALESCE(max(r.recorded_at)::date, CURRENT_DATE)) AS as_of
+        FROM sensor_readings r
+        JOIN sensors s ON s.id = r.sensor_id
+        JOIN houses h ON h.id = s.house_id
+        WHERE h.facility_id = ${f.id}
+      )
+      SELECT c.id, c.label,
+             c.start_date::text AS "startDate",
+             c.projected_yield_date::text AS "projectedYieldDate",
+             GREATEST(0, LEAST(${GROW_OUT_DAYS}, latest.as_of - c.start_date))::int AS day,
+             latest.as_of::text AS "dataAsOf",
+             (c.start_date + interval '6 days')::text AS "windowStart",
+             (c.start_date + interval '41 days')::text AS "windowEnd",
              now()::text AS "asOf"
-      FROM flock_cycles
-      WHERE facility_id = ${f.id} AND status = 'active'
+      FROM flock_cycles c, latest
+      WHERE c.facility_id = ${f.id} AND c.status = 'active'
       LIMIT 1`;
     const activeCycle = cycle[0] ?? null;
 
@@ -139,15 +154,19 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
           FROM activity_samples WHERE cycle_id = ${activeCycle.id} ORDER BY recorded_at ASC`
       : [];
     const activitySeries = activityRows.map((r) => Number(r.value));
-    const latestActivity = activitySeries[activitySeries.length - 1] ?? 0;
+    // null, not 0, when nothing has been recorded: 0 reads as "no bird is
+    // moving", which the dashboard would report as the whole flock inactive.
+    const latestActivity = activitySeries[activitySeries.length - 1] ?? null;
     const previousActivity = activitySeries[activitySeries.length - 2] ?? latestActivity;
     const activity = {
       value: latestActivity,
       unit: activityRows[activityRows.length - 1]?.unit ?? "IDX",
       baseline: activitySeries.length > 0
         ? activitySeries.reduce((a, b) => a + b, 0) / activitySeries.length
-        : 0,
-      trend: latestActivity > previousActivity ? "up" : latestActivity < previousActivity ? "down" : "flat",
+        : null,
+      trend: latestActivity === null || previousActivity === null
+        ? "flat"
+        : latestActivity > previousActivity ? "up" : latestActivity < previousActivity ? "down" : "flat",
       series: activitySeries.slice(-24),
       axisLabels: activityRows.slice(-24).map((r) => new Date(r.recordedAt as string).toISOString().slice(11, 16)),
     };
