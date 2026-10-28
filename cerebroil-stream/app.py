@@ -19,9 +19,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
 
+import base64
 import cv2
 import numpy as np
+from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
+
+# Load cerebroil-stream/.env (if present) before reading any of the vars below.
+load_dotenv()
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 DAHUA_RTSP_URL = os.getenv(
@@ -29,6 +34,10 @@ DAHUA_RTSP_URL = os.getenv(
     os.getenv("RTSP_URL", "rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1"),
 )
 KINECT_SOURCE = os.getenv("KINECT_SOURCE", "simulated")  # "0", "1", rtsp url, or "simulated"
+
+# Shared secret expected from packages/api (X-Vision-Token header). No
+# insecure default: an empty value means every protected route below refuses.
+VISION_SERVICE_TOKEN = os.getenv("VISION_SERVICE_TOKEN", "")
 
 JPEG_QUALITY   = 75       # 70-80% is optimal for LAN MJPEG
 FRAME_TIMEOUT  = 5.0      # seconds before camera reconnect
@@ -45,6 +54,17 @@ _dahua_ok            = False
 _kinect_lock         = threading.Lock()
 _latest_kinect_frame: bytes | None = None
 _kinect_ok           = False
+
+# State for the lightweight frame-diff analysis used by /analyze (see below).
+_ANALYZE_LOCK        = threading.Lock()
+_dahua_prev_gray: np.ndarray | None = None
+
+# Camera ids as used by the frontend/packages/api (dataset.ts: CAM-01, KINECT-01)
+# mapped to this service's internal stream names.
+_CAMERA_SOURCES = {
+    "CAM-01": "dahua", "dahua": "dahua", "DAHUA": "dahua",
+    "KINECT-01": "kinect", "kinect": "kinect", "KINECT": "kinect",
+}
 
 
 # ── Dahua CCTV IR Camera Loop ─────────────────────────────────────────────────
@@ -307,6 +327,217 @@ def _interpret(score: float) -> str:
     if score >= 68:  return "OK"
     if score >= 51:  return "Poor"
     return "Awful"
+
+
+
+# ── Vision-proxy contract (consumed by packages/api's vision-proxy.ts) ───────
+#
+# packages/api never lets the browser talk to this service directly: it
+# forwards requests here with an X-Vision-Token header and proxies the
+# response. The routes below implement the contract packages/api expects
+# (/health, /cameras, /stream/<id>, /capture/<id>, /analyze/<id>) — these did
+# not previously exist, which made every "Live Camera" / analyze call fail.
+
+def _require_vision_token() -> tuple[Response, int] | None:
+    """Returns an (error response, status) pair if the shared-secret header
+    is missing/wrong, else None. No insecure default: an unset token refuses
+    every protected route rather than silently allowing access."""
+    if not VISION_SERVICE_TOKEN:
+        return jsonify({"error": "vision_token_not_configured"}), 500
+    if request.headers.get("X-Vision-Token", "") != VISION_SERVICE_TOKEN:
+        return jsonify({"error": "unauthorized"}), 401
+    return None
+
+
+def _resolve_camera(camera_id: str) -> str | None:
+    return _CAMERA_SOURCES.get(camera_id)
+
+
+def _connected(source: str) -> bool:
+    return _dahua_ok if source == "dahua" else _kinect_ok
+
+
+def _latest_frame_bytes(source: str) -> bytes | None:
+    if source == "dahua":
+        with _dahua_lock:
+            return _latest_dahua_frame
+    with _kinect_lock:
+        return _latest_kinect_frame
+
+
+@app.get("/health")
+def vision_health() -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    connected = sum(1 for s in ("dahua", "kinect") if _connected(s))
+    return jsonify({
+        "status": "ok" if connected > 0 else "degraded",
+        "cameras_configured": len(set(_CAMERA_SOURCES.values())),
+        "cameras_connected": connected,
+    })
+
+
+@app.get("/cameras")
+def vision_cameras() -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    return jsonify([
+        {"camera_id": "CAM-01", "rtsp_url": DAHUA_RTSP_URL, "connected": _dahua_ok},
+        {"camera_id": "KINECT-01", "rtsp_url": KINECT_SOURCE, "connected": _kinect_ok},
+    ])
+
+
+@app.get("/stream/<camera_id>")
+def vision_stream(camera_id: str) -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    source = _resolve_camera(camera_id)
+    if source is None:
+        return jsonify({"error": "unknown_camera"}), 404
+    lock = _dahua_lock if source == "dahua" else _kinect_lock
+    accessor = (lambda: _latest_dahua_frame) if source == "dahua" else (lambda: _latest_kinect_frame)
+    return Response(
+        _generate_mjpeg_stream(lock, accessor),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+@app.post("/capture/<camera_id>")
+def vision_capture(camera_id: str) -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    source = _resolve_camera(camera_id)
+    if source is None:
+        return jsonify({"error": "unknown_camera"}), 404
+    frame_bytes = _latest_frame_bytes(source)
+    if frame_bytes is None:
+        return jsonify({"error": "no_frame_available"}), 503
+    return jsonify({
+        "camera_id": camera_id,
+        "connected": _connected(source),
+        "image": base64.b64encode(frame_bytes).decode("ascii"),
+        "content_type": "image/jpeg",
+        "size_bytes": len(frame_bytes),
+    })
+
+
+def _analyze_dahua(frame_bytes: bytes) -> dict:
+    """Frame-difference + contour activity analysis on the real captured
+    frame. This is a lightweight, honest stand-in for the YOLOv8/ByteTrack
+    pipeline described in CEREBROILER.md/cerebroil-backend — it reports real
+    motion signal from the camera, not a trained detector's output. Swap this
+    for an actual model inference call when one is wired up."""
+    global _dahua_prev_gray
+    arr = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if arr is None:
+        return {"detections": [], "movement_index": 0.0, "aggression_events": 0}
+
+    gray = cv2.GaussianBlur(cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY), (5, 5), 0)
+    detections: list[dict] = []
+    movement_index = 0.0
+
+    with _ANALYZE_LOCK:
+        prev = _dahua_prev_gray
+        _dahua_prev_gray = gray
+
+    if prev is not None and prev.shape == gray.shape:
+        diff = cv2.absdiff(prev, gray)
+        movement_index = round(float(np.mean(diff)) / 255.0, 4)
+        _, thresh = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)
+        thresh = cv2.dilate(thresh, None, iterations=2)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in contours:
+            if cv2.contourArea(c) < 80:  # drop compression/sensor noise
+                continue
+            x, y, w, h = cv2.boundingRect(c)
+            detections.append({
+                "box_x": float(x), "box_y": float(y), "box_w": float(w), "box_h": float(h),
+                "behavior": "ACTIVE", "estimated_weight_g": None,
+                "weight_confidence": None, "flag": None,
+            })
+
+    return {"detections": detections[:50], "movement_index": movement_index, "aggression_events": 0}
+
+
+def _analyze_kinect(frame_bytes: bytes) -> dict | None:
+    """ROI mean-intensity mass estimate from the depth colormap frame.
+    Calibrated against the synthetic generator's bird-ellipse vs. empty-
+    platform depth bands. Treat as an estimate pending a real depth-SDK
+    integration, not a calibrated measurement."""
+    arr = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if arr is None:
+        return None
+    h, w = arr.shape[:2]
+    roi = arr[int(h * 0.25):int(h * 0.75), int(w * 0.25):int(w * 0.75)]
+    mean_intensity = float(np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)))
+    calculated_mass_g = max(0.0, round(2400.0 - mean_intensity * 9.5, 1))
+    return {
+        "median_g": calculated_mass_g,
+        "std_dev_g": round(calculated_mass_g * 0.06, 1),
+        "sample_size": 1,
+        "confidence": 0.55,
+    }
+
+
+@app.post("/analyze/<camera_id>")
+def vision_analyze(camera_id: str) -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    source = _resolve_camera(camera_id)
+    if source is None:
+        return jsonify({"error": "unknown_camera"}), 404
+    frame_bytes = _latest_frame_bytes(source)
+    if frame_bytes is None:
+        return jsonify({"error": "no_frame_available"}), 503
+
+    result = {
+        "camera_id": camera_id,
+        # This service has no database connection by design — persistence is
+        # packages/api's job. It overwrites this field after it actually
+        # writes the rows; never report true from here.
+        "db_written": False,
+        "detections": [],
+        "detection_count": 0,
+        "behaviour": {
+            "movement_index": 0.0, "movement_label": "Unknown", "movement_status": "nominal",
+            "huddling_risk": 0.0, "huddling_label": "Low", "huddling_status": "nominal",
+            "aggression_events": 0,
+        },
+        "weight": None,
+        "clusters": [],
+        "cluster_count": 0,
+    }
+
+    if source == "dahua":
+        analysis = _analyze_dahua(frame_bytes)
+        result["detections"] = analysis["detections"]
+        result["detection_count"] = len(analysis["detections"])
+        mi = analysis["movement_index"]
+        result["behaviour"] = {
+            "movement_index": mi,
+            "movement_label": "Active" if mi > 0.02 else "Inactive",
+            "movement_status": "nominal" if mi > 0.02 else "warning",
+            "huddling_risk": round(max(0.0, 1.0 - mi * 10), 4),
+            "huddling_label": "Low" if mi > 0.02 else "High",
+            "huddling_status": "nominal" if mi > 0.02 else "warning",
+            "aggression_events": analysis["aggression_events"],
+        }
+        if result["detection_count"] >= 6:
+            result["clusters"] = [{
+                "label": "High density cluster",
+                "risk": round(min(1.0, result["detection_count"] / 20), 4),
+                "box": "roi",
+            }]
+            result["cluster_count"] = 1
+    else:
+        result["weight"] = _analyze_kinect(frame_bytes)
+
+    return jsonify(result)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
