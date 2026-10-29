@@ -235,7 +235,9 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     return reply.send({
       facility: f,
       houses,
-      cycle: activeCycle,
+      // lengthDays: how long a grow-out is, so the dashboard's "Day n of N" and
+      // growth chart axis are not a number the page assumes.
+      cycle: activeCycle ? { ...activeCycle, lengthDays: GROW_OUT_DAYS } : null,
       platform: platform[0] ?? null,
       readings: latestReadings,
       alerts,

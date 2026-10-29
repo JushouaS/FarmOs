@@ -94,12 +94,14 @@ export async function fetchAlertDetail(id: string): Promise<AlertDetailResponse>
   return apiFetch<AlertDetailResponse>(`/alerts/${id}`);
 }
 
+// apiFetch sends a JSON content type, and the API rejects an empty JSON body, so
+// these two post "{}".
 export async function acknowledgeAlert(id: string): Promise<{ updated: boolean; reason?: string }> {
-  return apiFetch(`/alerts/${id}/acknowledge`, { method: "POST" });
+  return apiFetch(`/alerts/${encodeURIComponent(id)}/acknowledge`, { method: "POST", body: "{}" });
 }
 
 export async function dismissAlert(id: string): Promise<{ updated: boolean; reason?: string }> {
-  return apiFetch(`/alerts/${id}/dismiss`, { method: "POST" });
+  return apiFetch(`/alerts/${encodeURIComponent(id)}/dismiss`, { method: "POST", body: "{}" });
 }
 
 /* -------------------------------------------------------------------------- */

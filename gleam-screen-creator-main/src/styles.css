@@ -486,6 +486,22 @@
   animation: springFadeSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Alert pop-ups slide in from the right edge, like a desktop notification. */
+@keyframes alertSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-alert-in {
+  animation: alertSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Login page motion. Purposes (R-19/R-31):
  * driftOrb    — living depth on the brand panel, 2 ambient elements only
  * cardShake   — direct attention to a failed sign-in attempt
@@ -604,6 +620,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .animate-alert-in,
   .animate-spring-in,
   .animate-drift-slow,
   .animate-drift-slower,

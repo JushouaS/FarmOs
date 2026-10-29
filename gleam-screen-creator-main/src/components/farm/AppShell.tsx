@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, type ReactNode } from "
 import { Link } from "@tanstack/react-router";
 import { SideNav } from "./SideNav";
 import { AccountMenu } from "./AccountMenu";
+import { AlertPopups } from "./AlertPopups";
 import { unacknowledgedAlerts } from "@/lib/farm/dataset";
 import {
   Menu,
@@ -262,6 +263,9 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
 
         {/* Bottom nav — below lg, on every page including the bare camera view */}
         <BottomNav />
+
+        {/* Corner pop-ups for abnormal alerts, on every page */}
+        <AlertPopups />
       </div>
     </AppShellContext.Provider>
   );
