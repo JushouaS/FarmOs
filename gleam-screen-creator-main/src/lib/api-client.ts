@@ -243,3 +243,35 @@ export async function analyzeFrame(cameraId: string): Promise<AnalysisResult> {
 export function visionStreamUrl(cameraId: string): string {
   return `${API_BASE}/visual/stream/${encodeURIComponent(cameraId)}`;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Feedback (problem reports and the SUS questionnaire)                      */
+/* -------------------------------------------------------------------------- */
+
+export interface SusSubmission {
+  respondent?: string;
+  role?: string;
+  /** Ten answers, 1 (strongly disagree) to 5 (strongly agree), in statement order. */
+  answers: number[];
+}
+
+export interface SusResult {
+  score: number;
+  interpretation: string;
+}
+
+export async function submitSus(body: SusSubmission): Promise<SusResult> {
+  return apiFetch<SusResult>("/feedback/sus", { method: "POST", body: JSON.stringify(body) });
+}
+
+export interface ReportSubmission {
+  respondent?: string;
+  role?: string;
+  /** Route the person was on, so the report can be traced. */
+  page?: string;
+  problem: string;
+}
+
+export async function submitReport(body: ReportSubmission): Promise<void> {
+  await apiFetch<{ ok: true }>("/feedback/report", { method: "POST", body: JSON.stringify(body) });
+}

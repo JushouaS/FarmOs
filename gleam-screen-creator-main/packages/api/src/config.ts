@@ -46,6 +46,16 @@ const schema = z.object({
   // H-4: no insecure default — server will refuse to start without a real token.
   VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
 
+  // SUS questionnaire / "Report a problem" form (routes/feedback.ts).
+  // Every response is written to a local CSV. When BOTH script settings are
+  // set, each response is also sent to the owner's Google Apps Script, which
+  // appends it to a .csv in their Drive (packages/api/google-apps-script/).
+  // Empty values in .env count as "not set".
+  SUS_CSV_PATH: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  REPORT_CSV_PATH: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SUS_GOOGLE_SCRIPT_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
+  SUS_GOOGLE_SCRIPT_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),
+
   // Groq AI (Intelligence engine) — https://console.groq.com/keys
   // Optional at startup; required only when intelligence routes are hit.
   GROQ_API_KEY: z.string().optional(),

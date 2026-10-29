@@ -1,11 +1,10 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { SideNav } from "./SideNav";
+import { AccountMenu } from "./AccountMenu";
 import { unacknowledgedAlerts } from "@/lib/farm/dataset";
-import { useAuth } from "@/lib/auth-context";
 import {
   Menu,
-  PanelLeft,
   Sun,
   Moon,
   Bell,
@@ -69,37 +68,9 @@ function ThemeToggle() {
   );
 }
 
-/* ── Location status strip ─────────────────────────────────── */
-function LocationStatus() {
-  return (
-    <div
-      className="hidden sm:flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-1 text-xs"
-      style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)" }}
-    >
-      <span className="relative flex h-2 w-2 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-      </span>
-      <span className="font-semibold text-[var(--text-primary)]">Pen 1</span>
-      <span style={{ color: "var(--border-strong)" }}>·</span>
-      <span className="truncate" style={{ color: "var(--text-secondary)" }}>House 1 (Ross 308)</span>
-    </div>
-  );
-}
-
 /* ── Top bar ──────────────────────────────────────────────── */
-function TopBar({
-  onMenuOpen,
-  onToggleSidebar,
-  collapsed,
-}: {
-  onMenuOpen: () => void;
-  onToggleSidebar: () => void;
-  collapsed: boolean;
-}) {
+function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
   const alertCount = unacknowledgedAlerts();
-  const { user } = useAuth();
-  const initial = user?.fullName?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U";
 
   return (
     <div
@@ -116,18 +87,8 @@ function TopBar({
         >
           <Menu className="h-4.5 w-4.5" />
         </button>
-
-        {/* Desktop sidebar toggle button */}
-        <button
-          onClick={onToggleSidebar}
-          className={`${TOP_BAR_ICON_BUTTON} max-lg:hidden`}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <PanelLeft className="h-4 w-4" />
-        </button>
-
-        <LocationStatus />
+        {/* Desktop has no button here: the sidebar's own header collapses it,
+            and its logo expands it again. */}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -151,17 +112,8 @@ function TopBar({
           )}
         </Link>
 
-        {/* User avatar */}
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white select-none shadow-xs pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:text-sm"
-          style={{
-            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-            border: "1px solid rgba(52,211,153,0.3)",
-          }}
-          title={user?.fullName ?? user?.email ?? "Farm Manager"}
-        >
-          {initial}
-        </div>
+        {/* Account menu (opens from the avatar) */}
+        <AccountMenu />
       </div>
     </div>
   );
@@ -300,11 +252,7 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
             </main>
           ) : (
             <>
-              <TopBar
-                onMenuOpen={() => setMobileOpen(true)}
-                onToggleSidebar={toggleCollapsed}
-                collapsed={collapsed}
-              />
+              <TopBar onMenuOpen={() => setMobileOpen(true)} />
               <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-5 sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:p-6 lg:pb-6">
                 {children}
               </main>

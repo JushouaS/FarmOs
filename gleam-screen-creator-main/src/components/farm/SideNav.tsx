@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
+import { UserAvatar } from "./UserAvatar";
 import { unacknowledgedAlerts } from "@/lib/farm/dataset";
 import {
   LayoutDashboard,
@@ -256,14 +257,8 @@ export function SideNav({
             }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs"
-              style={{
-                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                border: "1px solid rgba(52,211,153,0.3)",
-              }}
-            >
-              {user?.email?.[0]?.toUpperCase() ?? "U"}
+            <div className="h-8 w-8 shrink-0 shadow-xs">
+              <UserAvatar user={user} />
             </div>
             {!collapsed && (
               <div className="min-w-0 text-left">

@@ -25,6 +25,7 @@ import { registerAlertRoutes } from "./routes/alerts.js";
 import { registerIncidentRoutes } from "./routes/incidents.js";
 import { registerReportRoutes } from "./routes/reports.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
+import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -80,6 +81,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerIncidentRoutes, { prefix: "/incidents" });
   await app.register(registerReportRoutes, { prefix: "/reports" });
   await app.register(registerNotificationRoutes, { prefix: "/notifications" });
+  await app.register(registerFeedbackRoutes, { prefix: "/feedback" });
 
   return app;
 }

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
-import { Menu, PanelLeft } from "lucide-react";
+import { Menu } from "lucide-react";
 import {
   farm,
   broilers,
@@ -23,9 +23,9 @@ export const Route = createFileRoute("/visuals")({
 
 type ViewLayout = "dual" | "dahua" | "kinect";
 
-/* The menu and sidebar buttons need the app shell's controls, which only exist
- * for components rendered INSIDE <AppShell>. VisualsDashboardPage creates the
- * shell, so calling useAppShell() there returns null and the buttons did
+/* The menu button needs the app shell's controls, which only exist for
+ * components rendered INSIDE <AppShell>. VisualsDashboardPage creates the
+ * shell, so calling useAppShell() there returns null and the button did
  * nothing. This small component sits below the shell and can reach them. */
 function ShellButtons() {
   const shell = useAppShell();
@@ -41,16 +41,6 @@ function ShellButtons() {
         aria-controls="app-sidenav"
       >
         <Menu className="h-5 w-5" />
-      </button>
-      {/* Desktop sidebar toggle */}
-      <button
-        type="button"
-        onClick={() => shell?.toggleCollapsed()}
-        className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)]"
-        style={{ color: "var(--text-secondary)" }}
-        aria-label="Toggle sidebar"
-      >
-        <PanelLeft className="h-5 w-5" />
       </button>
     </>
   );
@@ -264,10 +254,7 @@ export function VisualsDashboardPage() {
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--cv-accent)]" />
                       <span className="truncate font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
-                        CAM-01 : OVERHEAD CAMERA
-                      </span>
-                      <span className="hidden shrink-0 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)] sm:inline">
-                        1280x720 @ 25fps
+                        CAM-01 : BROILERS BEHAVIOR
                       </span>
                     </div>
                   </div>
@@ -279,7 +266,7 @@ export function VisualsDashboardPage() {
                       feedOrigin && (
                         <img
                           src={`${feedOrigin}/video_feed/dahua`}
-                          alt="Dahua Overhead CCTV live camera feed"
+                          alt="Live camera feed of the broilers' behavior"
                           className="h-full w-full object-contain"
                           onError={() => setDahuaError(true)}
                         />
@@ -326,9 +313,6 @@ export function VisualsDashboardPage() {
                       <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--brand)]" />
                       <span className="truncate font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
                         CAM-02 : WEIGHING STATION
-                      </span>
-                      <span className="hidden shrink-0 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-tertiary)] sm:inline">
-                        Depth Station
                       </span>
                     </div>
                   </div>
@@ -403,21 +387,6 @@ export function VisualsDashboardPage() {
                         })}
                       </div>
                     )}
-
-                    {/* Weight Telemetry HUD (Bottom Left) */}
-                    <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-2">
-                      <div className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-black/75 px-2.5 py-1 text-xs backdrop-blur-sm elevation-1">
-                        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">AVG WEIGHT</span>
-                        <span className="font-mono font-bold text-[var(--brand)] tabular-nums">
-                          {farm.weight.actualAvgG} g
-                        </span>
-                        <span className="text-[var(--border-strong)]">|</span>
-                        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">TARGET</span>
-                        <span className="font-mono font-semibold text-[var(--text-secondary)] tabular-nums">
-                          {farm.weight.standardG} g
-                        </span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}

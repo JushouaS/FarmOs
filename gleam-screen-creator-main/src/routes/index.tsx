@@ -1,8 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { getOperationsOverview } from "@/lib/farm/repository";
-import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Cerebroil" }] }),
@@ -11,21 +9,6 @@ export const Route = createFileRoute("/")({
 });
 
 /* ── Helpers ────────────────────────────────────────────────── */
-/** "Good evening, Name · Wednesday, October 28" from the viewer's own clock.
- *  Computed after mount: the server's clock and time zone would otherwise
- *  render a different greeting than the browser hydrates with. */
-function useGreetingLine(name: string | null): string | null {
-  const [line, setLine] = useState<string | null>(null);
-  useEffect(() => {
-    const now = new Date();
-    const h = now.getHours();
-    const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-    const date = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-    setLine(`${part}${name ? `, ${name}` : ""} · ${date}`);
-  }, [name]);
-  return line;
-}
-
 function SBadge({ s }: { s: "critical" | "warning" | "nominal" | "optimal" }) {
   const cls = { critical: "badge-red", warning: "badge-amber", nominal: "badge-blue", optimal: "badge-green" }[s];
   const lbl = { critical: "Critical", warning: "Warning", nominal: "Info", optimal: "Normal" }[s];
@@ -178,27 +161,18 @@ function Dashboard() {
   const inactive  = active != null ? total - active : null;
   const avgWeight = data.weight?.actualAvgG ?? 0;
   const topAlerts = (data.alerts as any[]).filter((a) => !a.acknowledged).slice(0, 4);
-  const { user } = useAuth();
-  const greeting = useGreetingLine(user?.fullName ?? user?.email?.split("@")[0] ?? null);
 
   return (
     <AppShell>
-      {/* Header. Greeting line: real session name + viewer's date (reserved
-          height so it doesn't shift the page when it fills in after mount).
-          Title chip reuses the KPI cards' bird glyph as the identity motif.
-          The camera link is the page's one accent action: the live feed is
-          where an operator goes to check on what the numbers report. */}
-      <header className="mt-6 mb-6 flex flex-col gap-4 sm:mt-8 sm:flex-row sm:items-end sm:justify-between lg:mt-10">
-        <div className="min-w-0">
-          <p className="min-h-5 text-sm" style={{ color: "var(--text-tertiary)" }}>
-            {greeting}
-          </p>
-          <div className="mt-2 flex items-center gap-3">
-            <KpiIcon path={KPI_ICON_PATHS.flock} />
-            <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: "var(--text-primary)" }}>
-              Dashboard
-            </h1>
-          </div>
+      {/* Header. Title chip reuses the KPI cards' bird glyph as the identity
+          motif. The camera link is the page's one accent action: the live feed
+          is where an operator goes to check on what the numbers report. */}
+      <header className="mt-6 mb-6 flex flex-col gap-4 sm:mt-8 sm:flex-row sm:items-center sm:justify-between lg:mt-10">
+        <div className="flex min-w-0 items-center gap-3">
+          <KpiIcon path={KPI_ICON_PATHS.flock} />
+          <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: "var(--text-primary)" }}>
+            Dashboard
+          </h1>
         </div>
         <Link
           to="/visuals"

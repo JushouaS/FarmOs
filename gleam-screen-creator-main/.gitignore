@@ -48,3 +48,6 @@ __pycache__/
 
 # Local PostgreSQL data directory (packages/api/scripts/local-db.ts)
 .pgdata/
+
+# SUS questionnaire responses written by packages/api (personal data)
+packages/api/data/
