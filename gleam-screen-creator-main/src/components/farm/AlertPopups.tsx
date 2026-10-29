@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check, OctagonAlert, TrendingDown, X } from "lucide-react";
-import { acknowledgeAlert, fetchAlerts, type ApiAlert } from "@/lib/api-client";
+import { acknowledgeAlert, ApiError, fetchAlerts } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import {
+  clearUnacknowledgedAlerts,
+  removeUnacknowledgedAlert,
+  setUnacknowledgedAlerts,
+  useUnacknowledgedAlerts,
+} from "@/lib/alert-store";
 
 /* Alert pop-ups: a small card that slides in at the corner of the screen,
  * desktop-notification style, when something abnormal comes in.
@@ -77,9 +83,11 @@ function useIsWide(): boolean {
 }
 
 export function AlertPopups() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const wide = useIsWide();
-  const [alerts, setAlerts] = useState<ApiAlert[]>([]);
+  // The shared list also feeds the alert badges; only the abnormal ones pop up.
+  const { alerts: unacknowledged } = useUnacknowledgedAlerts();
+  const alerts = useMemo(() => unacknowledged.filter((a) => ABNORMAL.has(a.severity)), [unacknowledged]);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -90,14 +98,21 @@ export function AlertPopups() {
   const load = useCallback(async () => {
     try {
       const rows = await fetchAlerts({ acknowledged: false, limit: 50 });
-      setAlerts(rows.filter((a) => ABNORMAL.has(a.severity)));
-    } catch {
-      /* offline, signed out or the API is down: keep what is on screen */
+      setUnacknowledgedAlerts(rows);
+    } catch (err) {
+      // apiFetch already renewed the session and retried, so a 401 here means
+      // the sign-in is really over: tell the auth context, which sends the
+      // person to /login and stops this polling. Anything else (offline, API
+      // down) keeps what is on screen.
+      if (err instanceof ApiError && err.status === 401) await refresh();
     }
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      clearUnacknowledgedAlerts();
+      return;
+    }
     load();
     const timer = setInterval(load, POLL_MS);
     const onVisible = () => document.visibilityState === "visible" && load();
@@ -133,7 +148,7 @@ export function AlertPopups() {
     setFailed(null);
     try {
       await acknowledgeAlert(id);
-      setAlerts((cur) => cur.filter((a) => a.id !== id));
+      removeUnacknowledgedAlert(id);
     } catch {
       setFailed(id);
     } finally {

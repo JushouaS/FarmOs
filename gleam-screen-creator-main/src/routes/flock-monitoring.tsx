@@ -1,12 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
+import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { broilers, farm, modelTelemetry, type BehaviorState } from "@/lib/farm/dataset";
 
 export const Route = createFileRoute("/flock-monitoring")({
   head: () => ({ meta: [{ title: "Flock Tracking — Cerebroil" }] }),
   component: FlockTrackingPage,
 });
+
+/** The "Inactive" chip also covers the dataset's "Inactivity" state. */
+function matchesBehaviorFilter(behavior: BehaviorState, filter: BehaviorState | "All") {
+  if (filter === "All") return true;
+  if (filter === "Inactive") return behavior === "Inactive" || behavior === "Inactivity";
+  return behavior === filter;
+}
 
 type SortKey = "id" | "weightG" | "behavior" | "yoloConf" | "weightConf";
 
@@ -113,7 +121,7 @@ function FlockTrackingPage() {
   const [search,  setSearch]   = useState("");
 
   const sorted = [...broilers]
-    .filter((b) => filterB === "All" || b.behavior === filterB)
+    .filter((b) => matchesBehaviorFilter(b.behavior, filterB))
     .filter((b) => !search || b.id.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       let cmp = 0;
@@ -137,6 +145,11 @@ function FlockTrackingPage() {
 
   return (
     <AppShell>
+      <SampleNotice>
+        Per-bird tracking is not connected to the database yet, so this table is built-in sample data for{" "}
+        {broilers.length} birds on Day {farm.cycle.day}. The Dashboard shows the live flock.
+      </SampleNotice>
+
       {/* Header */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -185,7 +198,7 @@ function FlockTrackingPage() {
               : { background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
             {b === "All"
               ? `All (${broilers.length})`
-              : `${b} (${broilers.filter((x) => x.behavior === b).length})`}
+              : `${b} (${broilers.filter((x) => matchesBehaviorFilter(x.behavior, b)).length})`}
           </button>
         ))}
       </div>

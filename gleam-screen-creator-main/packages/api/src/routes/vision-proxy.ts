@@ -49,6 +49,8 @@ async function fetchAnalysis(cameraId: string): Promise<any> {
 }
 
 const SCAN_SAMPLES = 4;
+/** Same line the camera service draws between "Active" and "Inactive". */
+const REAL_MOVEMENT = 0.02;
 const SCAN_GAP_MS = 1_000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -79,7 +81,11 @@ async function runScan(app: FastifyInstance, cameraId: string) {
 
   let dbWritten = false;
   try {
-    dbWritten = await persistAnalysis(app, cameraId, chosen);
+    // Many small moving areas with almost no movement overall is picture
+    // noise, not birds, so a scan saves the behaviour snapshot but not those
+    // areas as "detections", and a cluster warning only when movement is real.
+    const real = movement(chosen) > REAL_MOVEMENT;
+    dbWritten = await persistAnalysis(app, cameraId, chosen, { detections: false, clusters: real });
   } catch (err) {
     app.log.error({ err, cameraId }, "vision scan: DB write failed, returning the scan unpersisted");
   }
@@ -257,8 +263,15 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
  * row was actually written. Looks the camera up by id; if it has no matching
  * `cameras` row (or the row has no sensor/cohort to attach a weight sample
  * to) the corresponding piece is skipped rather than thrown.
+ *
+ * `only` can leave out detections or cluster warnings (both default to saved).
  */
-async function persistAnalysis(app: FastifyInstance, cameraId: string, analysis: any): Promise<boolean> {
+async function persistAnalysis(
+  app: FastifyInstance,
+  cameraId: string,
+  analysis: any,
+  only: { detections?: boolean; clusters?: boolean } = {},
+): Promise<boolean> {
   const cameraRows = await app.sqlRead`
     SELECT id, house_id AS "houseId" FROM cameras WHERE id = ${cameraId}`;
   if (cameraRows.count === 0) return false;
@@ -266,7 +279,7 @@ async function persistAnalysis(app: FastifyInstance, cameraId: string, analysis:
 
   let wrote = false;
 
-  const detections: any[] = Array.isArray(analysis?.detections) ? analysis.detections : [];
+  const detections: any[] = only.detections !== false && Array.isArray(analysis?.detections) ? analysis.detections : [];
   for (const d of detections) {
     const id = `D-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await app.sqlWrite`
@@ -283,7 +296,7 @@ async function persistAnalysis(app: FastifyInstance, cameraId: string, analysis:
     wrote = true;
   }
 
-  const clusters: any[] = Array.isArray(analysis?.clusters) ? analysis.clusters : [];
+  const clusters: any[] = only.clusters !== false && Array.isArray(analysis?.clusters) ? analysis.clusters : [];
   for (const cl of clusters) {
     await app.sqlWrite`
       INSERT INTO cluster_warnings (camera_id, raised_at, label, risk, box)

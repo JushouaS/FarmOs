@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
+import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import {
   farm,
   broilers,
@@ -330,7 +331,10 @@ export function VisualsDashboardPage() {
             {/* Behavior State Breakdown Widget */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
-                <span className="label-section text-[11px] tracking-widest font-bold">Behavior Breakdown</span>
+                <span className="flex items-center gap-2">
+                  <span className="label-section text-[11px] tracking-widest font-bold">Behavior Breakdown</span>
+                  <SampleBadge />
+                </span>
                 <time
                   dateTime={now?.toISOString()}
                   title={`Local time. Day is 5:00 AM to 4:59 PM, night is the rest. It is ${nightModeActive ? "night" : "day"} now.`}
@@ -417,8 +421,8 @@ export function VisualsDashboardPage() {
 
             {/* Weight Category Distribution */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
-              <span className="label-section text-[11px] tracking-widest font-bold block pb-2.5 border-b border-[var(--border-subtle)]">
-                Weight Classification
+              <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
+                Weight Classification <SampleBadge />
               </span>
 
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -450,8 +454,8 @@ export function VisualsDashboardPage() {
 
             {/* Quick Environment Telemetry */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
-              <span className="label-section text-[11px] tracking-widest font-bold block pb-2.5 border-b border-[var(--border-subtle)]">
-                Pen Sensor Telemetry
+              <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
+                Pen Sensor Telemetry <SampleBadge />
               </span>
 
               <div className="mt-3 space-y-2.5 text-xs">

@@ -1,6 +1,6 @@
 import { redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeader } from "@tanstack/react-start/server";
+import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
 import { formatMeasurement } from "./format";
 import {
   activeIncident,
@@ -53,16 +53,84 @@ function forwardedCookieHeader(): Record<string, string> {
   }
 }
 
+interface RenewedSession {
+  /** The request's Cookie header with the new tokens swapped in, for the retry. */
+  cookieHeader: string;
+  /** The API's Set-Cookie lines, to hand on to the browser. */
+  setCookies: string[];
+}
+
+// The access token lasts 15 minutes; the refresh token, 30 days. A refresh
+// token works once (the API rotates it), so two requests that both hit an
+// expired token must share ONE renewal: a second renewal with the used token
+// would fail and sign the person out. Results are kept for a few seconds so a
+// request that arrives just after still gets the new tokens.
+const renewals = new Map<string, Promise<RenewedSession | null>>();
+const RENEWAL_KEEP_MS = 10_000;
+
+async function requestRenewal(cookie: string): Promise<RenewedSession | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", headers: { cookie } });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  const setCookies = res.headers.getSetCookie();
+  const fresh = new Map<string, string>();
+  for (const line of setCookies) {
+    const pair = line.split(";")[0] ?? "";
+    const eq = pair.indexOf("=");
+    if (eq > 0) fresh.set(pair.slice(0, eq).trim(), pair.slice(eq + 1));
+  }
+  const kept = cookie
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const name = part.slice(0, part.indexOf("="));
+      return fresh.has(name) ? `${name}=${fresh.get(name)}` : part;
+    });
+  for (const [name, value] of fresh) {
+    if (!kept.some((part) => part.startsWith(`${name}=`))) kept.push(`${name}=${value}`);
+  }
+  return { cookieHeader: kept.join("; "), setCookies };
+}
+
+function renewSession(cookie: string): Promise<RenewedSession | null> {
+  let renewal = renewals.get(cookie);
+  if (!renewal) {
+    renewal = requestRenewal(cookie);
+    renewals.set(cookie, renewal);
+    setTimeout(() => renewals.delete(cookie), RENEWAL_KEEP_MS).unref?.();
+  }
+  return renewal;
+}
+
 /**
  * Shared fetch helper: forwards the session cookie, throws on non-2xx.
- * A 401 redirects to /login — otherwise a signed-out visitor hits the root
+ * An expired access token is renewed once from the refresh token (and the new
+ * cookies are sent on to the browser) before giving up. A 401 that survives
+ * that redirects to /login — otherwise a signed-out visitor hits the root
  * error boundary before the client-side auth guard ever gets to run.
  */
 async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const cookie = forwardedCookieHeader().cookie;
+  let res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     headers: forwardedCookieHeader(),
   });
+  if (res.status === 401 && cookie) {
+    const renewed = await renewSession(cookie);
+    if (renewed) {
+      try {
+        setResponseHeader("set-cookie", renewed.setCookies);
+      } catch {
+        /* no response context: the retry below still works for this request */
+      }
+      res = await fetch(`${API_BASE}${path}`, { headers: { cookie: renewed.cookieHeader } });
+    }
+  }
   if (res.status === 401) {
     throw redirect({ to: "/login" });
   }

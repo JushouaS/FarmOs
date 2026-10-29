@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { UserAvatar } from "./UserAvatar";
-import { unacknowledgedAlerts } from "@/lib/farm/dataset";
+import { useUnacknowledgedAlertCount } from "@/lib/alert-store";
 import {
   LayoutDashboard,
   Video,
@@ -69,7 +69,7 @@ export function SideNav({
 }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const alertCount = unacknowledgedAlerts();
+  const alertCount = useUnacknowledgedAlertCount();
 
   const handleLogout = async () => {
     await logout();

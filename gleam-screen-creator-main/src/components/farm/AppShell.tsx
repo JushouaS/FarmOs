@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { SideNav } from "./SideNav";
 import { AccountMenu } from "./AccountMenu";
 import { AlertPopups } from "./AlertPopups";
-import { unacknowledgedAlerts } from "@/lib/farm/dataset";
+import { useUnacknowledgedAlertCount } from "@/lib/alert-store";
 import {
   Menu,
   Sun,
@@ -71,7 +71,7 @@ function ThemeToggle() {
 
 /* ── Top bar ──────────────────────────────────────────────── */
 function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
-  const alertCount = unacknowledgedAlerts();
+  const alertCount = useUnacknowledgedAlertCount();
 
   return (
     <div
@@ -130,7 +130,7 @@ const BOTTOM_ROUTES = [
 ] as const;
 
 function BottomNav() {
-  const alertCount = unacknowledgedAlerts();
+  const alertCount = useUnacknowledgedAlertCount();
   return (
     <nav
       aria-label="Primary"

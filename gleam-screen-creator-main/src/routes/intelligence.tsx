@@ -4,6 +4,7 @@ import { AppShell } from "@/components/farm/AppShell";
 import { getMonitoringReport } from "@/lib/farm/repository";
 import { fetchSituationBriefing, fetchFeedbackAlerts } from "@/lib/intelligence";
 import { farm } from "@/lib/farm/dataset";
+import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 
 export const Route = createFileRoute("/intelligence")({
   head: () => ({ meta: [{ title: "Insights — CereBroiler" }] }),
@@ -106,7 +107,9 @@ function InsightsPage() {
                 {alertsQ.isFetching ? (
                   <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Analyzing your flock data…</p>
                 ) : alertsQ.isError ? (
-                  <p className="text-sm" style={{ color: "var(--status-amber-text)" }}>Could not load AI analysis.</p>
+                  <p className="text-sm" style={{ color: "var(--status-amber-text)" }}>
+                    {alertsQ.error instanceof Error ? alertsQ.error.message : "Could not load AI analysis."}
+                  </p>
                 ) : alertsQ.data?.alerts.map((a: any, i: number) => (
                   <div key={i} className="rounded-lg p-4"
                     style={a.severity === "critical"
@@ -180,7 +183,9 @@ function InsightsPage() {
           </div>
 
           <div className="cb-card p-5">
-            <h3 className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Next Focus</h3>
+            <h3 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              Next Focus <SampleBadge />
+            </h3>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               Prepare for the next weight check in the coming days.
             </p>

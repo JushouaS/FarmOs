@@ -24,18 +24,44 @@ export class ApiError extends Error {
   }
 }
 
+// The access cookie lasts 15 minutes and the refresh cookie 30 days, and a
+// refresh token works only once. So every call that meets a 401 shares ONE
+// renewal (kept for a few seconds for calls that arrive just after), then
+// retries once with the new cookies.
+let renewing: Promise<boolean> | null = null;
+
+function renewSession(): Promise<boolean> {
+  if (!renewing) {
+    renewing = fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" })
+      .then((res) => res.ok)
+      .catch(() => false);
+    setTimeout(() => {
+      renewing = null;
+    }, 5_000);
+  }
+  return renewing;
+}
+
 async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  const send = () =>
+    fetch(`${API_BASE}${path}`, {
+      credentials: "include",
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  let res = await send();
+  if (res.status === 401 && !path.startsWith("/auth/")) {
+    // Retried even when this renewal failed: another request may have renewed
+    // the cookies a moment earlier, which is why this one was refused.
+    await renewSession();
+    res = await send();
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(res.status, (body as Record<string, string>).error ?? res.statusText);

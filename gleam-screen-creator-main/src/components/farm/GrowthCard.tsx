@@ -240,7 +240,9 @@ function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]
         </>
       )}
 
-      <table className="sr-only">
+      {/* A table ignores the 1px sr-only width and widens the page on phones, so the wrapper hides it. */}
+      <div className="sr-only">
+      <table>
         <caption>Average weight by day against the {targetLabel}</caption>
         <thead>
           <tr>
@@ -259,6 +261,7 @@ function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -110,7 +110,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+        let res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+        if (res.status === 401) {
+          // The 15 minute access token may have lapsed while the 30 day refresh
+          // token is still good: renew it rather than sending the person to /login.
+          const renewed = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" }).catch(() => null);
+          if (renewed?.ok) res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+        }
         if (res.ok) {
           const data = await res.json();
           setUser({

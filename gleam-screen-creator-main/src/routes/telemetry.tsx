@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef, useLayoutEffect } from "react";
+import { Fragment, useEffect, useState, useRef, useLayoutEffect, type ReactNode } from "react";
 import { AppShell } from "@/components/farm/AppShell";
+import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { getGrowthAnalytics } from "@/lib/farm/repository";
 import { broilers, farm, behaviorBreakdown, weightBreakdown } from "@/lib/farm/dataset";
 import {
@@ -20,6 +21,7 @@ import {
   Play,
   Activity,
   Calendar,
+  OctagonAlert,
 } from "lucide-react";
 
 export const Route = createFileRoute("/telemetry")({
@@ -28,7 +30,7 @@ export const Route = createFileRoute("/telemetry")({
   component: AnalyticsPage,
 });
 
-type Tab = "growth" | "feed" | "behavior" | "environment";
+type Tab = "growth" | "conditions";
 type InsightLevel = "positive" | "warning" | "critical" | "info";
 interface ChartSeries { x: number; y: number; }
 
@@ -862,57 +864,65 @@ function FlockWeightDistribution() {
   );
 }
 
-/* ── Interactive Growth Analysis with Process / Trigger Button ─── */
-function GrowthAnalysisSection({
-  avgW,
-  stdW,
-  wDelta,
-  optPct,
-  wd,
-  total,
-  day,
-  variancePercent,
+/* ── Diagnostics card: ready → processing → report ───────────────
+ * The same card for Weight Growth and Flock Conditions. The caller supplies
+ * the words and the report body; this owns the button, the progress and the
+ * three states. */
+function DiagnosticsCard({
+  title,
+  description,
+  chips,
+  buttonLabel,
+  processingTitle,
+  steps,
+  reportTitle,
+  evaluated,
+  children,
 }: {
-  avgW: number;
-  stdW: number;
-  wDelta: number;
-  optPct: number;
-  wd: { Optimal: number; Underweight: number; Overweight: number };
-  total: number;
-  day: number;
-  variancePercent: number;
+  title: string;
+  description: string;
+  chips: string[];
+  buttonLabel: string;
+  processingTitle: string;
+  steps: string[];
+  reportTitle: string;
+  evaluated: string;
+  children: ReactNode;
 }) {
   const [analysisState, setAnalysisState] = useState<"idle" | "processing" | "ready">("idle");
   const [progress, setProgress] = useState(0);
   const [stepIdx, setStepIdx] = useState(0);
   const [processedAt, setProcessedAt] = useState<string | null>(null);
+  const timers = useRef<{ tick?: ReturnType<typeof setInterval>; done?: ReturnType<typeof setTimeout> }>({});
 
-  const steps = [
-    "Ingesting 28 depth-scan weight and morphometric records...",
-    "Benchmarking flock curve against Ross 308 Day 14 standards (+1.5% delta)...",
-    "Evaluating cohort uniformity & clustering at drinker lines...",
-    "Synthesizing actionable harvest yield projections...",
-  ];
+  // Stop the timers if the person leaves the tab mid-run.
+  useEffect(
+    () => () => {
+      clearInterval(timers.current.tick);
+      clearTimeout(timers.current.done);
+    },
+    [],
+  );
 
   const handleRunAnalysis = () => {
+    clearInterval(timers.current.tick);
+    clearTimeout(timers.current.done);
     setAnalysisState("processing");
     setProgress(0);
     setStepIdx(0);
 
-    const interval = setInterval(() => {
+    timers.current.tick = setInterval(() => {
       setProgress((prev) => {
         const next = prev + 14;
         if (next >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
+          clearInterval(timers.current.tick);
+          timers.current.done = setTimeout(() => {
             setAnalysisState("ready");
             setProcessedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
           }, 250);
           return 100;
         }
-        if (next > 75) setStepIdx(3);
-        else if (next > 50) setStepIdx(2);
-        else if (next > 25) setStepIdx(1);
+        setStepIdx(Math.min(steps.length - 1, Math.floor((next / 100) * steps.length)));
         return next;
       });
     }, 130);
@@ -930,21 +940,19 @@ function GrowthAnalysisSection({
                 <Cpu className="h-4 w-4" />
               </span>
               <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-                Automated Growth Diagnostics & Trajectory
+                {title}
               </h2>
             </div>
             <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              Run multi-factor AI diagnostic on current 28-bird depth-scan telemetry, Ross 308 standard variance,
-              cohort uniformity, and feed efficiency projections for Day 42 harvest.
+              {description}
             </p>
             <div className="flex items-center gap-2 pt-1 flex-wrap font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-              <span className="px-2 py-0.5 rounded bg-surface-raised">28 Scans Ready</span>
-              <span>·</span>
-              <span className="px-2 py-0.5 rounded bg-surface-raised">Day 14 Cohort</span>
-              <span>·</span>
-              <span className="px-2 py-0.5 rounded bg-surface-raised">Ross 308 Benchmark</span>
-              <span>·</span>
-              <span className="px-2 py-0.5 rounded bg-surface-raised">FCR 1.64 Correlation</span>
+              {chips.map((chip, i) => (
+                <Fragment key={chip}>
+                  {i > 0 && <span>·</span>}
+                  <span className="px-2 py-0.5 rounded bg-surface-raised">{chip}</span>
+                </Fragment>
+              ))}
             </div>
           </div>
 
@@ -958,7 +966,7 @@ function GrowthAnalysisSection({
             }}
           >
             <Sparkles className="h-4 w-4" />
-            <span>Process & Analyze Growth</span>
+            <span>{buttonLabel}</span>
           </button>
         </div>
       )}
@@ -977,7 +985,7 @@ function GrowthAnalysisSection({
 
           <div className="space-y-1">
             <h3 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              Processing Telemetry & Growth Curves...
+              {processingTitle}
             </h3>
             <p className="text-xs font-mono h-4" style={{ color: "var(--brand)" }}>
               {steps[stepIdx]}
@@ -996,7 +1004,7 @@ function GrowthAnalysisSection({
               />
             </div>
             <div className="flex justify-between font-mono text-[10px]" style={{ color: "var(--text-tertiary)" }}>
-              <span>Step {stepIdx + 1} of 4</span>
+              <span>Step {stepIdx + 1} of {steps.length}</span>
               <span>{progress}%</span>
             </div>
           </div>
@@ -1016,10 +1024,10 @@ function GrowthAnalysisSection({
               </span>
               <div>
                 <h2 className="text-base font-bold leading-none" style={{ color: "var(--text-primary)" }}>
-                  Flock Growth Diagnostic Report
+                  {reportTitle}
                 </h2>
                 <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                  Generated at {processedAt ?? "just now"} · 28 Broiler Depth-Scans Evaluated
+                  Generated at {processedAt ?? "just now"} · {evaluated}
                 </p>
               </div>
             </div>
@@ -1038,6 +1046,49 @@ function GrowthAnalysisSection({
             </button>
           </div>
 
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Weight growth report ────────────────────────────────────── */
+function GrowthAnalysisSection({
+  avgW,
+  stdW,
+  wDelta,
+  optPct,
+  wd,
+  total,
+  day,
+  variancePercent,
+}: {
+  avgW: number;
+  stdW: number;
+  wDelta: number;
+  optPct: number;
+  wd: { Optimal: number; Underweight: number; Overweight: number };
+  total: number;
+  day: number;
+  variancePercent: number;
+}) {
+  return (
+    <DiagnosticsCard
+      title="Automated Growth Diagnostics & Trajectory"
+      description="Run multi-factor AI diagnostic on current 28-bird depth-scan telemetry, Ross 308 standard variance, cohort uniformity, and feed efficiency projections for Day 42 harvest."
+      chips={["28 Scans Ready", "Day 14 Cohort", "Ross 308 Benchmark", "FCR 1.64 Correlation"]}
+      buttonLabel="Process & Analyze Growth"
+      processingTitle="Processing Telemetry & Growth Curves..."
+      steps={[
+        "Ingesting 28 depth-scan weight and morphometric records...",
+        "Benchmarking flock curve against Ross 308 Day 14 standards (+1.5% delta)...",
+        "Evaluating cohort uniformity & clustering at drinker lines...",
+        "Synthesizing actionable harvest yield projections...",
+      ]}
+      reportTitle="Flock Growth Diagnostic Report"
+      evaluated="28 Broiler Depth-Scans Evaluated"
+    >
           {/* Diagnostic Key Takeaway Scorecards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
@@ -1108,25 +1159,196 @@ function GrowthAnalysisSection({
               </div>
             </div>
           </div>
+    </DiagnosticsCard>
+  );
+}
+
+/* ── Flock conditions report: feed, behavior and environment together ── */
+interface EnvSensor {
+  title: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  insight: { level: InsightLevel; title: string; body: string };
+}
+
+function ConditionsAnalysisSection({
+  day,
+  total,
+  fcr,
+  fcrTarget,
+  adgG,
+  movementIndex,
+  huddlingRisk,
+  aggressionEvents,
+  inactive,
+  huddling,
+  inactPct,
+  sensors,
+}: {
+  day: number;
+  total: number;
+  fcr: number;
+  fcrTarget: number;
+  adgG: number;
+  movementIndex: number;
+  huddlingRisk: number;
+  aggressionEvents: number;
+  inactive: number;
+  huddling: number;
+  inactPct: number;
+  sensors: EnvSensor[];
+}) {
+  const fcrDelta = fcrTarget - fcr;
+  const inRange = sensors.filter((e) => e.value >= e.min && e.value <= e.max);
+  const outOfRange = sensors.filter((e) => e.value < e.min || e.value > e.max);
+
+  // One plain recommendation, put together from whatever is off.
+  const actions: string[] = [];
+  if (huddling > 0) actions.push("check the drinker line and the ventilation where birds are huddling");
+  if (inactPct > 20) actions.push("walk the house and inspect the inactive birds");
+  if (fcr > fcrTarget) actions.push("review feed distribution and wastage");
+  if (outOfRange.length > 0) actions.push(`bring ${outOfRange.map((e) => e.title.toLowerCase()).join(" and ")} back into range`);
+  const recommendation =
+    actions.length > 0
+      ? `Next round: ${actions.join("; ")}.`
+      : "Feed, behavior and the house environment are all on target. Keep the current feed, ventilation and lighting routine.";
+
+  return (
+    <DiagnosticsCard
+      title="Automated Conditions Diagnostics"
+      description="Run a multi-factor diagnostic across feed efficiency, flock behavior and house environment, and see how the three affect each other."
+      chips={[`FCR ${fcr}`, `${total} Birds Scanned`, `${sensors.length} Sensors`, `Day ${day}`]}
+      buttonLabel="Process & Analyze Conditions"
+      processingTitle="Processing Feed, Behavior & Environment..."
+      steps={[
+        `Ingesting feed, water and daily-gain records (FCR ${fcr})...`,
+        `Reading behavior telemetry for ${total} birds: movement, huddling and aggression...`,
+        "Checking temperature, humidity and ammonia against their target bands...",
+        "Cross-checking the three and drafting recommendations...",
+      ]}
+      reportTitle="Flock Conditions Diagnostic Report"
+      evaluated={`${total} Birds · ${sensors.length} Sensors Evaluated`}
+    >
+      {/* Scorecards: one per area */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
+          <p className="label-section text-[10px]">Feed Efficiency</p>
+          <p className="font-mono text-base font-bold mt-0.5" style={{ color: fcr <= fcrTarget ? "var(--status-green)" : "var(--status-red)" }}>
+            FCR {fcr}
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+            {Math.abs(fcrDelta).toFixed(2)} {fcrDelta >= 0 ? "below" : "above"} the {fcrTarget} target
+          </p>
         </div>
-      )}
-    </div>
+
+        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
+          <p className="label-section text-[10px]">Activity</p>
+          <p className="font-mono text-base font-bold mt-0.5"
+            style={{ color: inactPct > 30 ? "var(--status-red)" : inactPct > 20 ? "var(--status-amber)" : "var(--status-green)" }}>
+            {(movementIndex * 100).toFixed(1)}%
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+            Movement index · {inactive} of {total} birds inactive
+          </p>
+        </div>
+
+        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
+          <p className="label-section text-[10px]">Huddling</p>
+          <p className="font-mono text-base font-bold mt-0.5" style={{ color: huddling > 0 ? "var(--status-amber)" : "var(--status-green)" }}>
+            {huddling} {huddling === 1 ? "Bird" : "Birds"}
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+            Cluster risk {(huddlingRisk * 100).toFixed(0)}%
+          </p>
+        </div>
+
+        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
+          <p className="label-section text-[10px]">Environment</p>
+          <p className="font-mono text-base font-bold mt-0.5" style={{ color: outOfRange.length === 0 ? "var(--status-green)" : "var(--status-amber)" }}>
+            {inRange.length} / {sensors.length}
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+            {outOfRange.length === 0 ? "Sensors in their target band" : `${outOfRange.map((e) => e.title).join(", ")} out of range`}
+          </p>
+        </div>
+      </div>
+
+      {/* Findings, grouped by area */}
+      <div className="space-y-4">
+        <div className="space-y-3">
+          <p className="label-section text-[11px] tracking-widest font-bold">Feed</p>
+          <InsightCard level={fcr <= fcrTarget ? "positive" : "warning"}
+            title={`FCR ${fcr} is ${Math.abs(fcrDelta).toFixed(2)} ${fcrDelta >= 0 ? "below" : "above"} target`}
+            body={`FCR trending downward across 8 consecutive measurements (1.72 to ${fcr}), indicating ${fcrDelta >= 0 ? "improving" : "slipping"} feed efficiency as the flock matures.`} />
+          <InsightCard level="positive"
+            title={`Daily gain of ${adgG} g/day within normal range`}
+            body={`Consistent with Ross 308 expectations at Day ${day}. Feed intake and weight gain ratio suggest a well-balanced diet and healthy gut function.`} />
+          <InsightCard level="info"
+            title="Water intake at 2.4 L/hr is nominal"
+            body="Water-to-feed ratio is within the expected range. Adequate hydration supports digestion and maintains optimal FCR performance." />
+        </div>
+
+        <div className="space-y-3">
+          <p className="label-section text-[11px] tracking-widest font-bold">Behavior</p>
+          <InsightCard level={inactPct > 30 ? "critical" : "warning"}
+            title={`${inactPct}% of birds show reduced daytime activity`}
+            body={`${inactive} birds classified as inactive in the current scan. B-019 has been inactive for over 30 minutes and is flagged for manual inspection.`} />
+          {huddling > 0 && (
+            <InsightCard level="warning"
+              title="B-013 and B-015 huddling detected, open incident"
+              body="Cluster density exceeded threshold near the water drinker zone (CAM-01). Huddling has persisted for 80+ minutes. Inspect the drinker and increase ventilation." />
+          )}
+          <InsightCard level={aggressionEvents === 0 ? "positive" : "warning"}
+            title={aggressionEvents === 0 ? "Zero aggression events detected" : `${aggressionEvents} aggression events detected`}
+            body={aggressionEvents === 0
+              ? `No pecking or aggressive interactions detected across ${total} birds. Pen density and lighting appear well-calibrated for this growth stage.`
+              : "Pecking or aggressive interactions were detected. Check stocking density and lighting."} />
+        </div>
+
+        <div className="space-y-3">
+          <p className="label-section text-[11px] tracking-widest font-bold">Environment</p>
+          {sensors.map((e) => (
+            <InsightCard key={e.title} level={e.insight.level} title={e.insight.title} body={e.insight.body} />
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl p-4 border flex items-start gap-3"
+        style={{ background: "rgba(52, 211, 153, 0.05)", borderColor: "rgba(52, 211, 153, 0.25)" }}>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+          style={{ background: "rgba(52, 211, 153, 0.2)", color: "var(--brand)" }}>
+          <TrendingUp className="h-3.5 w-3.5" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold leading-snug" style={{ color: "var(--brand)" }}>
+            Operational Recommendation
+          </p>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            {recommendation}
+          </p>
+        </div>
+      </div>
+    </DiagnosticsCard>
   );
 }
 
 /* ── Insight Card ────────────────────────────────────────────── */
 function InsightCard({ level, title, body }: { level: InsightLevel; title: string; body: string }) {
-  const cfg: Record<InsightLevel, { icon: string; bg: string; border: string; title: string }> = {
-    positive: { icon: "check", bg: "var(--status-green-bg)",  border: "var(--status-green-border)",  title: "var(--status-green-text)" },
-    warning:  { icon: "!",     bg: "var(--status-amber-bg)",  border: "var(--status-amber-border)",  title: "var(--status-amber-text)" },
-    critical: { icon: "x",     bg: "var(--status-red-bg)",    border: "var(--status-red-border)",    title: "var(--status-red-text)" },
-    info:     { icon: "i",     bg: "var(--status-blue-bg)",   border: "var(--status-blue-border)",   title: "var(--status-blue-text)" },
+  const cfg: Record<InsightLevel, { Icon: typeof Check; bg: string; border: string; title: string }> = {
+    positive: { Icon: Check,         bg: "var(--status-green-bg)",  border: "var(--status-green-border)",  title: "var(--status-green-text)" },
+    warning:  { Icon: AlertTriangle, bg: "var(--status-amber-bg)",  border: "var(--status-amber-border)",  title: "var(--status-amber-text)" },
+    critical: { Icon: OctagonAlert,  bg: "var(--status-red-bg)",    border: "var(--status-red-border)",    title: "var(--status-red-text)" },
+    info:     { Icon: Info,          bg: "var(--status-blue-bg)",   border: "var(--status-blue-border)",   title: "var(--status-blue-text)" },
   };
   const c = cfg[level];
   return (
     <div className="flex gap-3 rounded-xl p-4" style={{ background: c.bg, border: `1px solid ${c.border}` }}>
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-        style={{ background: c.border, color: "var(--text-inverse)" }}>{c.icon}</span>
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+        style={{ background: c.border, color: "var(--text-inverse)" }}>
+        <c.Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      </span>
       <div>
         <p className="text-sm font-semibold leading-snug" style={{ color: c.title }}>{title}</p>
         <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{body}</p>
@@ -1198,6 +1420,26 @@ function AnalyticsPage() {
   const tempHistory  = [28.4, 28.9, 29.1, 29.5, 29.1, 28.8, 29.1].map((v, i) => ({ x: i + 1, y: v }));
   const humidHistory = [61, 62, 63, 64, 63, 62, 63].map((v, i) => ({ x: i + 1, y: v }));
   const nh3History   = [8, 9, 9, 10, 9, 9, 9].map((v, i) => ({ x: i + 1, y: v }));
+  const envSensors = [
+    {
+      title: "Temperature", series: tempHistory, value: 29.1, min: 26, max: 32, unit: "°C",
+      color: "var(--brand)",
+      insight: { level: "positive" as InsightLevel, title: "Temperature within optimal range (26–32°C)",
+        body: "Stable over 7 days with a minor peak of 29.5°C on Day 4. No corrective action required. Continue monitoring as ambient temperatures rise mid-afternoon." },
+    },
+    {
+      title: "Humidity", series: humidHistory, value: 63, min: 50, max: 70, unit: "%",
+      color: "var(--status-blue)",
+      insight: { level: "positive" as InsightLevel, title: "Humidity steady at 63%, nominal",
+        body: "Remained within the 50–70% target band. Slight upward creep from 61% to 63% is acceptable and correlates with increased bird respiration as body mass grows." },
+    },
+    {
+      title: "Ammonia (NH3)", series: nh3History, value: 9, min: 0, max: 25, unit: " ppm",
+      color: "var(--status-amber)",
+      insight: { level: "info" as InsightLevel, title: "NH3 at 9 ppm, well below the 25 ppm alert threshold",
+        body: "Levels are low and stable. A one-day spike to 10 ppm self-resolved, likely due to litter disturbance. Litter moisture and ventilation management are effective." },
+    },
+  ];
 
   const displayedActualSeries = growthRange === "to-date" ? actualSeries : curve.map((p) => ({ x: p.day, y: p.actualG }));
   const displayedTargetSeries = growthRange === "to-date" ? targetSeries.filter((p) => p.x <= 14) : targetSeries;
@@ -1214,14 +1456,17 @@ function AnalyticsPage() {
   const fcrDelta = farm.feed.fcrTarget - farm.feed.fcr;
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "growth",      label: "Weight Growth" },
-    { id: "feed",        label: "Feed & FCR"    },
-    { id: "behavior",    label: "Behavior"      },
-    { id: "environment", label: "Environment"   },
+    { id: "growth",     label: "Weight Growth"   },
+    { id: "conditions", label: "Flock Conditions" },
   ];
 
   return (
     <AppShell>
+      <SampleNotice>
+        These charts and figures are built-in sample data for Day {farm.cycle.day}, not the live flock. The
+        Dashboard's Growth card shows the live weight and cycle day.
+      </SampleNotice>
+
       {/* Header */}
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>Analytics</h1>
@@ -1442,192 +1687,141 @@ function AnalyticsPage() {
         </div>
       )}
 
-      {/* ── FEED & FCR ── */}
-      {tab === "feed" && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Current FCR"   value={String(farm.feed.fcr)} sub={`Target: ${farm.feed.fcrTarget}`}
-              accent={farm.feed.fcr <= farm.feed.fcrTarget ? "var(--status-green)" : "var(--status-red)"} />
-            <StatCard label="vs Target"     value={`-${Math.abs(farm.feed.fcrDelta).toFixed(2)}`} sub="Below FCR target" accent="var(--status-green)" />
-            <StatCard label="Daily Gain"    value={`${farm.feed.adgG} g/day`} sub="Avg daily weight gain" />
-            <StatCard label="Feed Consumed" value={`${farm.feed.cycleConsumedKg} kg`} sub="Cycle total to date" />
-          </div>
-
-          <div className="cb-card p-5">
-            <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
-              <div>
-                <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>FCR Trend — Last 8 Measurements</h2>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                  Lower = better efficiency · Target {farm.feed.fcrTarget} shown as dashed line
-                </p>
-              </div>
-              <ChartLegend items={[
-                { color: "var(--brand)", label: "FCR" },
-                { color: "var(--status-amber)", label: "Target", dashed: true },
-              ]} />
+      {/* ── FLOCK CONDITIONS: feed, behavior and environment together ── */}
+      {tab === "conditions" && (
+        <div className="space-y-6">
+          {/* Feed */}
+          <section aria-labelledby="cond-feed" className="space-y-3">
+            <h2 id="cond-feed" className="label-section text-[11px] tracking-widest font-bold">Feed & Water</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard label="Current FCR"   value={String(farm.feed.fcr)} sub={`Target: ${farm.feed.fcrTarget}`}
+                accent={farm.feed.fcr <= farm.feed.fcrTarget ? "var(--status-green)" : "var(--status-red)"} />
+              <StatCard label="vs Target"     value={`${fcrDelta >= 0 ? "-" : "+"}${Math.abs(fcrDelta).toFixed(2)}`}
+                sub={fcrDelta >= 0 ? "Below FCR target" : "Above FCR target"}
+                accent={fcrDelta >= 0 ? "var(--status-green)" : "var(--status-red)"} />
+              <StatCard label="Daily Gain"    value={`${farm.feed.adgG} g/day`} sub="Avg daily weight gain" />
+              <StatCard label="Feed Consumed" value={`${farm.feed.cycleConsumedKg} kg`} sub="Cycle total to date" />
             </div>
-            <AxisLineChart series={fcrSeries}
-              targets={fcrSeries.map((_, i) => ({ x: i + 1, y: farm.feed.fcrTarget }))}
-              color="var(--brand)" targetColor="var(--status-amber)"
-              xLabel="Scan" yLabel="FCR" yTickCount={5} height={180} />
-          </div>
-
-          <div className="cb-card p-5">
-            <h2 className="mb-4 text-base font-bold" style={{ color: "var(--text-primary)" }}>Feed Analysis</h2>
-            <div className="space-y-3">
-              <InsightCard level="positive"
-                title={`FCR ${farm.feed.fcr} is ${fcrDelta.toFixed(2)} below target`}
-                body={`FCR trending downward across 8 consecutive measurements (1.72 → ${farm.feed.fcr}), indicating improving feed efficiency as the flock matures.`} />
-              <InsightCard level="positive"
-                title={`Daily gain of ${farm.feed.adgG} g/day within normal range`}
-                body="Consistent with Ross 308 expectations at Day 14. Feed intake and weight gain ratio suggest a well-balanced diet and healthy gut function." />
-              <InsightCard level="info"
-                title="Water intake at 2.4 L/hr — nominal"
-                body="Water-to-feed ratio is within the expected range. Adequate hydration supports digestion and maintains optimal FCR performance." />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── BEHAVIOR ── */}
-      {tab === "behavior" && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Movement Index" value={`${(farm.behavior.movementIndex * 100).toFixed(1)}%`} sub="Above 88% baseline" accent="var(--status-green)" />
-            <StatCard label="Huddling Risk"  value={`${(farm.behavior.huddlingRisk * 100).toFixed(0)}%`} sub="Low cluster density" accent="var(--status-green)" />
-            <StatCard label="Inactive Birds" value={`${bd.Inactivity} / ${total}`} sub={`${inactPct}% of flock`}
-              accent={inactPct > 20 ? "var(--status-red)" : "var(--status-amber)"} />
-            <StatCard label="Huddling"       value={`${bd.Huddling} birds`} sub="Cluster detected" accent="var(--status-amber)" />
-          </div>
-
-          <div className="cb-card p-5">
-            <h2 className="mb-4 text-base font-bold" style={{ color: "var(--text-primary)" }}>
-              Activity Classification — Current Scan
-            </h2>
-            <div className="flex flex-col sm:flex-row gap-6 items-center">
-              <div className="w-full max-w-[180px] shrink-0">
-                <DonutChart segments={[
-                  { label: "Active",   value: bd.Active,     color: "var(--status-green)" },
-                  { label: "Inactive", value: bd.Inactivity, color: "var(--status-red)" },
-                  { label: "Huddling", value: bd.Huddling,   color: "var(--status-amber)" },
+            <div className="cb-card p-5">
+              <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
+                <div>
+                  <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>FCR Trend, Last 8 Measurements</h3>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    Lower = better efficiency · Target {farm.feed.fcrTarget} shown as dashed line
+                  </p>
+                </div>
+                <ChartLegend items={[
+                  { color: "var(--brand)", label: "FCR" },
+                  { color: "var(--status-amber)", label: "Target", dashed: true },
                 ]} />
               </div>
-              <div className="flex-1 space-y-4 w-full">
-                {([
-                  { label: "Active",   count: bd.Active,     color: "var(--status-green)" },
-                  { label: "Inactive", count: bd.Inactivity, color: "var(--status-red)" },
-                  { label: "Huddling", count: bd.Huddling,   color: "var(--status-amber)" },
-                ] as const).map((row) => {
-                  const pct = Math.round((row.count / total) * 100);
-                  return (
-                    <div key={row.label}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} />
-                          {row.label}
-                        </span>
-                        <span className="font-mono text-sm font-bold" style={{ color: row.color }}>
-                          {row.count} birds · {pct}%
-                        </span>
+              <AxisLineChart series={fcrSeries}
+                targets={fcrSeries.map((_, i) => ({ x: i + 1, y: farm.feed.fcrTarget }))}
+                color="var(--brand)" targetColor="var(--status-amber)"
+                xLabel="Scan" yLabel="FCR" yTickCount={5} height={180} />
+            </div>
+          </section>
+
+          {/* Behavior */}
+          <section aria-labelledby="cond-behavior" className="space-y-3">
+            <h2 id="cond-behavior" className="label-section text-[11px] tracking-widest font-bold">Behavior</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard label="Movement Index" value={`${(farm.behavior.movementIndex * 100).toFixed(1)}%`} sub="Above 88% baseline" accent="var(--status-green)" />
+              <StatCard label="Huddling Risk"  value={`${(farm.behavior.huddlingRisk * 100).toFixed(0)}%`} sub="Low cluster density" accent="var(--status-green)" />
+              <StatCard label="Inactive Birds" value={`${bd.Inactivity} / ${total}`} sub={`${inactPct}% of flock`}
+                accent={inactPct > 20 ? "var(--status-red)" : "var(--status-amber)"} />
+              <StatCard label="Huddling"       value={`${bd.Huddling} birds`} sub="Cluster detected" accent="var(--status-amber)" />
+            </div>
+            <div className="cb-card p-5">
+              <h3 className="mb-4 text-base font-bold" style={{ color: "var(--text-primary)" }}>
+                Activity Classification, Current Scan
+              </h3>
+              <div className="flex flex-col sm:flex-row gap-6 items-center">
+                <div className="w-full max-w-[180px] shrink-0">
+                  <DonutChart segments={[
+                    { label: "Active",   value: bd.Active,     color: "var(--status-green)" },
+                    { label: "Inactive", value: bd.Inactivity, color: "var(--status-red)" },
+                    { label: "Huddling", value: bd.Huddling,   color: "var(--status-amber)" },
+                  ]} />
+                </div>
+                <div className="flex-1 space-y-4 w-full">
+                  {([
+                    { label: "Active",   count: bd.Active,     color: "var(--status-green)" },
+                    { label: "Inactive", count: bd.Inactivity, color: "var(--status-red)" },
+                    { label: "Huddling", count: bd.Huddling,   color: "var(--status-amber)" },
+                  ] as const).map((row) => {
+                    const pct = Math.round((row.count / total) * 100);
+                    return (
+                      <div key={row.label}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} />
+                            {row.label}
+                          </span>
+                          <span className="font-mono text-sm font-bold" style={{ color: row.color }}>
+                            {row.count} birds · {pct}%
+                          </span>
+                        </div>
+                        <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "var(--surface-raised)" }}>
+                          <div className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%`, background: row.color, opacity: 0.85 }} />
+                        </div>
                       </div>
-                      <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "var(--surface-raised)" }}>
-                        <div className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%`, background: row.color, opacity: 0.85 }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="cb-card p-5">
-            <h2 className="mb-4 text-base font-bold" style={{ color: "var(--text-primary)" }}>Movement Metrics</h2>
-            <div className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
-              {[
-                { label: "Movement Index",    value: `${(farm.behavior.movementIndex * 100).toFixed(1)}%`, status: "green" },
-                { label: "Huddling Risk",     value: `${(farm.behavior.huddlingRisk * 100).toFixed(0)}%`,  status: "green" },
-                { label: "Aggression Events", value: `${farm.behavior.aggressionEvents}`,                   status: "green" },
-                { label: "Inactive Birds",    value: `${bd.Inactivity} / ${total}`,                         status: inactPct > 20 ? "red" : "amber" },
-                { label: "Huddling Birds",    value: `${bd.Huddling} / ${total}`,                           status: bd.Huddling > 0 ? "amber" : "green" },
-              ].map((row) => (
-                <div key={row.label} className="flex items-center justify-between py-3">
-                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{row.label}</span>
-                  <span className="font-mono text-sm font-bold" style={{ color: `var(--status-${row.status})` }}>{row.value}</span>
+          {/* Environment */}
+          <section aria-labelledby="cond-env" className="space-y-3">
+            <h2 id="cond-env" className="label-section text-[11px] tracking-widest font-bold">Environment</h2>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {envSensors.map((env) => (
+                <div key={env.title} className="cb-card p-5">
+                  <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
+                    <div>
+                      <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{env.title}</h3>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                        7-day history · Optimal: {env.min}–{env.max}{env.unit}
+                      </p>
+                    </div>
+                    <span className="font-mono text-sm font-bold px-3 py-1 rounded-full"
+                      style={{
+                        color: env.color,
+                        background: `${env.color}18`,
+                        border: `1px solid ${env.color}40`,
+                      }}>
+                      Current: {env.value}{env.unit}
+                    </span>
+                  </div>
+                  <div className="mt-4">
+                    <AxisLineChart series={env.series} color={env.color} xLabel="Day"
+                      yLabel={env.unit.trim()} yTickCount={4} height={150} />
+                  </div>
+                  <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                    <RangeBar value={env.value} min={env.min} max={env.max} unit={env.unit} color={env.color} />
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div className="cb-card p-5">
-            <h2 className="mb-4 text-base font-bold" style={{ color: "var(--text-primary)" }}>Behavior Analysis</h2>
-            <div className="space-y-3">
-              <InsightCard level={inactPct > 30 ? "critical" : "warning"}
-                title={`${inactPct}% of birds show reduced daytime activity`}
-                body={`${bd.Inactivity} birds classified as inactive in the current scan. B-019 has been inactive for over 30 minutes and is flagged for manual inspection.`} />
-              <InsightCard level="warning"
-                title="B-013 and B-015 huddling detected — open incident"
-                body="Cluster density exceeded threshold near the water drinker zone (CAM-01). Huddling has persisted for 80+ minutes. Inspect the drinker and increase ventilation." />
-              <InsightCard level="positive"
-                title="Zero aggression events detected"
-                body={`No pecking or aggressive interactions detected across ${total} birds. Pen density and lighting appear well-calibrated for this growth stage.`} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── ENVIRONMENT ── */}
-      {tab === "environment" && (
-        <div className="space-y-5">
-          {([
-            {
-              title: "Temperature", series: tempHistory, value: 29.1, min: 26, max: 32, unit: "°C",
-              color: "var(--brand)",
-              insight: { level: "positive" as InsightLevel, title: "Temperature within optimal range (26–32°C)",
-                body: "Stable over 7 days with a minor peak of 29.5°C on Day 4. No corrective action required. Continue monitoring as ambient temperatures rise mid-afternoon." },
-            },
-            {
-              title: "Humidity", series: humidHistory, value: 63, min: 50, max: 70, unit: "%",
-              color: "var(--status-blue)",
-              insight: { level: "positive" as InsightLevel, title: "Humidity steady at 63% — nominal",
-                body: "Remained within the 50–70% target band. Slight upward creep from 61% to 63% is acceptable and correlates with increased bird respiration as body mass grows." },
-            },
-            {
-              title: "Ammonia (NH3)", series: nh3History, value: 9, min: 0, max: 25, unit: " ppm",
-              color: "var(--status-amber)",
-              insight: { level: "info" as InsightLevel, title: "NH3 at 9 ppm — well below 25 ppm alert threshold",
-                body: "Levels are low and stable. A one-day spike to 10 ppm self-resolved, likely due to litter disturbance. Litter moisture and ventilation management are effective." },
-            },
-          ] as const).map((env) => (
-            <div key={env.title} className="cb-card p-5">
-              <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
-                <div>
-                  <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{env.title}</h2>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                    7-day history · Optimal: {env.min}–{env.max}{env.unit}
-                  </p>
-                </div>
-                <span className="font-mono text-sm font-bold px-3 py-1 rounded-full"
-                  style={{
-                    color: env.color,
-                    background: `${env.color}18`,
-                    border: `1px solid ${env.color}40`,
-                  }}>
-                  Current: {env.value}{env.unit}
-                </span>
-              </div>
-              <div className="mt-4">
-                <AxisLineChart series={env.series} color={env.color} xLabel="Day"
-                  yLabel={env.unit.trim()} yTickCount={4} height={160} />
-              </div>
-              <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-                <RangeBar value={env.value} min={env.min} max={env.max} unit={env.unit} color={env.color} />
-              </div>
-              <div className="mt-4">
-                <InsightCard level={env.insight.level} title={env.insight.title} body={env.insight.body} />
-              </div>
-            </div>
-          ))}
+          <ConditionsAnalysisSection
+            day={farm.cycle.day}
+            total={total}
+            fcr={farm.feed.fcr}
+            fcrTarget={farm.feed.fcrTarget}
+            adgG={farm.feed.adgG}
+            movementIndex={farm.behavior.movementIndex}
+            huddlingRisk={farm.behavior.huddlingRisk}
+            aggressionEvents={farm.behavior.aggressionEvents}
+            inactive={bd.Inactivity}
+            huddling={bd.Huddling}
+            inactPct={inactPct}
+            sensors={envSensors}
+          />
         </div>
       )}
     </AppShell>
