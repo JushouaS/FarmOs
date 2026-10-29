@@ -131,6 +131,27 @@ export async function dismissAlert(id: string): Promise<{ updated: boolean; reas
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Grow-out cycle (Settings)                                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface CycleSettingInfo {
+  /** The day the flock was on when the setting was last applied. */
+  startDay: number;
+  /** The calendar date that was. */
+  startedOn: string;
+  /** Today's grow-out day. */
+  day: number;
+  endDay: number;
+  minStartDay: number;
+  defaultStartDay: number;
+}
+
+/** Set the day the flock is on today; it counts up from there. ADMIN and FARM_MANAGER only. */
+export async function saveCycleStartDay(startDay: number): Promise<CycleSettingInfo> {
+  return apiFetch("/settings/cycle", { method: "PUT", body: JSON.stringify({ startDay }) });
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Notifications                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -172,9 +193,15 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
 export async function saveNotificationPreferences(
   prefs: NotificationPreference[],
 ): Promise<{ updated: boolean; count: number }> {
+  // The API replaces the whole list, and rejects null quiet hours (a missing field means none).
+  const body = prefs.map(({ quietHoursStart, quietHoursEnd, ...rest }) => ({
+    ...rest,
+    ...(quietHoursStart ? { quietHoursStart } : {}),
+    ...(quietHoursEnd ? { quietHoursEnd } : {}),
+  }));
   return apiFetch("/notifications/preferences", {
     method: "PUT",
-    body: JSON.stringify(prefs),
+    body: JSON.stringify(body),
   });
 }
 

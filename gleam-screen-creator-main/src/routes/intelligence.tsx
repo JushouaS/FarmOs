@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/farm/AppShell";
 import { getMonitoringReport } from "@/lib/farm/repository";
 import { fetchSituationBriefing, fetchFeedbackAlerts } from "@/lib/intelligence";
-import { farm } from "@/lib/farm/dataset";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 
 export const Route = createFileRoute("/intelligence")({
@@ -20,6 +19,11 @@ const RECOMMENDATIONS = [
 ];
 
 function InsightsPage() {
+  // The day comes from Settings (through the report's cycle), not a fixed number.
+  const report = Route.useLoaderData() as any;
+  const day = Number(report?.cycle?.day ?? 0);
+  const endDay = Number(report?.cycle?.endDay ?? report?.cycle?.lengthDays ?? 45);
+  const behind = report?.weightStatus === "warning";
   const briefingQ = useQuery({
     queryKey: ["situation-briefing"],
     queryFn: fetchSituationBriefing,
@@ -191,7 +195,7 @@ function InsightsPage() {
             </p>
             <div className="mt-3 rounded-lg px-3 py-2 text-xs font-medium"
               style={{ background: "var(--status-green-bg)", color: "var(--status-green-text)", border: "1px solid var(--status-green-border)" }}>
-              Day {farm.cycle.day} of grow-out — on track for harvest
+              {behind ? `Day ${day} of ${endDay}: behind the weight target, check feed and water` : `Day ${day} of ${endDay}: on track for harvest`}
             </div>
           </div>
 

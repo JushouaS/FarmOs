@@ -9,6 +9,7 @@ import {
   liveCamera,
   readingByCode,
 } from "./dataset";
+import { sampleForDay } from "./sample";
 import type { ReportFinding } from "./types";
 
 /**
@@ -140,6 +141,11 @@ async function apiGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Settings — the signed-in user's saved notification preferences (one row per channel). */
+export const getNotificationPreferences = createServerFn({ method: "GET" }).handler(async () => {
+  return apiGet<any[]>("/notifications/preferences");
+});
+
 /** Dashboard — executive summary, activity index, KPI cards, alerts, sensors. */
 export const getOperationsOverview = createServerFn({ method: "GET" }).handler(async () => {
   return apiGet<any>("/operations/overview");
@@ -171,6 +177,8 @@ export const getGrowthAnalytics = createServerFn({ method: "GET" }).handler(asyn
 
 /** Visual telemetry — live feed overlays, behaviour metrics, anomaly timeline. */
 export const getVisualTelemetry = createServerFn({ method: "GET" }).handler(async () => {
+  // The sample flock, moved to the grow-out day set in Settings.
+  const { farm } = sampleForDay(await apiGet<any>("/operations/overview"));
   const camera = liveCamera();
   const cycleTotalDays = Math.round(
     (new Date(farm.cycle.projectedYieldDate).getTime() -
@@ -205,6 +213,9 @@ export const getVisualTelemetry = createServerFn({ method: "GET" }).handler(asyn
 
 /** Intelligence — the auto-generated monitoring report and its evidence. */
 export const getMonitoringReport = createServerFn({ method: "GET" }).handler(async () => {
+  // The sample flock, moved to the grow-out day set in Settings.
+  const overview = await apiGet<any>("/operations/overview");
+  const { farm } = sampleForDay(overview);
   const incident = activeIncident();
   const nh3Current = readingByCode("NH3_H01");
   const temperature = readingByCode("TEMP_H01");
@@ -265,7 +276,8 @@ export const getMonitoringReport = createServerFn({ method: "GET" }).handler(asy
       name: farm.facility.name,
       houseRange: farm.facility.houseRange,
     },
-    cycle: farm.cycle,
+    cycle: overview?.cycle ?? farm.cycle,
+    weightStatus: farm.weight.status,
     incident: {
       ...incident,
       houseLabel: houseLabel(incident.houseId),

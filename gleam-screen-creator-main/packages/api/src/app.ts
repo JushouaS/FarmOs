@@ -27,6 +27,7 @@ import { registerReportRoutes } from "./routes/reports.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
+import { registerSettingsRoutes } from "./routes/settings.js";
 
 /** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
 const PRIVATE_NETWORK_ORIGIN =
@@ -47,6 +48,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       env.NODE_ENV === "development"
         ? (origin, callback) => callback(null, !origin || env.API_CORS_ORIGINS.includes(origin) || PRIVATE_NETWORK_ORIGIN.test(origin))
         : env.API_CORS_ORIGINS,
+    // The plugin's default is GET, HEAD and POST only, which blocks a browser's
+    // PUT (Settings saves the grow-out day with one) and PATCH.
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   });
   await app.register(cookie, { secret: env.JWT_SECRET });
@@ -93,6 +97,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerReportRoutes, { prefix: "/reports" });
   await app.register(registerNotificationRoutes, { prefix: "/notifications" });
   await app.register(registerFeedbackRoutes, { prefix: "/feedback" });
+  await app.register(registerSettingsRoutes, { prefix: "/settings" });
 
   return app;
 }

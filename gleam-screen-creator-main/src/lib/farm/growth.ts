@@ -9,8 +9,10 @@
  *
  *   field                     comes from (overview response)
  *   standardName              facility.breed                    e.g. "Ross 308"
- *   cycleDay / cycleLength    cycle.day / cycle.lengthDays
- *   curve                     weight.curve[]  { day, actualG, standardG }
+ *   cycleDay / cycleLength    cycle.day / cycle.lengthDays (the last day, 45)
+ *   cycleStart                cycle.startDay (the day the window starts, Settings)
+ *   curve                     weight.curve[]  { day, actualG, standardG } up to today
+ *   standardCurve             weight.standardCurve[]  { day, standardG } to the last day
  *   actualG / standardG       weight.actualAvgG / weight.standardG
  *   variancePercent           weight.variancePercent
  *   confidencePercent         weight.estimationConfidencePercent
@@ -41,7 +43,11 @@ export interface GrowthCardData {
   standardName: string | null;
   cycleDay: number | null;
   cycleLength: number;
+  /** The first day on the chart: the start day set in Settings. */
+  cycleStart: number;
   curve: GrowthPoint[];
+  /** The breed's target for every day of the window, so the target line runs to the last day. */
+  standardCurve: { day: number; standardG: number }[];
   actualG: number | null;
   standardG: number | null;
   variancePercent: number | null;
@@ -54,8 +60,9 @@ export interface GrowthCardData {
   ammonia: GrowthReading;
 }
 
-/** Used only when the API does not say how long a grow-out is. */
-export const DEFAULT_CYCLE_LENGTH = 42;
+/** Used only when the API does not say where the grow-out starts and ends (days 16 to 45). */
+export const DEFAULT_CYCLE_LENGTH = 45;
+export const DEFAULT_CYCLE_START = 16;
 
 /** Postgres numerics arrive as strings; "", null and NaN become null. */
 function num(v: unknown): number | null {
@@ -84,6 +91,13 @@ export function buildGrowthCardData(overview: any): GrowthCardData {
   }
   curve.sort((a, b) => a.day - b.day);
   const last = curve[curve.length - 1];
+  const standardCurve: { day: number; standardG: number }[] = [];
+  for (const p of overview?.weight?.standardCurve ?? []) {
+    const day = num(p?.day);
+    const standardG = num(p?.standardG);
+    if (day !== null && standardG !== null) standardCurve.push({ day, standardG });
+  }
+  standardCurve.sort((a, b) => a.day - b.day);
 
   const actualG = num(overview?.weight?.actualAvgG) ?? last?.actualG ?? null;
   const standardG = num(overview?.weight?.standardG) ?? last?.standardG ?? null;
@@ -109,7 +123,9 @@ export function buildGrowthCardData(overview: any): GrowthCardData {
     standardName: typeof overview?.facility?.breed === "string" ? overview.facility.breed : null,
     cycleDay: num(overview?.cycle?.day) ?? last?.day ?? null,
     cycleLength: num(overview?.cycle?.lengthDays) ?? DEFAULT_CYCLE_LENGTH,
+    cycleStart: num(overview?.cycle?.startDay) ?? curve[0]?.day ?? DEFAULT_CYCLE_START,
     curve,
+    standardCurve,
     actualG,
     standardG,
     variancePercent: variance,

@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { buildFarmSnapshot } from "./farm/snapshot";
+import { getOperationsOverview } from "./farm/repository";
+import { sampleForDay } from "./farm/sample";
 
 /**
  * Intelligence engine — powered by Groq's free OpenAI-compatible API.
@@ -20,17 +22,24 @@ const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 const REQUEST_TIMEOUT_MS = 60_000;
 
 /**
- * Grounding context rendered from the same dataset the UI reads so the model
- * and the screen can never quote different figures.
+ * Grounding context rendered from the same data the UI reads so the model
+ * and the screen can never quote different figures. Built per request, so it
+ * is on the grow-out day Settings has set (not the day the server started).
  */
-const FARM_SNAPSHOT = buildFarmSnapshot();
+async function currentSnapshot(): Promise<string> {
+  try {
+    return buildFarmSnapshot(sampleForDay(await getOperationsOverview()).farm);
+  } catch {
+    return buildFarmSnapshot();
+  }
+}
 
-const SYSTEM_PROMPT = `You are the CereBroiler Intelligence Engine inside the FARM_OS operations console.
+const systemPrompt = (snapshot: string) => `You are the CereBroiler Intelligence Engine inside the FARM_OS operations console.
 Produce analysis strictly grounded in the telemetry snapshot below. Be precise and clinical;
 reference sensors, houses and figures from the snapshot. Respond in plain text only
 (no markdown, no headings).
 
-${FARM_SNAPSHOT}`;
+${snapshot}`;
 
 type ChatMessage = { role: "system" | "user"; content: string };
 
@@ -154,9 +163,10 @@ Cover: overall flock status, the open incident in the snapshot with its root cau
 immediate outlook. Maximum 130 words, 2-3 short paragraphs separated by blank lines.`;
 
 export const fetchSituationBriefing = createServerFn({ method: "POST" }).handler(async () => {
+  const snapshot = await currentSnapshot();
   const { content, latencyMs, model } = await callEngineWithTiming(
     [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: systemPrompt(snapshot) },
       { role: "user", content: BRIEFING_PROMPT },
     ],
     2000,
@@ -173,13 +183,13 @@ const alertSchema = z.object({
 
 export type FeedbackAlert = z.infer<typeof alertSchema>;
 
-const ALERTS_PROMPT = `Analyze the telemetry snapshot and produce feedback alerts for the farm operator.
+const alertsPrompt = (snapshot: string) => `Analyze the telemetry snapshot and produce feedback alerts for the farm operator.
 Return ONLY a JSON array (no markdown fences, no prose) of 3 to 5 objects with exactly these keys:
 "severity" (one of "critical", "warning", "nominal"), "title" (<= 8 words, uppercase),
 "detail" (one sentence citing snapshot figures), "action" (one imperative sentence).
 Order from most to least severe.
 
-${FARM_SNAPSHOT}`;
+${snapshot}`;
 
 function extractJsonArray(raw: string): unknown {
   const start = raw.indexOf("[");
@@ -193,8 +203,9 @@ function extractJsonArray(raw: string): unknown {
 }
 
 export const fetchFeedbackAlerts = createServerFn({ method: "POST" }).handler(async () => {
+  const snapshot = await currentSnapshot();
   const { content, latencyMs, model } = await callEngineWithTiming(
-    [{ role: "user", content: ALERTS_PROMPT }],
+    [{ role: "user", content: alertsPrompt(snapshot) }],
     2500,
   );
   const alerts = z.array(alertSchema).min(1).max(6).parse(extractJsonArray(content));

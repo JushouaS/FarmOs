@@ -1,23 +1,31 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
-import { useAuth } from "@/lib/auth-context";
-import { checkVisionHealth } from "@/lib/api-client";
-import { getOperationsOverview } from "@/lib/farm/repository";
+import { ApiError, saveCycleStartDay, saveNotificationPreferences, type NotificationPreference } from "@/lib/api-client";
+import { getNotificationPreferences, getOperationsOverview } from "@/lib/farm/repository";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings — Cerebroil" }] }),
-  loader: () => getOperationsOverview(),
+  loader: async () => {
+    const [overview, prefs] = await Promise.all([
+      getOperationsOverview(),
+      // null (not an empty list) when they could not be loaded, so a save can never overwrite what is stored.
+      getNotificationPreferences().catch(() => null),
+    ]);
+    return { overview, prefs };
+  },
   component: SettingsPage,
 });
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="relative h-6 w-11 rounded-full transition-colors shrink-0 before:absolute before:-inset-2.5 before:content-['']"
+      className="relative h-6 w-11 rounded-full transition-colors shrink-0 before:absolute before:-inset-2.5 before:content-[''] disabled:opacity-50"
       style={{
         background: checked ? "var(--brand)" : "var(--surface-raised)",
         border: "1px solid var(--border-default)",
@@ -53,70 +61,211 @@ function Row({ label, sub, children }: { label: string; sub?: string; children: 
   );
 }
 
-function OnlineDot({ ok, label }: { ok: boolean; label?: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="h-2 w-2 rounded-full shrink-0"
-        style={{
-          background: ok ? "var(--cv-accent)" : "var(--status-red)",
-          boxShadow: ok ? "0 0 4px var(--cv-accent)" : "none",
-        }} />
-      <span className="font-mono text-xs font-semibold"
-        style={{ color: ok ? "var(--cv-accent)" : "var(--status-red-text)" }}>
-        {label ?? (ok ? "Online" : "Offline")}
-      </span>
-    </div>
-  );
-}
-
 function MonoVal({ value }: { value: string }) {
   return (
     <span className="font-mono text-xs font-semibold" style={{ color: "var(--cv-accent)" }}>{value}</span>
   );
 }
 
-/** What the camera service reports, shown as it is: "Not reachable" when it does not answer. */
-function useCameraService() {
-  const [status, setStatus] = useState<{ ok: boolean; label: string }>({ ok: false, label: "Checking…" });
-  useEffect(() => {
-    let live = true;
-    checkVisionHealth()
-      .then((h) => {
-        if (!live) return;
-        setStatus({
-          ok: h.cameras_connected > 0,
-          label: `${h.cameras_connected} of ${h.cameras_configured} cameras connected`,
-        });
-      })
-      .catch(() => live && setStatus({ ok: false, label: "Not reachable" }));
-    return () => {
-      live = false;
-    };
-  }, []);
-  return status;
+/* The day the flock is on. The start day is the one setting; today's day counts up
+ * from it, and every page that shows a day, a weight target or a growth chart
+ * reads it from the same place, so applying it here changes them all. */
+function CycleDaySection({ cycle }: { cycle: any }) {
+  const router = useRouter();
+  const minDay = Number(cycle?.minStartDay ?? 16);
+  const endDay = Number(cycle?.endDay ?? cycle?.lengthDays ?? 45);
+  const startDay = Number(cycle?.startDay ?? minDay);
+  const today = Number(cycle?.day ?? startDay);
+  const [draft, setDraft] = useState(String(startDay));
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Follow the saved value when it changes (after applying, or from another device).
+  useEffect(() => setDraft(String(startDay)), [startDay]);
+
+  const value = Number(draft);
+  const valid = draft.trim() !== "" && Number.isInteger(value) && value >= minDay && value <= endDay;
+  const step = (by: number) => {
+    const base = Number.isInteger(value) ? value : startDay;
+    setNote(null);
+    setDraft(String(Math.min(endDay, Math.max(minDay, base + by))));
+  };
+
+  const apply = async () => {
+    if (!valid || busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await saveCycleStartDay(value);
+      await router.invalidate();
+      setNote({ ok: true, text: `Done. The flock is on Day ${value} today.` });
+    } catch (err) {
+      setNote({
+        ok: false,
+        text:
+          err instanceof ApiError && err.status === 403
+            ? "Only an administrator or farm manager can change the day."
+            : "Could not save the day. Check the connection and try again.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const harvest = cycle?.projectedYieldDate
+    ? new Date(`${cycle.projectedYieldDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
+  const left = Math.max(0, endDay - today);
+
+  return (
+    <Section title="Grow-out Day">
+      <div className="px-4 py-4 sm:px-5">
+        <label htmlFor="start-day" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          Start day
+        </label>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+          The day the flock is on today, from Day {minDay} to Day {endDay}. It counts up by one each day after that.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center overflow-hidden rounded-xl" style={{ border: "1px solid var(--border-default)", background: "var(--surface-sunken)" }}>
+            <button type="button" onClick={() => step(-1)} disabled={valid && value <= minDay} aria-label="One day earlier"
+              className="tap h-11 w-11 text-lg font-semibold disabled:opacity-40" style={{ color: "var(--text-secondary)" }}>
+              −
+            </button>
+            <input
+              id="start-day"
+              type="number"
+              inputMode="numeric"
+              min={minDay}
+              max={endDay}
+              value={draft}
+              onChange={(e) => { setNote(null); setDraft(e.target.value); }}
+              onKeyDown={(e) => e.key === "Enter" && apply()}
+              aria-invalid={!valid}
+              aria-describedby="start-day-hint"
+              className="h-11 w-16 bg-transparent text-center font-mono text-lg font-bold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              style={{ color: "var(--text-primary)" }}
+            />
+            <button type="button" onClick={() => step(1)} disabled={valid && value >= endDay} aria-label="One day later"
+              className="tap h-11 w-11 text-lg font-semibold disabled:opacity-40" style={{ color: "var(--text-secondary)" }}>
+              +
+            </button>
+          </div>
+          <button type="button" onClick={apply} disabled={!valid || busy} className="btn-primary tap disabled:opacity-50">
+            {busy ? "Applying…" : valid ? `Set today as Day ${value}` : "Set the day"}
+          </button>
+          {startDay !== minDay && (
+            <button type="button" onClick={() => { setNote(null); setDraft(String(minDay)); }}
+              className="tap text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>
+              Use Day {minDay}
+            </button>
+          )}
+        </div>
+        <p id="start-day-hint" className="mt-2 text-xs" style={{ color: valid ? "var(--text-tertiary)" : "var(--status-red-text)" }}>
+          {valid ? `Changing it updates the Dashboard, Analytics, Flock Tracking, Live Camera and Insights.` : `Enter a whole number from ${minDay} to ${endDay}.`}
+        </p>
+        {note && (
+          <p role="status" className="mt-2 text-sm font-semibold" style={{ color: note.ok ? "var(--status-green-text)" : "var(--status-red-text)" }}>
+            {note.text}
+          </p>
+        )}
+      </div>
+      <Row label="Today" sub={harvest ? `Last day is ${harvest}` : undefined}>
+        <MonoVal value={`Day ${today} of ${endDay} · ${left} ${left === 1 ? "day" : "days"} left`} />
+      </Row>
+    </Section>
+  );
+}
+
+/* Email and push preferences, stored per user (notification_preferences). These save
+ * the choice; sending email or push is not set up yet, and the card says so. */
+const CHANNELS = [
+  { channel: "email", label: "Email Alerts", sub: "Critical and warning alerts via email", fallback: true },
+  { channel: "push", label: "Push Notifications", sub: "Browser push for real-time alerts", fallback: false },
+] as const;
+
+function NotificationsSection({ stored }: { stored: NotificationPreference[] | null }) {
+  const router = useRouter();
+  const savedOn = (channel: string, fallback: boolean) => stored?.find((p) => p.channel === channel)?.enabled ?? fallback;
+  const savedEmail = savedOn("email", true);
+  const savedPush = savedOn("push", false);
+  const [on, setOn] = useState({ email: savedEmail, push: savedPush });
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Follow what is saved (after saving, or when the page loads).
+  useEffect(() => setOn({ email: savedEmail, push: savedPush }), [savedEmail, savedPush]);
+
+  const dirty = on.email !== savedEmail || on.push !== savedPush;
+  const unavailable = stored === null;
+
+  const save = async () => {
+    if (!dirty || busy || stored === null) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      // The API replaces the whole list, so the other channels are sent back as they are.
+      const rows: NotificationPreference[] = [
+        ...stored.filter((p) => p.channel !== "email" && p.channel !== "push"),
+        ...CHANNELS.map(({ channel }) => {
+          const current = stored.find((p) => p.channel === channel);
+          return {
+            channel,
+            enabled: on[channel],
+            // New rows follow the wording on the card: critical and warning alerts.
+            minSeverity: current?.minSeverity ?? "warning",
+            quietHoursStart: current?.quietHoursStart ?? null,
+            quietHoursEnd: current?.quietHoursEnd ?? null,
+          };
+        }),
+      ];
+      await saveNotificationPreferences(rows);
+      await router.invalidate();
+      setNote({ ok: true, text: "Saved." });
+    } catch {
+      setNote({ ok: false, text: "Could not save. Check the connection and try again." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section title="Notifications">
+      {CHANNELS.map(({ channel, label, sub }) => (
+        <Row key={channel} label={label} sub={sub}>
+          <Toggle
+            label={label}
+            checked={on[channel]}
+            disabled={unavailable}
+            onChange={(v) => { setNote(null); setOn((p) => ({ ...p, [channel]: v })); }}
+          />
+        </Row>
+      ))}
+      <div className="px-4 py-4 sm:px-5">
+        <p className="text-xs" style={{ color: unavailable ? "var(--status-red-text)" : "var(--text-tertiary)" }}>
+          {unavailable
+            ? "Could not load your saved preferences. Refresh the page to try again."
+            : "Your choice is saved to your account. Sending email and push is not set up yet, so no messages go out."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={save} disabled={!dirty || busy || unavailable} className="btn-primary tap disabled:opacity-50">
+            {busy ? "Saving…" : "Save Changes"}
+          </button>
+          {note && (
+            <span role="status" className="text-sm font-semibold" style={{ color: note.ok ? "var(--status-green-text)" : "var(--status-red-text)" }}>
+              {note.text}
+            </span>
+          )}
+        </div>
+      </div>
+    </Section>
+  );
 }
 
 function SettingsPage() {
-  const { user } = useAuth();
-  // Facility, cycle and platform come from the API (/operations/overview).
-  const overview = Route.useLoaderData() as any;
-  const facility = overview?.facility ?? null;
+  // The cycle comes from the API (/operations/overview); notification choices from /notifications/preferences.
+  const { overview, prefs } = Route.useLoaderData() as { overview: any; prefs: NotificationPreference[] | null };
   const cycle = overview?.cycle ?? null;
-  const platform = overview?.platform ?? null;
-  const camera = useCameraService();
-  const [notif,   setNotif]   = useState({ email: true, push: false, sms: false });
-  const [saved,   setSaved]   = useState(false);
-  // The API runs on port 4000 of the same host that served this page.
-  const [apiUrl,  setApiUrl]  = useState("http://localhost:4000");
-  useEffect(() => {
-    setApiUrl(`${window.location.protocol}//${window.location.hostname}:4000`);
-  }, []);
-  const [rtspUrl, setRtspUrl] = useState("rtsp://[camera-ip]:554/stream1");
-
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  };
 
   return (
     <AppShell>
@@ -130,107 +279,10 @@ function SettingsPage() {
       </div>
 
       {/* Responsive grid: 1 col mobile, 2 col lg */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        {/* Left */}
-        <div className="space-y-6">
-          <Section title="Farm Information">
-            <Row label="Farm Name"><MonoVal value={facility?.name ?? "—"} /></Row>
-            <Row label="Pen"><MonoVal value={facility?.houseRange ?? "—"} /></Row>
-            <Row label="Breed"><MonoVal value={facility?.breed ?? "—"} /></Row>
-            <Row label="Manager">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {user?.fullName ?? user?.email ?? "Farm Manager"}
-              </span>
-            </Row>
-            <Row label="Grow-out Cycle">
-              <MonoVal value={cycle ? `Day ${cycle.day} / ${cycle.lengthDays ?? 42}` : "—"} />
-            </Row>
-          </Section>
+      <div className="grid items-start gap-6 grid-cols-1 lg:grid-cols-2">
+        <CycleDaySection cycle={cycle} />
 
-          <Section title="Notifications">
-            <Row label="Email Alerts" sub="Critical and warning alerts via email">
-              <Toggle checked={notif.email} onChange={(v) => setNotif((p) => ({ ...p, email: v }))} />
-            </Row>
-            <Row label="Push Notifications" sub="Browser push for real-time alerts">
-              <Toggle checked={notif.push} onChange={(v) => setNotif((p) => ({ ...p, push: v }))} />
-            </Row>
-            <Row label="SMS Alerts" sub="Text message for critical severity only">
-              <Toggle checked={notif.sms} onChange={(v) => setNotif((p) => ({ ...p, sms: v }))} />
-            </Row>
-          </Section>
-
-          <Section title="Unit Preferences">
-            <Row label="Weight Unit"><MonoVal value="Grams (g) / Kilograms (kg)" /></Row>
-            <Row label="Temperature Unit"><MonoVal value="Celsius (°C)" /></Row>
-          </Section>
-        </div>
-
-        {/* Right */}
-        <div className="space-y-6">
-          <Section title="System">
-            <Row label="App Version" sub="Release channel">
-              <MonoVal value={platform ? `${platform.appVersion} · ${platform.releaseChannel}` : "—"} />
-            </Row>
-            <Row label="API Version">
-              <MonoVal value={platform?.apiVersion ?? "—"} />
-            </Row>
-            <Row label="ML Model" sub="Weight and behaviour model">
-              <MonoVal value={platform?.mlModel ?? "—"} />
-            </Row>
-            <Row label="Language Model" sub="Insights and briefings">
-              <MonoVal value={platform?.llm ?? "—"} />
-            </Row>
-            <Row label="Platform Status">
-              <OnlineDot ok={platform?.status === "nominal"} label={platform ? String(platform.status).toUpperCase() : "UNKNOWN"} />
-            </Row>
-            <Row label="Camera Service" sub="Live from the vision service">
-              <OnlineDot ok={camera.ok} label={camera.label} />
-            </Row>
-          </Section>
-
-          <Section title="API & Camera Endpoints">
-            <div className="px-4 py-4 sm:px-5 space-y-4">
-              <div>
-                <label className="label-section mb-1.5 block">API Server URL</label>
-                <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)}
-                  className="cb-input font-mono text-xs"
-                  placeholder="http://localhost:4000" />
-                <p className="mt-1 font-mono text-[10px]" style={{ color: "var(--text-tertiary)" }}>
-                  Backend server address for telemetry sync
-                </p>
-              </div>
-              <div>
-                <label className="label-section mb-1.5 block">RTSP Camera Stream URL</label>
-                <input value={rtspUrl} onChange={(e) => setRtspUrl(e.target.value)}
-                  className="cb-input font-mono text-xs"
-                  placeholder="rtsp://192.168.x.x:554/stream1" />
-                <p className="mt-1 font-mono text-[10px]" style={{ color: "var(--text-tertiary)" }}>
-                  Network video stream address for pen camera
-                </p>
-              </div>
-            </div>
-          </Section>
-
-          <Section title="System Status">
-            <Row label="CAM-01" sub="Pen 1 overhead camera"><OnlineDot ok={true} /></Row>
-            <Row label="Temperature Sensor" sub="SN-241-H1"><OnlineDot ok={true} /></Row>
-            <Row label="Humidity Sensor"    sub="SN-242-H1"><OnlineDot ok={true} /></Row>
-            <Row label="Ammonia Sensor"     sub="SN-244-H1"><OnlineDot ok={true} /></Row>
-            <Row label="Last Sync">
-              <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>2 min ago</span>
-            </Row>
-          </Section>
-        </div>
-      </div>
-
-      {/* Save row */}
-      <div className="mt-6 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
-        {saved && (
-          <span role="status" className="text-center font-mono text-sm font-semibold sm:text-left" style={{ color: "var(--status-green)" }}>
-            ✓ Changes saved
-          </span>
-        )}
-        <button onClick={handleSave} className="btn-primary tap">Save Changes</button>
+        <NotificationsSection stored={prefs} />
       </div>
     </AppShell>
   );

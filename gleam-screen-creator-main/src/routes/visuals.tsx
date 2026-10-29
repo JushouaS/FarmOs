@@ -1,20 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
-import {
-  farm,
-  broilers,
-  kinectDetections,
-  behaviorBreakdown,
-  weightBreakdown,
-  isNightCycle,
-} from "@/lib/farm/dataset";
+import { behaviorBreakdown, isNightCycle } from "@/lib/farm/dataset";
+import { getOperationsOverview } from "@/lib/farm/repository";
+import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay } from "@/lib/farm/sample";
 
 export const Route = createFileRoute("/visuals")({
   head: () => ({ meta: [{ title: "Live Vision - Cerebroil" }] }),
+  loader: () => getOperationsOverview(),
   component: VisualsDashboardPage,
 });
 
@@ -44,6 +40,10 @@ function ShellButtons() {
 }
 
 export function VisualsDashboardPage() {
+  // The sample flock, moved to the grow-out day set in Settings.
+  const overview = Route.useLoaderData() as any;
+  const sample = useMemo(() => sampleForDay(overview), [overview]);
+  const { farm, broilers } = sample;
   const [layout, setLayout] = useState<ViewLayout>("dual");
   const [dahuaError, setDahuaError] = useState(false);
   const [kinectError, setKinectError] = useState(false);
@@ -71,7 +71,7 @@ export function VisualsDashboardPage() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const bBreakdown = behaviorBreakdown(nightModeActive);
-  const wBreakdown = weightBreakdown();
+  const wBreakdown = sample.weightBreakdown;
   const totalBirds = broilers.length;
 
   const handleFullscreenToggle = () => {
@@ -298,7 +298,7 @@ export function VisualsDashboardPage() {
                     {/* Interactive Kinect Depth-Target Overlay */}
                     {!kinectError && (
                       <div className="pointer-events-none absolute inset-0">
-                        {kinectDetections.map((kd) => (
+                        {sample.kinect.map((kd) => (
                           <div
                             key={kd.id}
                             style={{
@@ -431,7 +431,7 @@ export function VisualsDashboardPage() {
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Underweight}
                   </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&lt;1.2 kg</div>
+                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(sample.standardG * UNDERWEIGHT_RATIO)}</div>
                 </div>
 
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
@@ -439,7 +439,7 @@ export function VisualsDashboardPage() {
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Optimal}
                   </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">1.2-1.9 kg</div>
+                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{rangeLabel(sample.standardG * UNDERWEIGHT_RATIO, sample.standardG * HEAVY_RATIO)}</div>
                 </div>
 
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
@@ -447,7 +447,7 @@ export function VisualsDashboardPage() {
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Overweight}
                   </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&gt;1.9 kg</div>
+                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(sample.standardG * HEAVY_RATIO)}</div>
                 </div>
               </div>
             </div>

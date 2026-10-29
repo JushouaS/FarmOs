@@ -1,5 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
+import {
+  CYCLE_END_DAY,
+  addDays,
+  currentDay,
+  curveToDate,
+  databaseToday,
+  readCycleSetting,
+  standardCurve,
+  weightAtDay,
+  type WeightPoint,
+} from "../cycle-day.js";
 
 // Ross 308's published cumulative feed-conversion-ratio target is day-indexed
 // in the breed standard table; this uses the flat mid-cycle figure the UI
@@ -7,9 +18,6 @@ import { requireAuth } from "../auth/middleware.js";
 // Tracked separately from `cycle_weights.standard_g`, which IS already a
 // real per-day stored standard.
 const FCR_TARGET = 1.70;
-
-// Ross 308 grow-out length the UI measures progress against ("Day N/42").
-const GROW_OUT_DAYS = 42;
 
 /**
  * GET /operations/overview
@@ -31,30 +39,36 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       FROM houses WHERE facility_id = ${f.id} AND is_active = true
       ORDER BY sort_order`;
 
-    // The grow-out day is measured to the facility's latest sensor reading,
-    // not the wall clock: a cycle whose data stops (seed snapshot, offline
-    // sensors) would otherwise keep counting into nonsense like "Day 929/42".
-    // Live data keeps this at today. Capped to the grow-out length.
+    // The grow-out day is a setting (Settings > Grow-out Cycle): the flock was
+    // on `startDay` on `startedOn` and counts up from there, to day 45. The
+    // window the pages show runs from `startDay` to the end of the grow-out.
+    const today = await databaseToday(app);
+    const setting = await readCycleSetting(app, today);
+    const day = currentDay(setting, today);
+    const harvestOn = addDays(setting.startedOn, CYCLE_END_DAY - setting.startDay);
     const cycle = await app.sqlRead`
-      WITH latest AS (
-        SELECT LEAST(CURRENT_DATE, COALESCE(max(r.recorded_at)::date, CURRENT_DATE)) AS as_of
-        FROM sensor_readings r
-        JOIN sensors s ON s.id = r.sensor_id
-        JOIN houses h ON h.id = s.house_id
-        WHERE h.facility_id = ${f.id}
-      )
-      SELECT c.id, c.label,
-             c.start_date::text AS "startDate",
-             c.projected_yield_date::text AS "projectedYieldDate",
-             GREATEST(0, LEAST(${GROW_OUT_DAYS}, latest.as_of - c.start_date))::int AS day,
-             latest.as_of::text AS "dataAsOf",
-             (c.start_date + interval '6 days')::text AS "windowStart",
-             (c.start_date + interval '41 days')::text AS "windowEnd",
-             now()::text AS "asOf"
-      FROM flock_cycles c, latest
+      SELECT c.id, c.label
+      FROM flock_cycles c
       WHERE c.facility_id = ${f.id} AND c.status = 'active'
       LIMIT 1`;
-    const activeCycle = cycle[0] ?? null;
+    const activeCycle = cycle[0]
+      ? {
+          id: String(cycle[0].id),
+          label: cycle[0].label as string,
+          day,
+          startDay: setting.startDay,
+          endDay: CYCLE_END_DAY,
+          lengthDays: CYCLE_END_DAY,
+          startedOn: setting.startedOn,
+          // The date the birds were day 0, and the date they reach the last day.
+          startDate: addDays(setting.startedOn, -setting.startDay),
+          projectedYieldDate: harvestOn,
+          windowStart: setting.startedOn,
+          windowEnd: harvestOn,
+          dataAsOf: today,
+          asOf: new Date().toISOString(),
+        }
+      : null;
 
     const latestReadings = await app.sqlRead`
       SELECT DISTINCT ON (s.id) s.id AS "sensorId", s.house_id AS "houseId",
@@ -87,20 +101,27 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       FROM platform_status LIMIT 1`;
 
     // ---- weight (WeightAnalytics) --------------------------------------
-    const weightCurve = activeCycle
+    const storedRows = activeCycle
       ? await app.sqlRead`
-          SELECT day, actual_g AS "actualG", standard_g AS "standardG"
+          SELECT day, actual_g AS "actualG", standard_g AS "standardG",
+                 sample_size AS "sampleSize", estimation_confidence AS "estimationConfidence"
           FROM cycle_weights WHERE cycle_id = ${activeCycle.id} ORDER BY day ASC`
       : [];
-    const latestWeightRow = activeCycle
-      ? await app.sqlRead`
-          SELECT actual_g AS "actualG", standard_g AS "standardG",
-                 sample_size AS "sampleSize", estimation_confidence AS "estimationConfidence"
-          FROM cycle_weights WHERE cycle_id = ${activeCycle.id} ORDER BY day DESC LIMIT 1`
-      : [];
-    const lw = latestWeightRow[0] ?? null;
+    const stored: WeightPoint[] = storedRows.map((r) => ({
+      day: Number(r.day),
+      actualG: Number(r.actualG),
+      standardG: Number(r.standardG),
+    }));
+    // Weight for today's grow-out day (read off the stored curve when no row
+    // is stored for exactly today), not the last row in the table.
+    const lw = weightAtDay(stored, day);
+    // Confidence and sample size come from the stored weigh-in nearest to today
+    // that recorded them.
+    const measured = storedRows
+      .filter((r) => r.estimationConfidence != null)
+      .sort((a, b) => Math.abs(Number(a.day) - day) - Math.abs(Number(b.day) - day))[0];
     const variancePercent = lw && lw.standardG ? ((lw.actualG - lw.standardG) / lw.standardG) * 100 : 0;
-    const estimationConfidencePercent = lw?.estimationConfidence != null ? lw.estimationConfidence * 100 : null;
+    const estimationConfidencePercent = measured ? Number(measured.estimationConfidence) * 100 : null;
     const weight = {
       actualAvgG: lw?.actualG ?? null,
       standardG: lw?.standardG ?? null,
@@ -109,9 +130,12 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       // used for both fields pending a separate model-confidence column.
       modelConfidence: estimationConfidencePercent,
       estimationConfidencePercent,
-      sampleSize: lw?.sampleSize ?? null,
+      sampleSize: measured?.sampleSize ?? null,
       status: variancePercent >= 0 ? "optimal" : variancePercent > -5 ? "nominal" : "warning",
-      curve: weightCurve,
+      // Weigh-ins from the start day to today, and the target for every day of
+      // the window (the dashed line, which carries on to day 45).
+      curve: activeCycle ? curveToDate(stored, setting.startDay, day) : [],
+      standardCurve: activeCycle ? standardCurve(stored, setting.startDay, CYCLE_END_DAY) : [],
     };
 
     // ---- feed (FeedMetrics) ---------------------------------------------
@@ -235,9 +259,10 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     return reply.send({
       facility: f,
       houses,
-      // lengthDays: how long a grow-out is, so the dashboard's "Day n of N" and
-      // growth chart axis are not a number the page assumes.
-      cycle: activeCycle ? { ...activeCycle, lengthDays: GROW_OUT_DAYS } : null,
+      // cycle.lengthDays / startDay: how long a grow-out is and the day the
+      // window starts, so "Day n of N" and the growth chart axis are not
+      // numbers a page assumes.
+      cycle: activeCycle,
       platform: platform[0] ?? null,
       readings: latestReadings,
       alerts,

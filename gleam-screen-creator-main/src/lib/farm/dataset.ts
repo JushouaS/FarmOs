@@ -154,7 +154,7 @@ const RAW_BIRDS: Array<[number, BehaviorState, number, BroilerBird["flag"]?]> = 
   [1520, "Inactivity", 0.98],
 ];
 
-function morpho(weightG: number): Pick<BroilerBird, "breastWidthMm" | "totalLengthMm" | "depthZMm"> {
+export function morpho(weightG: number): Pick<BroilerBird, "breastWidthMm" | "totalLengthMm" | "depthZMm"> {
   const w = weightG / 1000;
   return {
     breastWidthMm: parseFloat((52 + w * 11.6).toFixed(1)),

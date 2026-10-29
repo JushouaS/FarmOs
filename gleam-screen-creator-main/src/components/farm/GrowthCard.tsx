@@ -56,7 +56,20 @@ function useViewportHeight() {
   return h;
 }
 
-function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]; cycleLength: number; targetLabel: string }) {
+function GrowthChart({
+  curve,
+  standardCurve,
+  firstDay,
+  cycleLength,
+  targetLabel,
+}: {
+  curve: GrowthPoint[];
+  standardCurve: { day: number; standardG: number }[];
+  /** The first day on the axis: the start day from Settings. */
+  firstDay: number;
+  cycleLength: number;
+  targetLabel: string;
+}) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
@@ -73,14 +86,26 @@ function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]
   const innerH = height - m.top - m.bottom;
 
   const lastDay = curve[curve.length - 1]?.day ?? 0;
-  const maxDay = Math.max(cycleLength, Math.ceil(lastDay / 7) * 7);
-  const maxG = Math.max(...curve.flatMap((p) => [p.actualG, p.standardG]));
+  // The axis is the window: the start day to the last day of the grow-out.
+  const minDay = Math.min(firstDay, curve[0]?.day ?? firstDay);
+  const maxDay = Math.max(cycleLength, lastDay);
+  const maxG = Math.max(...curve.flatMap((p) => [p.actualG, p.standardG]), ...standardCurve.map((p) => p.standardG));
   const step = niceStep(maxG / 1000);
   const yMax = Math.ceil((maxG / 1000) / step) * step;
   const yTicks = Array.from({ length: Math.round(yMax / step) + 1 }, (_, i) => i * step);
-  const xTicks = Array.from({ length: Math.floor(maxDay / 7) + 1 }, (_, i) => i * 7);
+  // A tick every 7 days from the first day, and always the last day; a week tick
+  // too close to the last day gives way to it.
+  // On the last day the window is one day wide: that day, in the middle.
+  const xTicks =
+    maxDay <= minDay
+      ? [minDay]
+      : [
+          ...Array.from({ length: Math.floor((maxDay - minDay) / 7) + 1 }, (_, i) => minDay + i * 7).filter((d) => maxDay - d >= 3),
+          maxDay,
+        ];
 
-  const x = (day: number) => m.left + (day / maxDay) * innerW;
+  const x = (day: number) =>
+    maxDay <= minDay ? m.left + innerW / 2 : m.left + ((day - minDay) / (maxDay - minDay)) * innerW;
   // On a narrow chart, drop a % label that would touch its later neighbour.
   const showPct = new Set<number>();
   let nextX = Infinity;
@@ -96,6 +121,10 @@ function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]
     curve.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.day).toFixed(1)},${y(pick(p)).toFixed(1)}`).join(" ");
 
   const actualPath = path((p) => p.actualG);
+  // The target runs the whole window; the actual line stops at today.
+  const targetPath = standardCurve
+    .map((p, i) => `${i === 0 ? "M" : "L"}${x(p.day).toFixed(1)},${y(p.standardG).toFixed(1)}`)
+    .join(" ");
   const first = curve[0]!;
   const last = curve[curve.length - 1]!;
   const area = `${actualPath} L${x(last.day).toFixed(1)},${y(0).toFixed(1)} L${x(first.day).toFixed(1)},${y(0).toFixed(1)} Z`;
@@ -165,7 +194,7 @@ function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]
 
             {/* Target and actual */}
             <path d={area} fill="var(--brand)" opacity="0.1" />
-            <path d={path((p) => p.standardG)} fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeDasharray="5 4" strokeLinecap="round" />
+            <path d={targetPath || path((p) => p.standardG)} fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeDasharray="5 4" strokeLinecap="round" />
             <path d={actualPath} fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
             {/* One dot per weigh-in, each a hover, tap and keyboard target */}
@@ -188,7 +217,7 @@ function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]
                   <circle
                     cx={x(p.day)}
                     cy={y(p.actualG)}
-                    r={isShown ? 6 : 4.5}
+                    r={isShown ? 6 : curve.length > 14 ? 3 : 4.5}
                     fill="var(--surface-card)"
                     stroke="var(--brand)"
                     strokeWidth="2.5"
@@ -199,9 +228,9 @@ function GrowthChart({ curve, cycleLength, targetLabel }: { curve: GrowthPoint[]
 
             {/* The latest weight, always labelled */}
             <text
-              x={x(last.day) - 10}
+              x={x(last.day) < m.left + 70 ? x(last.day) + 10 : x(last.day) - 10}
               y={y(last.actualG) - 12}
-              textAnchor="end"
+              textAnchor={x(last.day) < m.left + 70 ? "start" : "end"}
               fontSize={fs + 1}
               fontWeight="700"
               fill="var(--text-primary)"
@@ -317,7 +346,7 @@ function ReadingCell({ label, reading }: { label: string; reading: GrowthReading
 }
 
 export function GrowthCard({ data }: Props) {
-  const { curve, actualG, standardG, variancePercent, cycleLength, cycleDay: day, flock } = data;
+  const { curve, standardCurve, actualG, standardG, variancePercent, cycleLength, cycleStart, cycleDay: day, flock } = data;
   const targetLabel = data.standardName ? `${data.standardName} target` : "target";
   const has = actualG != null && standardG != null && curve.length > 0;
   const state = variancePercent != null ? standing(variancePercent) : null;
@@ -422,7 +451,7 @@ export function GrowthCard({ data }: Props) {
             </span>
           </div>
           {curve.length > 0 ? (
-            <GrowthChart curve={curve} cycleLength={cycleLength} targetLabel={targetLabel} />
+            <GrowthChart curve={curve} standardCurve={standardCurve} firstDay={cycleStart} cycleLength={cycleLength} targetLabel={targetLabel} />
           ) : (
             <p className="py-10 text-center text-base" style={{ color: "var(--text-tertiary)" }}>
               No weight readings yet for this flock.
