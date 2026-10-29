@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useAuth, MfaRequiredError, type LoginError } from "@/lib/auth-context";
 import { CerebroilLogo } from "@/components/farm/SideNav";
+import { gmailComposeUrl } from "@/lib/contact";
 import { Chicken, type ChickenMood } from "@/components/farm/Chicken";
 
 export const Route = createFileRoute("/login")({
@@ -429,7 +430,12 @@ function LoginPage() {
             <p className="mt-5 text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
               No account?{" "}
               <a
-                href="mailto:support@cerebroil.dev?subject=Account%20Request"
+                href={gmailComposeUrl({
+                  subject: "Cerebroil account request",
+                  body: "Hello, I would like an account for Cerebroil.\n\nName:\nRole:\n",
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="font-medium hover:underline"
                 style={{ color: "var(--brand)" }}
               >

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { AppShell } from "@/components/farm/AppShell";
+import { gmailComposeUrl } from "@/lib/contact";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({ meta: [{ title: "Contact & Support — CereBroiler" }] }),
@@ -24,9 +25,14 @@ function ContactPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const sub  = encodeURIComponent(`Support Request: ${subject}`);
-    const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`);
-    window.location.href = `mailto:support@cerebroiler.dev?subject=${sub}&body=${body}`;
+    window.open(
+      gmailComposeUrl({
+        subject: `Support Request: ${subject}`,
+        body: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
+      }),
+      "_blank",
+      "noopener,noreferrer",
+    );
     setSent(true);
     setTimeout(() => setSent(false), 4000);
   };
