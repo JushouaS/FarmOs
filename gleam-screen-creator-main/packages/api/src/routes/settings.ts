@@ -33,7 +33,7 @@ const lightingBody = z
 
 const flockBody = z.object({
   houses: z
-    .array(z.object({ id: z.string().min(1), population: z.number().int().min(0).max(1_000_000) }))
+    .array(z.object({ id: z.string().min(1), population: z.number().int().min(1).max(1000) }))
     .min(1)
     .max(50),
 });
@@ -103,7 +103,7 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "invalid_flock",
-        message: "Each house needs a whole number of birds from 0 to 1,000,000.",
+        message: "The number of broiler chickens must be a whole number from 1 to 1,000.",
       });
     }
     const known = await app.sqlRead`SELECT id FROM houses WHERE is_active = true`;

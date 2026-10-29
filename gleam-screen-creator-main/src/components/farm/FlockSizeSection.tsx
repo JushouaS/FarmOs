@@ -12,7 +12,9 @@ export interface HouseSize {
   population: number;
 }
 
-const MAX_BIRDS = 1_000_000;
+/** The pen holds between 1 and 1,000 broiler chickens. */
+const MIN_BIRDS = 1;
+const MAX_BIRDS = 1000;
 
 export function FlockSizeSection({ house, canManage }: { house: HouseSize | null; canManage: boolean }) {
   const router = useRouter();
@@ -24,7 +26,7 @@ export function FlockSizeSection({ house, canManage }: { house: HouseSize | null
   useEffect(() => setDraft(saved), [saved]);
 
   const trimmed = draft.trim();
-  const valid = /^\d+$/.test(trimmed) && Number(trimmed) <= MAX_BIRDS;
+  const valid = /^\d+$/.test(trimmed) && Number(trimmed) >= MIN_BIRDS && Number(trimmed) <= MAX_BIRDS;
   const dirty = trimmed !== saved;
 
   const save = async () => {
@@ -37,7 +39,7 @@ export function FlockSizeSection({ house, canManage }: { house: HouseSize | null
     return (
       <Section title="Flock Size">
         <Block>
-          <Hint>No house is set up yet.</Hint>
+          <Hint>No pen is set up yet.</Hint>
         </Block>
       </Section>
     );
@@ -47,10 +49,10 @@ export function FlockSizeSection({ house, canManage }: { house: HouseSize | null
     <Section title="Flock Size">
       <Block>
         <label htmlFor="flock-size" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-          Birds in {house.label}
+          Number of broiler chickens in {house.label}
         </label>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
-          Set it when a batch is placed, and after losses. The Dashboard shows this number.
+          Update it when a new batch is placed and after any losses. The Dashboard shows this number.
         </p>
         <div className="mt-3 flex items-center gap-2">
           <input
@@ -67,9 +69,9 @@ export function FlockSizeSection({ house, canManage }: { house: HouseSize | null
             aria-invalid={!valid}
             className="cb-input w-36 text-right font-mono text-sm disabled:opacity-60"
           />
-          <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>birds</span>
+          <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>broiler chickens</span>
         </div>
-        {!valid && <Hint tone="error">Enter a whole number from 0 to {MAX_BIRDS.toLocaleString()}.</Hint>}
+        {!valid && <Hint tone="error">Enter a whole number from {MIN_BIRDS} to {MAX_BIRDS.toLocaleString()}.</Hint>}
         {!canManage ? (
           <Hint>{NOT_ALLOWED}</Hint>
         ) : (
