@@ -27,7 +27,6 @@ export function VisualsDashboardPage() {
   const shell = useAppShell();
   const [layout, setLayout] = useState<ViewLayout>("dual");
   const [showOverlays, setShowOverlays] = useState(true);
-  const [showConfidence] = useState(true);
   const [selectedBird, setSelectedBird] = useState<BroilerBird | null>(null);
   const [selectedKinect, setSelectedKinect] = useState<KinectDetection | null>(null);
   const [dahuaError, setDahuaError] = useState(false);
@@ -299,69 +298,8 @@ export function VisualsDashboardPage() {
                       </div>
                     )}
 
-                    {/* AI Bounding Box Overlays (SVG Composited Layer) */}
-                    {showOverlays && !dahuaError && (
-                      <div className="pointer-events-none absolute inset-0">
-                        {farm.detections.map((det) => {
-                          const bird = broilers.find((b) => b.id.replace("B-", "D") === det.id);
-                          const isHuddling = det.behavior === "HUDDLING";
-                          const isSelected = selectedBird?.id === bird?.id;
-
-                          return (
-                            <div
-                              key={det.id}
-                              style={{
-                                left: `${(det.box.x / 640) * 100}%`,
-                                top: `${(det.box.y / 360) * 100}%`,
-                                width: `${(det.box.width / 640) * 100}%`,
-                                height: `${(det.box.height / 360) * 100}%`,
-                              }}
-                              className={`pointer-events-auto absolute cursor-pointer rounded-sm border transition-all ${isSelected
-                                  ? "border-2 border-[var(--cv-accent)] shadow-[0_0_12px_var(--cv-accent)]"
-                                  : isHuddling
-                                    ? "border border-[var(--status-amber)] bg-[rgba(251,191,36,0.12)]"
-                                    : "border border-[var(--cv-accent)] bg-[rgba(163,230,53,0.08)]"
-                                }`}
-                              onClick={() => {
-                                if (!bird) return;
-                                setSelectedBird(bird);
-                                setSelectedKinect(null);
-                                revealInspector();
-                              }}
-                            >
-                              <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/80 px-1 py-0.5 text-[9px] font-mono font-medium text-[var(--cv-accent-text)]">
-                                <span>{det.id}</span>
-                                {showConfidence && (
-                                  <span className="text-[var(--text-tertiary)] tabular-nums">
-                                    {(det.weightConfidence * 100).toFixed(0)}%
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Pen Environment Overlay (Bottom Left) */}
-                    <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-2">
-                      <div className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-black/75 px-2.5 py-1 text-xs backdrop-blur-sm elevation-1">
-                        <span className="text-[10px] text-[var(--text-tertiary)]">TEMP</span>
-                        <span className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
-                          29.1°C
-                        </span>
-                        <span className="text-[var(--border-strong)]">|</span>
-                        <span className="text-[10px] text-[var(--text-tertiary)]">RH</span>
-                        <span className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
-                          63%
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Active Birds Scanned Count Badge (Bottom Right) */}
-                    <div className="pointer-events-none absolute bottom-3 right-3 rounded-lg border border-[var(--border-subtle)] bg-black/75 px-2.5 py-1 text-xs font-mono text-[var(--text-secondary)] backdrop-blur-sm">
-                      <span className="text-[var(--cv-accent)] font-semibold tabular-nums">{totalBirds}</span> BIRDS<span className="hidden sm:inline"> MONITORED</span>
-                    </div>
+                    {/* No overlays on this feed: the boxes, temperature/humidity chip and
+                        bird count that used to sit here were demo data, not camera output. */}
                   </div>
                 </div>
               )}
