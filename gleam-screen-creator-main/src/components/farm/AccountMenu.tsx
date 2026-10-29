@@ -6,7 +6,7 @@ import { UserAvatar } from "./UserAvatar";
 import { ReportDialog } from "./ReportDialog";
 import { SusDialog } from "./SusDialog";
 import { useAuth } from "@/lib/auth-context";
-import { AVATAR_ACCEPT, avatarRules, AvatarError, removeAvatar, saveAvatar, useAvatar } from "@/lib/avatar";
+import { AVATAR_ACCEPT, AvatarError, removeAvatar, saveAvatar, useAvatar } from "@/lib/avatar";
 import { tr } from "@/lib/i18n";
 
 /* Account menu: opens from the top bar's avatar, in the shape of Google's
@@ -252,7 +252,6 @@ export function AccountMenu() {
             {message.text}
           </p>
         )}
-        <p className="px-4 pb-2 pt-3 text-center text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("{AVATAR_RULES} Saved in this browser only.", { AVATAR_RULES: avatarRules() })}</p>
       </PopoverContent>
     </Popover>
 
