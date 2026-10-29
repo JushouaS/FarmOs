@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { getOperationsOverview } from "@/lib/farm/repository";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — Cerebroil" }] }),
@@ -9,13 +11,19 @@ export const Route = createFileRoute("/")({
 });
 
 /* ── Helpers ────────────────────────────────────────────────── */
-/** Monospaced telemetry value with cv-accent colour */
-function TV({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="font-mono font-semibold" style={{ color: "var(--cv-accent)" }}>
-      {children}
-    </span>
-  );
+/** "Good evening, Name · Wednesday, October 28" from the viewer's own clock.
+ *  Computed after mount: the server's clock and time zone would otherwise
+ *  render a different greeting than the browser hydrates with. */
+function useGreetingLine(name: string | null): string | null {
+  const [line, setLine] = useState<string | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const h = now.getHours();
+    const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    const date = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    setLine(`${part}${name ? `, ${name}` : ""} · ${date}`);
+  }, [name]);
+  return line;
 }
 
 function SBadge({ s }: { s: "critical" | "warning" | "nominal" | "optimal" }) {
@@ -168,41 +176,42 @@ function Dashboard() {
   const actPct: number | null = data.activity?.value != null ? Math.round(data.activity.value) : null;
   const active    = actPct != null ? Math.round((total * actPct) / 100) : null;
   const inactive  = active != null ? total - active : null;
-  // Day N is measured to the latest reading; say so when that isn't today.
-  const dataAsOf: string | null = data.cycle?.dataAsOf ?? null;
-  const staleSince = dataAsOf && dataAsOf < new Date().toISOString().slice(0, 10)
-    ? new Date(`${dataAsOf}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : null;
   const avgWeight = data.weight?.actualAvgG ?? 0;
   const topAlerts = (data.alerts as any[]).filter((a) => !a.acknowledged).slice(0, 4);
+  const { user } = useAuth();
+  const greeting = useGreetingLine(user?.fullName ?? user?.email?.split("@")[0] ?? null);
 
   return (
     <AppShell>
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            {data.facility.name} &middot; {data.cluster?.houseLabel ?? "Pen 1"} &middot; Grow-out Day{" "}
-            <TV>{data.cycle?.day ?? "—"}</TV>/42 &middot; {data.facility.breed ?? "Ross 308"}
+      {/* Header. Greeting line: real session name + viewer's date (reserved
+          height so it doesn't shift the page when it fills in after mount).
+          Title chip reuses the KPI cards' bird glyph as the identity motif.
+          The camera link is the page's one accent action: the live feed is
+          where an operator goes to check on what the numbers report. */}
+      <header className="mt-6 mb-6 flex flex-col gap-4 sm:mt-8 sm:flex-row sm:items-end sm:justify-between lg:mt-10">
+        <div className="min-w-0">
+          <p className="min-h-5 text-sm" style={{ color: "var(--text-tertiary)" }}>
+            {greeting}
           </p>
-          {staleSince && (
-            <p className="mt-1 text-xs" style={{ color: "var(--status-amber-text)" }}>
-              Latest sensor data is from {staleSince}
-            </p>
-          )}
+          <div className="mt-2 flex items-center gap-3">
+            <KpiIcon path={KPI_ICON_PATHS.flock} />
+            <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: "var(--text-primary)" }}>
+              Dashboard
+            </h1>
+          </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full px-3.5 py-1.5 self-start shrink-0"
-          style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)" }}>
-          <span className="h-1.5 w-1.5 rounded-full"
-            style={{ background: "var(--status-green)", boxShadow: "0 0 4px var(--status-green)" }} />
-          <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-            Status: <span className="font-semibold text-[var(--status-green)]">Healthy</span>
-          </span>
-        </div>
-      </div>
+        <Link
+          to="/visuals"
+          className="btn-primary tap shrink-0 self-start sm:self-auto"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="2" y="6" width="14" height="12" rx="2" />
+            <path d="m16 10 6-3v10l-6-3" />
+          </svg>
+          Open live camera
+        </Link>
+      </header>
 
       {/* ── KPI grid — responsive ───────────────────────────────
            Flock count is the page's focal metric, so it takes the wide

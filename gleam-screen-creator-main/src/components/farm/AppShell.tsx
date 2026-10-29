@@ -32,6 +32,11 @@ export function useAppShell() {
   return useContext(AppShellContext);
 }
 
+/* One style for every square icon control in the top bar (menu, sidebar
+ * toggle, theme, alerts) so the left and right clusters read as one set. */
+const TOP_BAR_ICON_BUTTON =
+  "tap relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all";
+
 /* ── Theme toggle ─────────────────────────────────────────── */
 function ThemeToggle() {
   const [isLight, setIsLight] = useState(false);
@@ -51,8 +56,7 @@ function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      className="tap flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
-      style={{ color: "var(--text-secondary)" }}
+      className={TOP_BAR_ICON_BUTTON}
       aria-label="Toggle theme"
       title={isLight ? "Switch to dark mode" : "Switch to light mode"}
     >
@@ -105,7 +109,7 @@ function TopBar({
         {/* Mobile hamburger menu button */}
         <button
           onClick={onMenuOpen}
-          className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all lg:hidden"
+          className={`${TOP_BAR_ICON_BUTTON} lg:hidden`}
           aria-label="Open navigation menu"
           aria-controls="app-sidenav"
           title="Open menu"
@@ -116,7 +120,7 @@ function TopBar({
         {/* Desktop sidebar toggle button */}
         <button
           onClick={onToggleSidebar}
-          className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
+          className={`${TOP_BAR_ICON_BUTTON} max-lg:hidden`}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -126,14 +130,13 @@ function TopBar({
         <LocationStatus />
       </div>
 
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <ThemeToggle />
 
         {/* Alert bell with badge */}
         <Link
           to="/alerts"
-          className="tap relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
-          style={{ color: "var(--text-secondary)" }}
+          className={TOP_BAR_ICON_BUTTON}
           aria-label="View alerts"
           title="View alerts"
         >
@@ -150,7 +153,7 @@ function TopBar({
 
         {/* User avatar */}
         <div
-          className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white select-none shadow-xs"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white select-none shadow-xs pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:text-sm"
           style={{
             background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
             border: "1px solid rgba(52,211,153,0.3)",
