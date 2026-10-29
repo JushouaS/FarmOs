@@ -23,8 +23,40 @@ export const Route = createFileRoute("/visuals")({
 
 type ViewLayout = "dual" | "dahua" | "kinect";
 
-export function VisualsDashboardPage() {
+/* The menu and sidebar buttons need the app shell's controls, which only exist
+ * for components rendered INSIDE <AppShell>. VisualsDashboardPage creates the
+ * shell, so calling useAppShell() there returns null and the buttons did
+ * nothing. This small component sits below the shell and can reach them. */
+function ShellButtons() {
   const shell = useAppShell();
+  return (
+    <>
+      {/* Mobile hamburger */}
+      <button
+        type="button"
+        onClick={() => shell?.openMobileMenu()}
+        className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)] lg:hidden"
+        style={{ color: "var(--text-secondary)" }}
+        aria-label="Open menu"
+        aria-controls="app-sidenav"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      {/* Desktop sidebar toggle */}
+      <button
+        type="button"
+        onClick={() => shell?.toggleCollapsed()}
+        className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)]"
+        style={{ color: "var(--text-secondary)" }}
+        aria-label="Toggle sidebar"
+      >
+        <PanelLeft className="h-5 w-5" />
+      </button>
+    </>
+  );
+}
+
+export function VisualsDashboardPage() {
   const [layout, setLayout] = useState<ViewLayout>("dual");
   const [showOverlays, setShowOverlays] = useState(true);
   const [selectedBird, setSelectedBird] = useState<BroilerBird | null>(null);
@@ -86,26 +118,7 @@ export function VisualsDashboardPage() {
         {/* Top Control Bar — wraps to two rows on narrow screens */}
         <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 py-2 sm:px-5 lg:flex-nowrap lg:px-6 elevation-1">
           <div className="flex min-w-0 items-center gap-3">
-            {/* Mobile hamburger */}
-            <button
-              type="button"
-              onClick={() => shell?.openMobileMenu()}
-              className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)] lg:hidden"
-              style={{ color: "var(--text-secondary)" }}
-              aria-label="Open menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            {/* Desktop sidebar toggle */}
-            <button
-              type="button"
-              onClick={() => shell?.toggleCollapsed()}
-              className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)]"
-              style={{ color: "var(--text-secondary)" }}
-              aria-label="Toggle sidebar"
-            >
-              <PanelLeft className="h-5 w-5" />
-            </button>
+            <ShellButtons />
             <div className="flex min-w-0 items-center gap-2">
               <span className="relative flex h-3 w-3 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--cv-accent)] opacity-75"></span>
