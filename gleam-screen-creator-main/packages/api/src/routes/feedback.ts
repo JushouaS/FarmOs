@@ -190,6 +190,7 @@ export async function registerFeedbackRoutes(app: FastifyInstance) {
         "SUS response saved locally but NOT sent to Google; check SUS_GOOGLE_SCRIPT_URL/TOKEN and the Apps Script deployment",
       );
     }
-    return reply.code(201).send({ score, interpretation });
+    // The score stays server side: it goes in the CSV, not back to the respondent.
+    return reply.code(201).send({ ok: true });
   });
 }

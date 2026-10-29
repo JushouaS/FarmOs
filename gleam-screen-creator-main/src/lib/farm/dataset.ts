@@ -7,7 +7,7 @@ import type { FarmDataset, SensorReading, StatusLevel } from "./types";
  * Behavioral classification (3-state model per system architecture):
  *   "Inactivity" — low motion score during daytime
  *   "Huddling"   — high bounding-box cluster density
- *   "Sleeping"   — time-based override: 21:00–03:59 local time
+ *   "Sleeping"   — time-based override: 17:00–04:59 local time
  *
  * Weight categories (Kinect depth-volume regression):
  *   "Underweight" — < 1.20 kg   (#F59E0B amber)
@@ -32,13 +32,13 @@ const INCIDENT_STILL =
 /* ─── Night cycle ─────────────────────────────────────────────────────────── */
 
 /**
- * Returns true if local time is between 21:00 (9 PM) and 03:59 AM.
- * During this window all birds are classified "Sleeping" and inactivity/
+ * Day runs 05:00 to 16:59 local time; everything else (17:00 to 04:59) is night.
+ * During the night all birds are classified "Sleeping" and inactivity/
  * huddling alert triggers are suppressed.
  */
 export function isNightCycle(date: Date = new Date()): boolean {
   const h = date.getHours();
-  return h >= 21 || h < 4;
+  return h >= 17 || h < 5;
 }
 
 /* ─── Behavior states ─────────────────────────────────────────────────────── */
@@ -47,7 +47,7 @@ export function isNightCycle(date: Date = new Date()): boolean {
  * Three-state behavioral model:
  * - "Inactivity" : minimal pixel movement, daytime only
  * - "Huddling"   : high bounding-box cluster density, daytime only
- * - "Sleeping"   : time-based override active 21:00–03:59
+ * - "Sleeping"   : time-based override active 17:00–04:59
  */
 export type BehaviorState = "Active" | "Inactive" | "Inactivity" | "Huddling" | "Sleeping";
 

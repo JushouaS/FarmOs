@@ -22,6 +22,80 @@ function visionHeaders(): Record<string, string> {
   return { "X-Vision-Token": VISION_TOKEN };
 }
 
+/** The vision service answered, but with an error; carries its status and body. */
+class VisionError extends Error {
+  constructor(
+    public status: number,
+    public body: Record<string, unknown>,
+  ) {
+    super("vision_error");
+  }
+}
+
+/** One CV pass on the camera's latest frame. Throws VisionError when the
+ *  service answers with an error, and a plain Error when it can't be reached. */
+async function fetchAnalysis(cameraId: string): Promise<any> {
+  const res = await fetch(`${VISION_BASE}/analyze/${encodeURIComponent(cameraId)}`, {
+    method: "POST",
+    headers: { ...visionHeaders(), "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    // M-7: truncate body to prevent internal Flask stack traces leaking to the client
+    const body = (await res.text().catch(() => "")).slice(0, 500);
+    throw new VisionError(res.status, { error: "analyze_error", detail: body });
+  }
+  return res.json();
+}
+
+const SCAN_SAMPLES = 4;
+const SCAN_GAP_MS = 1_000;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Presses of the same camera's scan while one is running share its result.
+const scansInFlight = new Map<string, Promise<unknown>>();
+
+/**
+ * Several analysis passes a second apart, reduced to one result.
+ *
+ * The vision service measures motion against the frame of its previous
+ * analysis, so a lone call compares against an old frame (or none at all) and
+ * reports a still flock. The first pass only sets that reference; the rest
+ * measure real motion over about a second each. The pass with the middle
+ * movement is kept, so one camera glitch or one burst of movement does not
+ * decide the answer, and only that pass is written to the database.
+ */
+async function runScan(app: FastifyInstance, cameraId: string) {
+  const samples: any[] = [];
+  for (let i = 0; i < SCAN_SAMPLES; i++) {
+    if (i > 0) await sleep(SCAN_GAP_MS);
+    samples.push(await fetchAnalysis(cameraId));
+  }
+  const usable = samples.slice(1);
+  const movement = (a: any): number => Number(a?.behaviour?.movement_index ?? 0);
+  const ranked = [...usable].sort((a, b) => movement(a) - movement(b));
+  const chosen = ranked[Math.floor(ranked.length / 2)];
+  const values = usable.map(movement);
+
+  let dbWritten = false;
+  try {
+    dbWritten = await persistAnalysis(app, cameraId, chosen);
+  } catch (err) {
+    app.log.error({ err, cameraId }, "vision scan: DB write failed, returning the scan unpersisted");
+  }
+
+  return {
+    ...chosen,
+    db_written: dbWritten,
+    scan: {
+      samples: usable.length,
+      movement_min: Math.min(...values),
+      movement_max: Math.max(...values),
+      movement_mean: Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10000) / 10000,
+    },
+  };
+}
+
 export async function registerVisionProxyRoutes(app: FastifyInstance) {
   // -----------------------------------------------------------------------
   // GET /visual/health — Flask service health check
@@ -137,18 +211,9 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
     const { cameraId } = request.params as { cameraId: string };
     let analysis: any;
     try {
-      const res = await fetch(`${VISION_BASE}/analyze/${encodeURIComponent(cameraId)}`, {
-        method: "POST",
-        headers: { ...visionHeaders(), "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!res.ok) {
-        // M-7: truncate body to prevent internal Flask stack traces leaking to the client
-        const body = (await res.text().catch(() => "")).slice(0, 500);
-        return reply.code(res.status).send({ error: "analyze_error", detail: body });
-      }
-      analysis = await res.json();
-    } catch {
+      analysis = await fetchAnalysis(cameraId);
+    } catch (err) {
+      if (err instanceof VisionError) return reply.code(err.status).send(err.body);
       return reply.code(503).send({ error: "vision_service_unavailable" });
     }
 
@@ -161,6 +226,30 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
 
     return reply.send({ ...analysis, db_written: dbWritten });
   });
+
+  // -----------------------------------------------------------------------
+  // POST /visual/scan/:cameraId — what the Live Camera "Analysis" button
+  // calls: a few analysis passes a second apart, reduced to one result (see
+  // runScan). Takes about three seconds.
+  // -----------------------------------------------------------------------
+  app.post(
+    "/scan/:cameraId",
+    { preHandler: [requireAuth], config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { cameraId } = request.params as { cameraId: string };
+      let pending = scansInFlight.get(cameraId);
+      if (!pending) {
+        pending = runScan(app, cameraId).finally(() => scansInFlight.delete(cameraId));
+        scansInFlight.set(cameraId, pending);
+      }
+      try {
+        return reply.send(await pending);
+      } catch (err) {
+        if (err instanceof VisionError) return reply.code(err.status).send(err.body);
+        return reply.code(503).send({ error: "vision_service_unavailable" });
+      }
+    },
+  );
 }
 
 /**

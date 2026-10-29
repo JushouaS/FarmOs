@@ -2,18 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
+import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
 import {
   farm,
   broilers,
   kinectDetections,
-  modelTelemetry,
   behaviorBreakdown,
   weightBreakdown,
-  effectiveBehavior,
-  weightCategory,
-  BEHAVIOR_COLOR,
-  type BroilerBird,
-  type KinectDetection,
+  isNightCycle,
 } from "@/lib/farm/dataset";
 
 export const Route = createFileRoute("/visuals")({
@@ -48,13 +44,18 @@ function ShellButtons() {
 
 export function VisualsDashboardPage() {
   const [layout, setLayout] = useState<ViewLayout>("dual");
-  const [showOverlays, setShowOverlays] = useState(true);
-  const [selectedBird, setSelectedBird] = useState<BroilerBird | null>(null);
-  const [selectedKinect, setSelectedKinect] = useState<KinectDetection | null>(null);
   const [dahuaError, setDahuaError] = useState(false);
   const [kinectError, setKinectError] = useState(false);
-  const [nightModeActive, setNightModeActive] = useState(false);
-  const [flashNotice, setFlashNotice] = useState<string | null>(null);
+  // The clock drives the day/night cycle: day is 05:00 to 16:59, and birds
+  // count as sleeping the rest of the time (isNightCycle). Null until mounted so the server render and
+  // the first client render match.
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const nightModeActive = now ? isNightCycle(now) : false;
 
   // Vision service (cerebroil-stream, port 5000) on the host that served this
   // page, so a phone on the LAN gets this machine's feed instead of its own
@@ -67,27 +68,10 @@ export function VisualsDashboardPage() {
   const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "port 5000";
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const inspectorRef = useRef<HTMLDivElement>(null);
-
-  // Below lg the inspector sits under the feeds, out of view; bring it up
-  // after a tap so the selection visibly does something.
-  const revealInspector = () => {
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      requestAnimationFrame(() =>
-        inspectorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
-      );
-    }
-  };
 
   const bBreakdown = behaviorBreakdown(nightModeActive);
   const wBreakdown = weightBreakdown();
   const totalBirds = broilers.length;
-
-  const handleSnapshot = () => {
-    const time = new Date().toLocaleTimeString();
-    setFlashNotice(`Frame snapshot captured at ${time}`);
-    setTimeout(() => setFlashNotice(null), 3200);
-  };
 
   const handleFullscreenToggle = () => {
     if (!document.fullscreenElement) {
@@ -131,19 +115,9 @@ export function VisualsDashboardPage() {
             </div>
           </div>
 
-          {/* Controls: View Layout Switcher, Overlays, Actions */}
+          {/* Controls: View Layout Switcher, Fullscreen */}
           {/* Full-width second row on phones; inline from sm */}
           <div className="flex w-full items-center gap-2 sm:w-auto">
-            {/* Notification Toast — floats above the bottom nav on phones */}
-            {flashNotice && (
-              <div
-                role="status"
-                className="animate-spring-in fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-center rounded-lg border border-[var(--status-green-border)] bg-[var(--status-green-bg)] px-3 py-2 text-xs font-medium text-[var(--status-green-text)] shadow-lg md:static md:inset-auto md:z-auto md:px-2.5 md:py-1 md:shadow-none"
-              >
-                {flashNotice}
-              </div>
-            )}
-
             {/* Layout Mode Selector (Concentric: outer rounded-lg p-0.5, inner rounded-md) */}
             <div className="flex flex-1 items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-0.5 sm:flex-none">
               <button
@@ -186,40 +160,6 @@ export function VisualsDashboardPage() {
                 <span className="hidden sm:inline">Kinect 3D</span>
               </button>
             </div>
-
-            {/* Toggle Overlay Button — icon-only on phones */}
-            <button
-              type="button"
-              onClick={() => setShowOverlays(!showOverlays)}
-              aria-pressed={showOverlays}
-              aria-label="Toggle detection overlays"
-              className={`tactile-btn tap flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${showOverlays
-                  ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
-                  : "border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              title="Toggle AI Bounding Box Overlays"
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M9 9h6v6H9z" />
-              </svg>
-              <span className="hidden md:inline">Detections</span>
-            </button>
-
-            {/* Snapshot Trigger Button */}
-            <button
-              type="button"
-              onClick={handleSnapshot}
-              aria-label="Capture snapshot"
-              className="tactile-btn tap flex shrink-0 items-center justify-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-              title="Capture instantaneous frame"
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-              <span className="hidden md:inline">Snapshot</span>
-            </button>
 
             {/* Fullscreen Trigger Button */}
             <button
@@ -355,36 +295,25 @@ export function VisualsDashboardPage() {
                     )}
 
                     {/* Interactive Kinect Depth-Target Overlay */}
-                    {showOverlays && !kinectError && (
+                    {!kinectError && (
                       <div className="pointer-events-none absolute inset-0">
-                        {kinectDetections.map((kd) => {
-                          const isTargetSelected = selectedKinect?.id === kd.id;
-                          return (
-                            <div
-                              key={kd.id}
-                              style={{
-                                left: `${kd.x}%`,
-                                top: `${kd.y}%`,
-                                width: `${kd.w}%`,
-                                height: `${kd.h}%`,
-                              }}
-                              className={`pointer-events-auto absolute cursor-pointer rounded border border-dashed transition-all ${isTargetSelected
-                                  ? "border-2 border-[var(--brand)] bg-[rgba(52,211,153,0.2)] shadow-[0_0_10px_var(--brand)]"
-                                  : "border-[var(--brand)] bg-[rgba(52,211,153,0.06)] hover:bg-[rgba(52,211,153,0.14)]"
-                                }`}
-                              onClick={() => {
-                                setSelectedKinect(kd);
-                                setSelectedBird(null);
-                                revealInspector();
-                              }}
-                            >
-                              <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-[9px] font-mono text-[var(--brand)]">
-                                <span>{kd.id}</span>
-                                <span className="text-[var(--text-primary)] tabular-nums">{kd.weightG}g</span>
-                              </div>
+                        {kinectDetections.map((kd) => (
+                          <div
+                            key={kd.id}
+                            style={{
+                              left: `${kd.x}%`,
+                              top: `${kd.y}%`,
+                              width: `${kd.w}%`,
+                              height: `${kd.h}%`,
+                            }}
+                            className="absolute rounded border border-dashed border-[var(--brand)] bg-[rgba(52,211,153,0.06)]"
+                          >
+                            <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-[9px] font-mono text-[var(--brand)]">
+                              <span>{kd.id}</span>
+                              <span className="text-[var(--text-primary)] tabular-nums">{kd.weightG}g</span>
                             </div>
-                          );
-                        })}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -396,141 +325,21 @@ export function VisualsDashboardPage() {
           {/* Right Inspector & Analytics Drawer Panel */}
           {/* Stacks under the feeds below lg (2-up on tablets), docks right from lg */}
           <aside className="grid gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 sm:grid-cols-2 sm:p-4 lg:flex lg:w-72 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-t-0 lg:border-l lg:p-3">
-            {/* Selected Target Inspection Box */}
-            <div ref={inspectorRef} className="scroll-mt-4 scroll-mb-20 rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
-              <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
-                <span className="label-section text-[11px] tracking-widest font-bold">
-                  {selectedBird ? "Bird Inspector" : selectedKinect ? "Depth Target" : "Target Selection"}
-                </span>
-                {(selectedBird || selectedKinect) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedBird(null);
-                      setSelectedKinect(null);
-                    }}
-                    className="tactile-btn tap -my-2 px-1 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              {selectedBird ? (
-                <div className="mt-2.5 space-y-2 animate-spring-in">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm font-bold text-[var(--text-primary)]">
-                      {selectedBird.id}
-                    </span>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                      style={{
-                        backgroundColor: `${BEHAVIOR_COLOR[effectiveBehavior(selectedBird, nightModeActive)]}20`,
-                        color: BEHAVIOR_COLOR[effectiveBehavior(selectedBird, nightModeActive)],
-                        border: `1px solid ${BEHAVIOR_COLOR[effectiveBehavior(selectedBird, nightModeActive)]}40`,
-                      }}
-                    >
-                      {effectiveBehavior(selectedBird, nightModeActive)}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
-                      <div className="text-[10px] text-[var(--text-tertiary)]">EST. WEIGHT</div>
-                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--brand)]">
-                        {selectedBird.weightG} g
-                      </div>
-                      <div className="text-[10px] text-[var(--text-tertiary)]">
-                        {weightCategory(selectedBird.weightG)}
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
-                      <div className="text-[10px] text-[var(--text-tertiary)]">DETECTION CONF</div>
-                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--cv-accent)]">
-                        {(selectedBird.yoloConfidence * 100).toFixed(0)}%
-                      </div>
-                      <div className="text-[10px] text-[var(--text-tertiary)]">
-                        Weight: {(selectedBird.weightConfidence * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Morphometrics Detail */}
-                  <div className="rounded-lg bg-[var(--surface-raised)] p-2 text-xs space-y-1">
-                    <div className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Bird Dimensions
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[var(--text-secondary)]">Breast Width:</span>
-                      <span className="font-mono tabular-nums text-[var(--text-primary)]">
-                        {selectedBird.breastWidthMm} mm
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[var(--text-secondary)]">Total Length:</span>
-                      <span className="font-mono tabular-nums text-[var(--text-primary)]">
-                        {selectedBird.totalLengthMm} mm
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[var(--text-secondary)]">Height / Depth:</span>
-                      <span className="font-mono tabular-nums text-[var(--text-primary)]">
-                        {selectedBird.depthZMm} mm
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ) : selectedKinect ? (
-                <div className="mt-2.5 space-y-2 animate-spring-in">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm font-bold text-[var(--brand)]">
-                      {selectedKinect.id}
-                    </span>
-                    <span className="badge-cv">SCALE ZONE</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
-                      <div className="text-[10px] text-[var(--text-tertiary)]">ESTIMATED WEIGHT</div>
-                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--brand)]">
-                        {selectedKinect.weightG} g
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-[var(--surface-raised)] p-2">
-                      <div className="text-[10px] text-[var(--text-tertiary)]">DISTANCE / DEPTH</div>
-                      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--text-primary)]">
-                        {selectedKinect.depthMm} mm
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="py-6 flex flex-col items-center gap-2 text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-raised)] text-[var(--text-tertiary)]">
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
-                  </div>
-                  <p className="text-xs text-[var(--text-tertiary)] leading-relaxed max-w-[180px]">
-                    Tap or click any detection box on either stream to inspect bird telemetry.
-                  </p>
-                </div>
-              )}
-            </div>
+            <CameraAnalysis />
 
             {/* Behavior State Breakdown Widget */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
                 <span className="label-section text-[11px] tracking-widest font-bold">Behavior Breakdown</span>
-                <button
-                  type="button"
-                  onClick={() => setNightModeActive(!nightModeActive)}
-                  aria-pressed={nightModeActive}
-                  className={`tactile-btn tap -my-2 rounded px-1.5 py-0.5 text-[10px] font-mono ${nightModeActive
-                      ? "bg-[var(--status-blue-bg)] text-[var(--status-blue-text)] border border-[var(--status-blue-border)]"
-                      : "bg-[var(--surface-raised)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
-                    }`}
-                  title="Toggle 21:00-03:59 night cycle override simulation"
+                <time
+                  dateTime={now?.toISOString()}
+                  title={`Local time. Day is 5:00 AM to 4:59 PM, night is the rest. It is ${nightModeActive ? "night" : "day"} now.`}
+                  className="-my-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[var(--text-secondary)]"
                 >
-                  Night: {nightModeActive ? "ON" : "OFF"}
-                </button>
+                  {now
+                    ? `${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })} · ${nightModeActive ? "Night" : "Day"}`
+                    : "--:--:--"}
+                </time>
               </div>
 
               <div className="mt-3.5 space-y-3 text-xs">

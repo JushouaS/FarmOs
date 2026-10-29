@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ApiError, submitSus, type SusResult } from "@/lib/api-client";
+import { ApiError, submitSus } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 
 /* The System Usability Scale (SUS) questionnaire: ten statements answered from
@@ -55,7 +55,9 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
   const [showMissing, setShowMissing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<SusResult | null>(null);
+  const [done, setDone] = useState(false);
+  // Set when every statement got the same rating; the next press sends anyway.
+  const [sameWarning, setSameWarning] = useState(false);
   const questionRefs = useRef<Array<HTMLFieldSetElement | null>>([]);
 
   // Every time the dialog opens it starts from a blank form.
@@ -67,7 +69,8 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
     setShowMissing(false);
     setSending(false);
     setError(null);
-    setResult(null);
+    setDone(false);
+    setSameWarning(false);
     // Only a fresh opening resets the form, not a change to the hand-over values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -75,8 +78,10 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
   const answered = answers.filter((a) => a > 0).length;
   const total = SUS_STATEMENTS.length;
 
-  const setAnswer = (index: number, value: number) =>
+  const setAnswer = (index: number, value: number) => {
+    setSameWarning(false);
     setAnswers((prev) => prev.map((a, i) => (i === index ? value : a)));
+  };
 
   const send = () =>
     submitSus({
@@ -98,21 +103,27 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
       return;
     }
 
+    // The even-numbered statements are worded negatively, so the same rating
+    // on all ten always scores exactly 50. Ask once before sending that.
+    if (!sameWarning && answers.every((a) => a === answers[0])) {
+      setSameWarning(true);
+      return;
+    }
+
     setSending(true);
     setError(null);
     try {
-      let res: SusResult;
       try {
-        res = await send();
+        await send();
       } catch (err) {
         // The 15 minute access session may have lapsed while the form was open.
         if (err instanceof ApiError && err.status === 401 && (await refresh())) {
-          res = await send();
+          await send();
         } else {
           throw err;
         }
       }
-      setResult(res);
+      setDone(true);
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 401
@@ -137,20 +148,13 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
         }}
         className="flex max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-3xl border-[color:var(--border-default)] bg-[color:var(--surface-card)] p-0 text-[color:var(--text-primary)] shadow-[var(--shadow-elev-3)] sm:rounded-3xl"
       >
-        {result ? (
+        {done ? (
           <div className="flex flex-col items-center px-6 pb-6 pt-10 text-center">
             <CheckCircle2 className="h-10 w-10" style={{ color: "var(--status-green-text)" }} aria-hidden="true" />
             <DialogTitle className="mt-4 font-display text-xl">Thank you for your feedback</DialogTitle>
             <DialogDescription className="mt-2 max-w-xs">
               Your answers help us make the system easier to use.
             </DialogDescription>
-            <p className="mt-6 text-sm" style={{ color: "var(--text-secondary)" }}>
-              Your SUS score
-            </p>
-            <p className="font-display text-5xl font-semibold tabular-nums">{result.score}</p>
-            <p className="mt-1 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-              {result.interpretation}
-            </p>
             <button
               type="button"
               onClick={() => onOpenChange(false)}
@@ -277,6 +281,12 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                   {error ?? `Answer all ${total} statements to send. ${total - answered} left.`}
                 </p>
               )}
+              {sameWarning && !error && (
+                <p role="alert" className="mb-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+                  You gave every statement the same rating. Statements 2, 4, 6, 8 and 10 are worded negatively, so
+                  please check your answers, or press Send anyway if they are right.
+                </p>
+              )}
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button
                   type="button"
@@ -291,7 +301,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                   className="tap inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--brand)] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)] disabled:opacity-60"
                 >
                   {sending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                  {sending ? "Sending…" : "Send answers"}
+                  {sending ? "Sending…" : sameWarning ? "Send anyway" : "Send answers"}
                 </button>
               </div>
             </div>

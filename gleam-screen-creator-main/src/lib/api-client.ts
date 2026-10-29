@@ -255,13 +255,9 @@ export interface SusSubmission {
   answers: number[];
 }
 
-export interface SusResult {
-  score: number;
-  interpretation: string;
-}
-
-export async function submitSus(body: SusSubmission): Promise<SusResult> {
-  return apiFetch<SusResult>("/feedback/sus", { method: "POST", body: JSON.stringify(body) });
+/** The score is worked out and stored on the server; respondents are not shown it. */
+export async function submitSus(body: SusSubmission): Promise<void> {
+  await apiFetch<{ ok: true }>("/feedback/sus", { method: "POST", body: JSON.stringify(body) });
 }
 
 export interface ReportSubmission {
@@ -274,4 +270,18 @@ export interface ReportSubmission {
 
 export async function submitReport(body: ReportSubmission): Promise<void> {
   await apiFetch<{ ok: true }>("/feedback/report", { method: "POST", body: JSON.stringify(body) });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Camera scan (Live Camera "Analysis")                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface CameraScan extends AnalysisResult {
+  scan?: { samples: number; movement_min: number; movement_max: number; movement_mean: number };
+}
+
+/** Several analysis passes about a second apart, reduced to one result. Takes about 3 seconds. */
+export async function scanCamera(cameraId: string): Promise<CameraScan> {
+  // apiFetch sends a JSON content type, and the API rejects an empty JSON body.
+  return apiFetch<CameraScan>(`/visual/scan/${encodeURIComponent(cameraId)}`, { method: "POST", body: "{}" });
 }
