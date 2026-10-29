@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import math
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -29,11 +30,15 @@ from flask import Flask, Response, jsonify, render_template, request
 load_dotenv()
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-DAHUA_RTSP_URL = os.getenv(
-    "DAHUA_RTSP_URL",
-    os.getenv("RTSP_URL", "rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1"),
-)
+# No default: the URL carries the camera's login, so it must come from .env
+# (see .env.example). Unset means the Dahua stream stays off.
+DAHUA_RTSP_URL = os.getenv("DAHUA_RTSP_URL", os.getenv("RTSP_URL", ""))
 KINECT_SOURCE = os.getenv("KINECT_SOURCE", "simulated")  # "0", "1", rtsp url, or "simulated"
+
+
+def _redact_url(url: str) -> str:
+    """Camera URL with its password replaced by ***, for logs and responses."""
+    return re.sub(r"(://[^:/@]*:)[^@]*@", r"\1***@", url)
 
 # Shared secret expected from packages/api (X-Vision-Token header). No
 # insecure default: an empty value means every protected route below refuses.
@@ -72,8 +77,12 @@ def dahua_capture_loop() -> None:
     global _latest_dahua_frame, _dahua_ok
     encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
 
+    if not DAHUA_RTSP_URL:
+        print("[dahua] DAHUA_RTSP_URL is not set in .env; Dahua stream disabled.")
+        return
+
     while True:
-        print(f"[dahua] Connecting to {DAHUA_RTSP_URL} …")
+        print(f"[dahua] Connecting to {_redact_url(DAHUA_RTSP_URL)} …")
         cap = cv2.VideoCapture(DAHUA_RTSP_URL, cv2.CAP_FFMPEG)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
@@ -178,7 +187,7 @@ def kinect_capture_loop() -> None:
     frame_count = 0
     while True:
         if is_device:
-            print(f"[kinect] Opening video source {source} …")
+            print(f"[kinect] Opening video source {_redact_url(str(source))} …")
             cap = cv2.VideoCapture(source)
             if cap.isOpened():
                 print("[kinect] Connected to device.")
@@ -195,7 +204,7 @@ def kinect_capture_loop() -> None:
                 cap.release()
                 _kinect_ok = False
             else:
-                print(f"[kinect] Cannot open {source}, falling back to real-time depth synthesis.")
+                print(f"[kinect] Cannot open {_redact_url(str(source))}, falling back to real-time depth synthesis.")
 
         # Real-time depth generator mode
         _kinect_ok = True
@@ -208,20 +217,23 @@ def kinect_capture_loop() -> None:
 
 
 # ── MJPEG Stream Generators ───────────────────────────────────────────────────
-PLACEHOLDER = (
-    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
-    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t"
-    b"\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a"
-    b"\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\x1e"
-    b"\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f"
-    b"\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00"
-    b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xc4\x00\xb5\x10\x00"
-    b"\x02\x01\x03\x03\x02\x04\x03\x05\x05\x04\x04\x00\x00\x01}\x01\x02"
-    b"\x03\x00\x04\x11\x05\x12!1A\x06\x13Qa\x07\"q\x142\x81\x91\xa1\x08"
-    b"#B\xb1\xc1\x15R\xd1\xf0$3br\x82\t\n\x16\x17\x18\x19\x1a%&'()*456789"
-    b":CDEFGHIJSTUVWXYZcdefghijstuvwxyz\xff\xda\x00\x08\x01\x01\x00\x00?"
-    b"\x00\xfb\xd4P\x00\x00\x00\x1f\xff\xd9"
-)
+def _make_placeholder_jpeg() -> bytes:
+    """Frame streamed while a camera has no signal. Encoded by OpenCV so every
+    browser can decode it: an undecodable frame makes the page's <img> fire
+    onError, which the dashboard reports as the whole service being down."""
+    frame = np.full((360, 640, 3), (23, 15, 2), dtype=np.uint8)  # slate-950 (BGR)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    for text, scale, y, color in (
+        ("NO CAMERA SIGNAL", 0.9, 170, (241, 245, 241)),
+        ("Camera off or unreachable - retrying", 0.55, 205, (184, 163, 148)),
+    ):
+        (w, _), _ = cv2.getTextSize(text, font, scale, 2)
+        cv2.putText(frame, text, ((640 - w) // 2, y), font, scale, color, 2, cv2.LINE_AA)
+    _, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+    return buffer.tobytes()
+
+
+PLACEHOLDER = _make_placeholder_jpeg()
 
 
 def _generate_mjpeg_stream(lock: threading.Lock, frame_accessor: callable) -> Generator[bytes, None, None]:
@@ -270,8 +282,8 @@ def status() -> Response:
         "camera_ok": _dahua_ok or _kinect_ok,
         "dahua_ok": _dahua_ok,
         "kinect_ok": _kinect_ok,
-        "dahua_url": DAHUA_RTSP_URL,
-        "kinect_source": KINECT_SOURCE,
+        "dahua_url": _redact_url(DAHUA_RTSP_URL),
+        "kinect_source": _redact_url(KINECT_SOURCE),
     })
 
 
@@ -384,8 +396,8 @@ def vision_cameras() -> Response:
     if err:
         return err
     return jsonify([
-        {"camera_id": "CAM-01", "rtsp_url": DAHUA_RTSP_URL, "connected": _dahua_ok},
-        {"camera_id": "KINECT-01", "rtsp_url": KINECT_SOURCE, "connected": _kinect_ok},
+        {"camera_id": "CAM-01", "rtsp_url": _redact_url(DAHUA_RTSP_URL), "connected": _dahua_ok},
+        {"camera_id": "KINECT-01", "rtsp_url": _redact_url(KINECT_SOURCE), "connected": _kinect_ok},
     ])
 
 
