@@ -314,13 +314,41 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   app.get("/me", { preHandler: [requireAuth] }, async (request) => {
     const user = request.authUser!;
     const row = await app.sqlRead`
-      SELECT id, email, full_name, avatar_url, last_login_at, created_at
+      SELECT id, email, full_name, avatar_url, analysis_language, last_login_at, created_at
       FROM users WHERE id = ${user.sub}`;
     return {
       user: row[0],
       roles: user.roles,
       permissions: user.permissions,
     };
+  });
+
+  /**
+   * PATCH /auth/me
+   * The signed-in person's own profile: their name and the language the Live
+   * Camera analysis shows in. Either field can be sent alone.
+   */
+  const profileBody = z
+    .object({
+      fullName: z.string().trim().min(1).max(160).optional(),
+      analysisLanguage: z.enum(["en", "tl", "ceb"]).optional(),
+    })
+    .refine((b) => b.fullName !== undefined || b.analysisLanguage !== undefined, { message: "nothing_to_change" });
+
+  app.patch("/me", { preHandler: [requireAuth] }, async (request, reply) => {
+    const parsed = profileBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_profile", message: "Give a name (1 to 160 characters) or a language (en, tl or ceb)." });
+    }
+    const row = await app.sqlWrite`
+      UPDATE users
+      SET full_name = COALESCE(${parsed.data.fullName ?? null}, full_name),
+          analysis_language = COALESCE(${parsed.data.analysisLanguage ?? null}, analysis_language),
+          updated_at = now()
+      WHERE id = ${request.authUser!.sub}
+      RETURNING id, email, full_name, avatar_url, analysis_language`;
+    if (row.count === 0) return reply.code(404).send({ error: "user_not_found" });
+    return reply.send({ user: row[0] });
   });
 
   /* -------------------------------------------------------------------------- */

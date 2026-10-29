@@ -18,7 +18,8 @@ const API_BASE =
     : "http://localhost:4000");
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** `detail` is the API's own sentence about what was wrong, when it gave one. */
+  constructor(public status: number, message: string, public detail?: string) {
     super(message);
     this.name = "ApiError";
   }
@@ -64,7 +65,12 @@ async function apiFetch<T>(
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, (body as Record<string, string>).error ?? res.statusText);
+    const fields = body as Record<string, unknown>;
+    throw new ApiError(
+      res.status,
+      typeof fields.error === "string" ? fields.error : res.statusText,
+      typeof fields.message === "string" ? fields.message : undefined,
+    );
   }
   return res.json() as Promise<T>;
 }
@@ -149,6 +155,32 @@ export interface CycleSettingInfo {
 /** Set the day the flock is on today; it counts up from there. ADMIN and FARM_MANAGER only. */
 export async function saveCycleStartDay(startDay: number): Promise<CycleSettingInfo> {
   return apiFetch("/settings/cycle", { method: "PUT", body: JSON.stringify({ startDay }) });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Farm settings (Settings page)                                             */
+/*  Every write below is ADMIN or FARM_MANAGER only; others get a 403.        */
+/* -------------------------------------------------------------------------- */
+
+export interface Lighting {
+  /** When the day starts, local time, "HH:MM". */
+  dayStart: string;
+  /** When the night starts, local time, "HH:MM". */
+  nightStart: string;
+}
+
+export async function saveLighting(lighting: Lighting): Promise<Lighting> {
+  return apiFetch("/settings/lighting", { method: "PUT", body: JSON.stringify(lighting) });
+}
+
+/** The number of birds in each house. */
+export async function saveFlockSize(houses: { id: string; population: number }[]): Promise<void> {
+  await apiFetch("/settings/flock", { method: "PUT", body: JSON.stringify({ houses }) });
+}
+
+/** Change your own password. On success the API signs every session out, this one included. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiFetch("/auth/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
 }
 
 /* -------------------------------------------------------------------------- */

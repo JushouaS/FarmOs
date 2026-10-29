@@ -66,6 +66,8 @@ export interface AuthUser {
   id: string;
   email: string;
   fullName?: string | null;
+  /** The language the Live Camera analysis shows in (Settings > Account). */
+  analysisLanguage?: "en" | "tl" | "ceb";
   roles: string[];
   permissions: string[];
 }
@@ -91,6 +93,8 @@ interface AuthState {
   verifyMfaBackupCode: (code: string) => Promise<number>;
   logout: () => Promise<void>;
   refresh: () => Promise<boolean>;
+  /** Change the signed-in person's name and/or analysis language. */
+  updateProfile: (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -104,6 +108,26 @@ export function useAuth(): AuthState {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // A sign-in response carries the roles but not the name or language, so ask for them.
+  const loadProfile = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+      if (!res.ok) return;
+      const data = await res.json();
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              fullName: data.user.full_name ?? prev.fullName ?? null,
+              analysisLanguage: data.user.analysis_language ?? prev.analysisLanguage,
+            }
+          : prev,
+      );
+    } catch {
+      /* the name appears after the next page load */
+    }
+  }, []);
 
   // Hydrate from the session cookie on first mount, falling back to the
   // persisted local admin session when the API is unreachable.
@@ -123,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: data.user.id,
             email: data.user.email,
             fullName: data.user.full_name ?? data.user.fullName ?? null,
+            analysisLanguage: data.user.analysis_language ?? undefined,
             roles: data.roles,
             permissions: data.permissions,
           });
@@ -188,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: data.user.roles,
       permissions: data.user.permissions,
     });
+    void loadProfile();
   }, []);
 
   const verifyMfa = useCallback(async (token: string) => {
@@ -208,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: data.user.roles,
       permissions: data.user.permissions,
     });
+    void loadProfile();
   }, []);
 
   const verifyMfaBackupCode = useCallback(async (code: string): Promise<number> => {
@@ -228,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: data.user.roles,
       permissions: data.user.permissions,
     });
+    void loadProfile();
     return data.backupCodesRemaining ?? 0;
   }, []);
 
@@ -260,6 +288,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateProfile = useCallback(async (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => {
+    const send = () =>
+      fetch(`${API_BASE}/auth/me`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+    let res = await send();
+    if (res.status === 401) {
+      // The 15 minute access cookie may have lapsed; renew it once and retry.
+      const renewed = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" }).catch(() => null);
+      if (renewed?.ok) res = await send();
+    }
+    if (!res.ok) throw new Error("profile_not_saved");
+    const data = await res.json();
+    setUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            fullName: data.user.full_name ?? prev.fullName ?? null,
+            analysisLanguage: data.user.analysis_language ?? prev.analysisLanguage,
+          }
+        : prev,
+    );
+  }, []);
+
   const value = useMemo<AuthState>(
     () => ({
       user,
@@ -270,8 +325,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyMfaBackupCode,
       logout,
       refresh,
+      updateProfile,
     }),
-    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh],
+    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
+import { readLighting } from "../lighting.js";
 import {
   CYCLE_END_DAY,
   addDays,
@@ -265,6 +266,8 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       cycle: activeCycle,
       platform: platform[0] ?? null,
       readings: latestReadings,
+      // When the day starts and when the night starts (Settings > Light and night hours).
+      lighting: await readLighting(app),
       alerts,
       summary,
       activity,

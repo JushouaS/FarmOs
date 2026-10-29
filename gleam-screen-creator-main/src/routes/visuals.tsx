@@ -4,7 +4,7 @@ import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
-import { behaviorBreakdown, isNightCycle } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay } from "@/lib/farm/sample";
 
@@ -44,6 +44,8 @@ export function VisualsDashboardPage() {
   const overview = Route.useLoaderData() as any;
   const sample = useMemo(() => sampleForDay(overview), [overview]);
   const { farm, broilers } = sample;
+  // When the day starts and the night starts comes from Settings.
+  const lighting: LightingHours = overview?.lighting ?? DEFAULT_LIGHTING;
   const [layout, setLayout] = useState<ViewLayout>("dual");
   const [dahuaError, setDahuaError] = useState(false);
   const [kinectError, setKinectError] = useState(false);
@@ -56,7 +58,7 @@ export function VisualsDashboardPage() {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-  const nightModeActive = now ? isNightCycle(now) : false;
+  const nightModeActive = now ? isNightCycle(now, lighting) : false;
 
   // Vision service (cerebroil-stream, port 5000) on the host that served this
   // page, so a phone on the LAN gets this machine's feed instead of its own
@@ -326,7 +328,7 @@ export function VisualsDashboardPage() {
           {/* Right Inspector & Analytics Drawer Panel */}
           {/* Stacks under the feeds below lg (2-up on tablets), docks right from lg */}
           <aside className="grid gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 sm:grid-cols-2 sm:p-4 lg:flex lg:w-72 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-t-0 lg:border-l lg:p-3">
-            <CameraAnalysis />
+            <CameraAnalysis lighting={lighting} />
 
             {/* Behavior State Breakdown Widget */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
@@ -337,7 +339,7 @@ export function VisualsDashboardPage() {
                 </span>
                 <time
                   dateTime={now?.toISOString()}
-                  title={`Local time. Day is 5:00 AM to 4:59 PM, night is the rest. It is ${nightModeActive ? "night" : "day"} now.`}
+                  title={`Local time. Day runs from ${clock12(lighting.dayStart)} until ${clock12(lighting.nightStart)}, night is the rest. It is ${nightModeActive ? "night" : "day"} now.`}
                   className="-my-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[var(--text-secondary)]"
                 >
                   {now

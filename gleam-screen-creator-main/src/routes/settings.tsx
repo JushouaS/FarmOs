@@ -1,7 +1,13 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
+import { AccountSection } from "@/components/farm/AccountSection";
+import { FlockSizeSection } from "@/components/farm/FlockSizeSection";
+import { LightingSection } from "@/components/farm/LightingSection";
+import { Block, Hint, MonoVal, Row, SaveRow, Section, Toggle, useSaver } from "@/components/farm/SettingsParts";
 import { ApiError, saveCycleStartDay, saveNotificationPreferences, type NotificationPreference } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
+import { DEFAULT_LIGHTING } from "@/lib/farm/dataset";
 import { getNotificationPreferences, getOperationsOverview } from "@/lib/farm/repository";
 
 export const Route = createFileRoute("/settings")({
@@ -16,56 +22,6 @@ export const Route = createFileRoute("/settings")({
   },
   component: SettingsPage,
 });
-
-function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className="relative h-6 w-11 rounded-full transition-colors shrink-0 before:absolute before:-inset-2.5 before:content-[''] disabled:opacity-50"
-      style={{
-        background: checked ? "var(--brand)" : "var(--surface-raised)",
-        border: "1px solid var(--border-default)",
-      }}
-    >
-      <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
-    </button>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h2 className="label-section mb-3">{title}</h2>
-      <div className="cb-card overflow-hidden divide-y" style={{ borderColor: "var(--border-subtle)" }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{label}</p>
-        {sub && <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{sub}</p>}
-      </div>
-      {/* Long values (model names, unit lists) wrap right-aligned instead of
-          squeezing the label column on phones */}
-      <div className="flex min-w-0 max-w-[55%] justify-end text-right [overflow-wrap:anywhere]">{children}</div>
-    </div>
-  );
-}
-
-function MonoVal({ value }: { value: string }) {
-  return (
-    <span className="font-mono text-xs font-semibold" style={{ color: "var(--cv-accent)" }}>{value}</span>
-  );
-}
 
 /* The day the flock is on. The start day is the one setting; today's day counts up
  * from it, and every page that shows a day, a weight target or a growth chart
@@ -119,7 +75,7 @@ function CycleDaySection({ cycle }: { cycle: any }) {
 
   return (
     <Section title="Grow-out Day">
-      <div className="px-4 py-4 sm:px-5">
+      <Block>
         <label htmlFor="start-day" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
           Start day
         </label>
@@ -169,7 +125,7 @@ function CycleDaySection({ cycle }: { cycle: any }) {
             {note.text}
           </p>
         )}
-      </div>
+      </Block>
       <Row label="Today" sub={harvest ? `Last day is ${harvest}` : undefined}>
         <MonoVal value={`Day ${today} of ${endDay} · ${left} ${left === 1 ? "day" : "days"} left`} />
       </Row>
@@ -177,95 +133,146 @@ function CycleDaySection({ cycle }: { cycle: any }) {
   );
 }
 
-/* Email and push preferences, stored per user (notification_preferences). These save
- * the choice; sending email or push is not set up yet, and the card says so. */
+/* Email and push preferences, stored per user (notification_preferences): which
+ * channels, from which severity up, and the quiet hours. These save the choice;
+ * sending email or push is not set up yet, and the card says so. */
 const CHANNELS = [
-  { channel: "email", label: "Email Alerts", sub: "Critical and warning alerts via email", fallback: true },
-  { channel: "push", label: "Push Notifications", sub: "Browser push for real-time alerts", fallback: false },
+  { channel: "email", label: "Email Alerts", sub: "Alerts at your chosen level, by email" },
+  { channel: "push", label: "Push Notifications", sub: "Browser push at your chosen level" },
 ] as const;
+
+const LEVELS = [
+  { value: "critical", label: "Critical only" },
+  { value: "warning", label: "Warning and critical" },
+  { value: "deviation", label: "Everything, including deviations" },
+] as const;
+type Level = (typeof LEVELS)[number]["value"];
+
+/** The stored severity as one of the three choices (anything milder than a warning is "everything"). */
+const levelOf = (severity: string | undefined): Level =>
+  severity === "critical" ? "critical" : severity === undefined || severity === "warning" ? "warning" : "deviation";
+
+const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : "");
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function NotificationsSection({ stored }: { stored: NotificationPreference[] | null }) {
   const router = useRouter();
+  const saver = useSaver();
   const savedOn = (channel: string, fallback: boolean) => stored?.find((p) => p.channel === channel)?.enabled ?? fallback;
-  const savedEmail = savedOn("email", true);
-  const savedPush = savedOn("push", false);
-  const [on, setOn] = useState({ email: savedEmail, push: savedPush });
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  // The level and quiet hours are shared by email and push, so they are read from whichever is stored.
+  const ref = stored?.find((p) => p.channel === "email") ?? stored?.find((p) => p.channel === "push");
+  const saved = {
+    email: savedOn("email", true),
+    push: savedOn("push", false),
+    level: levelOf(ref?.minSeverity),
+    quietOn: Boolean(ref?.quietHoursStart && ref?.quietHoursEnd),
+    quietStart: hhmm(ref?.quietHoursStart) || "22:00",
+    quietEnd: hhmm(ref?.quietHoursEnd) || "05:00",
+  };
+  const key = JSON.stringify(saved);
+  const [on, setOn] = useState(saved);
 
   // Follow what is saved (after saving, or when the page loads).
-  useEffect(() => setOn({ email: savedEmail, push: savedPush }), [savedEmail, savedPush]);
+  useEffect(() => setOn(saved), [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dirty = on.email !== savedEmail || on.push !== savedPush;
+  const dirty = JSON.stringify(on) !== key;
+  const quietValid = !on.quietOn || (HHMM.test(on.quietStart) && HHMM.test(on.quietEnd) && on.quietStart !== on.quietEnd);
   const unavailable = stored === null;
+  const change = (patch: Partial<typeof on>) => {
+    saver.setNote(null);
+    setOn((p) => ({ ...p, ...patch }));
+  };
 
   const save = async () => {
-    if (!dirty || busy || stored === null) return;
-    setBusy(true);
-    setNote(null);
-    try {
+    if (!dirty || !quietValid || stored === null) return;
+    const ok = await saver.run(() => {
       // The API replaces the whole list, so the other channels are sent back as they are.
       const rows: NotificationPreference[] = [
         ...stored.filter((p) => p.channel !== "email" && p.channel !== "push"),
-        ...CHANNELS.map(({ channel }) => {
-          const current = stored.find((p) => p.channel === channel);
-          return {
-            channel,
-            enabled: on[channel],
-            // New rows follow the wording on the card: critical and warning alerts.
-            minSeverity: current?.minSeverity ?? "warning",
-            quietHoursStart: current?.quietHoursStart ?? null,
-            quietHoursEnd: current?.quietHoursEnd ?? null,
-          };
-        }),
+        ...CHANNELS.map(({ channel }) => ({
+          channel,
+          enabled: on[channel],
+          minSeverity: on.level,
+          quietHoursStart: on.quietOn ? on.quietStart : null,
+          quietHoursEnd: on.quietOn ? on.quietEnd : null,
+        })),
       ];
-      await saveNotificationPreferences(rows);
-      await router.invalidate();
-      setNote({ ok: true, text: "Saved." });
-    } catch {
-      setNote({ ok: false, text: "Could not save. Check the connection and try again." });
-    } finally {
-      setBusy(false);
-    }
+      return saveNotificationPreferences(rows);
+    }, "Saved.");
+    if (ok) await router.invalidate();
   };
 
   return (
     <Section title="Notifications">
       {CHANNELS.map(({ channel, label, sub }) => (
         <Row key={channel} label={label} sub={sub}>
-          <Toggle
-            label={label}
-            checked={on[channel]}
-            disabled={unavailable}
-            onChange={(v) => { setNote(null); setOn((p) => ({ ...p, [channel]: v })); }}
-          />
+          <Toggle label={label} checked={on[channel]} disabled={unavailable} onChange={(v) => change({ [channel]: v })} />
         </Row>
       ))}
-      <div className="px-4 py-4 sm:px-5">
-        <p className="text-xs" style={{ color: unavailable ? "var(--status-red-text)" : "var(--text-tertiary)" }}>
+      <Block>
+        <label htmlFor="alert-level" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          Send me
+        </label>
+        <select
+          id="alert-level"
+          value={on.level}
+          disabled={unavailable}
+          onChange={(e) => change({ level: e.target.value as Level })}
+          className="cb-input mt-1.5 block w-full text-sm disabled:opacity-60"
+        >
+          {LEVELS.map((l) => (
+            <option key={l.value} value={l.value}>{l.label}</option>
+          ))}
+        </select>
+      </Block>
+      <Row label="Quiet hours" sub="Hold back alerts below critical during these hours">
+        <Toggle label="Quiet hours" checked={on.quietOn} disabled={unavailable} onChange={(v) => change({ quietOn: v })} />
+      </Row>
+      {on.quietOn && (
+        <Block>
+          <div className="flex flex-wrap gap-5">
+            {([["quiet-start", "From", "quietStart"], ["quiet-end", "Until", "quietEnd"]] as const).map(([id, label, field]) => (
+              <div key={id}>
+                <label htmlFor={id} className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{label}</label>
+                <input
+                  id={id}
+                  type="time"
+                  value={on[field]}
+                  disabled={unavailable}
+                  onChange={(e) => change({ [field]: e.target.value })}
+                  aria-invalid={!quietValid}
+                  className="cb-input mt-1.5 block w-36 font-mono text-sm disabled:opacity-60"
+                />
+              </div>
+            ))}
+          </div>
+          {!quietValid && <Hint tone="error">Give both times, and make them different.</Hint>}
+        </Block>
+      )}
+      <Block>
+        <Hint tone={unavailable ? "error" : undefined}>
           {unavailable
             ? "Could not load your saved preferences. Refresh the page to try again."
-            : "Your choice is saved to your account. Sending email and push is not set up yet, so no messages go out."}
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button type="button" onClick={save} disabled={!dirty || busy || unavailable} className="btn-primary tap disabled:opacity-50">
-            {busy ? "Saving…" : "Save Changes"}
-          </button>
-          {note && (
-            <span role="status" className="text-sm font-semibold" style={{ color: note.ok ? "var(--status-green-text)" : "var(--status-red-text)" }}>
-              {note.text}
-            </span>
-          )}
-        </div>
-      </div>
+            : "Your choices are saved to your account. Sending email and push is not set up yet, so no messages go out."}
+        </Hint>
+        <SaveRow onSave={save} busy={saver.busy} disabled={!dirty || !quietValid || unavailable} note={saver.note} />
+      </Block>
     </Section>
   );
 }
 
 function SettingsPage() {
-  // The cycle comes from the API (/operations/overview); notification choices from /notifications/preferences.
-  const { overview, prefs } = Route.useLoaderData() as { overview: any; prefs: NotificationPreference[] | null };
+  const { overview, prefs } = Route.useLoaderData() as {
+    overview: any;
+    prefs: NotificationPreference[] | null;
+  };
+  const { user } = useAuth();
   const cycle = overview?.cycle ?? null;
+  // One pen: the house the live camera watches (the first house if none is named).
+  const houses: any[] = overview?.houses ?? [];
+  const house = houses.find((h) => h.id === overview?.cluster?.houseId) ?? houses[0] ?? null;
+  // Farm-wide settings are for administrators and farm managers; everyone can change their own account.
+  const canManage = Boolean(user?.roles?.some((r) => r === "ADMIN" || r === "FARM_MANAGER"));
 
   return (
     <AppShell>
@@ -278,11 +285,17 @@ function SettingsPage() {
         </p>
       </div>
 
-      {/* Responsive grid: 1 col mobile, 2 col lg */}
+      {/* Responsive: one column on a phone, two on a wide screen */}
       <div className="grid items-start gap-6 grid-cols-1 lg:grid-cols-2">
-        <CycleDaySection cycle={cycle} />
-
-        <NotificationsSection stored={prefs} />
+        <div className="space-y-6">
+          <CycleDaySection cycle={cycle} />
+          <FlockSizeSection house={house} canManage={canManage} />
+          <LightingSection lighting={overview?.lighting ?? DEFAULT_LIGHTING} canManage={canManage} />
+        </div>
+        <div className="space-y-6">
+          <AccountSection />
+          <NotificationsSection stored={prefs} />
+        </div>
       </div>
     </AppShell>
   );

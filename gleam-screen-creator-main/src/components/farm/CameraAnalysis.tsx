@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Info, Languages, Loader2, OctagonAlert, ScanSearch } from "lucide-react";
 import { ApiError, scanCamera } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
-import { isNightCycle } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import {
   CHROME,
   LANGUAGES,
@@ -55,23 +55,28 @@ function readLang(): Lang {
   return "en";
 }
 
-export function CameraAnalysis() {
-  const { refresh } = useAuth();
+export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: LightingHours }) {
+  const { refresh, user, updateProfile } = useAuth();
   const [lang, setLang] = useState<Lang>("en");
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);
   const [scan, setScan] = useState<{ result: ScanResult; at: Date; findings: Finding[] } | null>(null);
 
+  // The language is the account's (Settings > Account), and follows the person
+  // across devices. Until it is known, the last choice made in this browser.
   // Read after mount so the server render and the first client render match.
-  useEffect(() => setLang(readLang()), []);
+  const savedLang = user?.analysisLanguage;
+  useEffect(() => setLang(savedLang ?? readLang()), [savedLang]);
 
   const chooseLang = (next: Lang) => {
     setLang(next);
     try {
       localStorage.setItem(LANG_KEY, next);
     } catch {
-      /* not saved; still applies for this visit */
+      /* not saved here; still applies for this visit */
     }
+    // Keep the account's language in step with the choice made on the panel.
+    if (next !== savedLang) updateProfile({ analysisLanguage: next }).catch(() => {});
   };
 
   const run = async () => {
@@ -91,7 +96,7 @@ export function CameraAnalysis() {
         }
       }
       const at = new Date();
-      setScan({ result, at, findings: buildFindings(result, isNightCycle(at)) });
+      setScan({ result, at, findings: buildFindings(result, isNightCycle(at, lighting)) });
     } catch (err) {
       setError(errorKeyFor(err));
     } finally {
