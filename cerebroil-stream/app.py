@@ -47,6 +47,12 @@ VISION_SERVICE_TOKEN = os.getenv("VISION_SERVICE_TOKEN", "")
 JPEG_QUALITY   = 75       # 70-80% is optimal for LAN MJPEG
 FRAME_TIMEOUT  = 5.0      # seconds before camera reconnect
 RETRY_DELAY    = 3.0      # seconds between reconnect attempts
+# A camera that changes its encoder settings (resolution, frame rate, codec)
+# can leave an open connection delivering nothing new, or the same picture
+# over and over. If the decoded picture has not changed for this long, the
+# stream is treated as dead: reconnect, and show "no signal" meanwhile.
+PICTURE_STALL  = 12.0     # seconds without a changed picture
+IO_TIMEOUT_MS  = 8000     # open/read timeout handed to OpenCV's FFmpeg backend
 SUS_CSV        = Path("sus_responses") / "responses.csv"
 
 app = Flask(__name__)
@@ -55,6 +61,19 @@ app = Flask(__name__)
 _dahua_lock          = threading.Lock()
 _latest_dahua_frame: bytes | None = None
 _dahua_ok            = False
+_dahua_changed_at    = 0.0     # time.monotonic() when the picture last changed
+
+
+def _dahua_alive() -> bool:
+    """Connected AND the picture is still changing (see PICTURE_STALL)."""
+    return _dahua_ok and (time.monotonic() - _dahua_changed_at) < PICTURE_STALL
+
+
+def _dahua_frame_or_none() -> bytes | None:
+    """Latest Dahua frame, or None when the stream is stale so the page shows
+    the "no signal" picture instead of a frozen last frame."""
+    return _latest_dahua_frame if _dahua_alive() else None
+
 
 _kinect_lock         = threading.Lock()
 _latest_kinect_frame: bytes | None = None
@@ -74,7 +93,7 @@ _CAMERA_SOURCES = {
 
 # ── Dahua CCTV IR Camera Loop ─────────────────────────────────────────────────
 def dahua_capture_loop() -> None:
-    global _latest_dahua_frame, _dahua_ok
+    global _latest_dahua_frame, _dahua_ok, _dahua_changed_at
     encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
 
     if not DAHUA_RTSP_URL:
@@ -83,7 +102,11 @@ def dahua_capture_loop() -> None:
 
     while True:
         print(f"[dahua] Connecting to {_redact_url(DAHUA_RTSP_URL)} …")
-        cap = cv2.VideoCapture(DAHUA_RTSP_URL, cv2.CAP_FFMPEG)
+        cap = cv2.VideoCapture(
+            DAHUA_RTSP_URL,
+            cv2.CAP_FFMPEG,
+            [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, IO_TIMEOUT_MS, cv2.CAP_PROP_READ_TIMEOUT_MSEC, IO_TIMEOUT_MS],
+        )
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         if not cap.isOpened():
@@ -92,9 +115,12 @@ def dahua_capture_loop() -> None:
             time.sleep(RETRY_DELAY)
             continue
 
-        print("[dahua] Connected.")
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"[dahua] Connected ({w}x{h}).")
         _dahua_ok = True
         last_frame_time = time.monotonic()
+        _dahua_changed_at = last_frame_time
+        last_signature: bytes | None = None
 
         while True:
             ret, frame = cap.read()
@@ -106,7 +132,21 @@ def dahua_capture_loop() -> None:
                 time.sleep(0.01)
                 continue
 
-            last_frame_time = time.monotonic()
+            now = time.monotonic()
+            last_frame_time = now
+
+            # Cheap fingerprint of the picture (a sparse sample of pixels).
+            # Real cameras have sensor noise, so a live picture changes
+            # constantly; an identical one for PICTURE_STALL seconds means
+            # the stream is stuck.
+            signature = frame[::48, ::48].tobytes()
+            if signature != last_signature:
+                last_signature = signature
+                _dahua_changed_at = now
+            elif now - _dahua_changed_at > PICTURE_STALL:
+                print(f"[dahua] Picture unchanged for {now - _dahua_changed_at:.0f}s — reconnecting …")
+                break
+
             _, buffer = cv2.imencode(".jpg", frame, encode_params)
             with _dahua_lock:
                 _latest_dahua_frame = buffer.tobytes()
@@ -261,7 +301,7 @@ def index() -> str:
 def video_feed_dahua() -> Response:
     """Overhead Dahua IR CCTV stream."""
     return Response(
-        _generate_mjpeg_stream(_dahua_lock, lambda: _latest_dahua_frame),
+        _generate_mjpeg_stream(_dahua_lock, _dahua_frame_or_none),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
@@ -279,8 +319,8 @@ def video_feed_kinect() -> Response:
 def status() -> Response:
     """Status probe for both Dahua and Kinect streams."""
     return jsonify({
-        "camera_ok": _dahua_ok or _kinect_ok,
-        "dahua_ok": _dahua_ok,
+        "camera_ok": _dahua_alive() or _kinect_ok,
+        "dahua_ok": _dahua_alive(),
         "kinect_ok": _kinect_ok,
         "dahua_url": _redact_url(DAHUA_RTSP_URL),
         "kinect_source": _redact_url(KINECT_SOURCE),
@@ -366,13 +406,13 @@ def _resolve_camera(camera_id: str) -> str | None:
 
 
 def _connected(source: str) -> bool:
-    return _dahua_ok if source == "dahua" else _kinect_ok
+    return _dahua_alive() if source == "dahua" else _kinect_ok
 
 
 def _latest_frame_bytes(source: str) -> bytes | None:
     if source == "dahua":
         with _dahua_lock:
-            return _latest_dahua_frame
+            return _dahua_frame_or_none()
     with _kinect_lock:
         return _latest_kinect_frame
 
@@ -396,7 +436,7 @@ def vision_cameras() -> Response:
     if err:
         return err
     return jsonify([
-        {"camera_id": "CAM-01", "rtsp_url": _redact_url(DAHUA_RTSP_URL), "connected": _dahua_ok},
+        {"camera_id": "CAM-01", "rtsp_url": _redact_url(DAHUA_RTSP_URL), "connected": _dahua_alive()},
         {"camera_id": "KINECT-01", "rtsp_url": _redact_url(KINECT_SOURCE), "connected": _kinect_ok},
     ])
 
@@ -410,7 +450,7 @@ def vision_stream(camera_id: str) -> Response:
     if source is None:
         return jsonify({"error": "unknown_camera"}), 404
     lock = _dahua_lock if source == "dahua" else _kinect_lock
-    accessor = (lambda: _latest_dahua_frame) if source == "dahua" else (lambda: _latest_kinect_frame)
+    accessor = _dahua_frame_or_none if source == "dahua" else (lambda: _latest_kinect_frame)
     return Response(
         _generate_mjpeg_stream(lock, accessor),
         mimetype="multipart/x-mixed-replace; boundary=frame",
