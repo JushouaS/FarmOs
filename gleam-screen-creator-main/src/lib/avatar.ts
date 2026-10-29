@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { tr } from "@/lib/i18n";
 
 /**
  * Profile photo, kept in this browser.
@@ -21,8 +22,8 @@ const SIZE = 256;
 /** For the file input's `accept` attribute: JPG and PNG only. */
 export const AVATAR_ACCEPT = ".jpg,.jpeg,.png,image/jpeg,image/png";
 
-/** One line for the UI that states the rules. */
-export const AVATAR_RULES = `JPG or PNG, up to ${MAX_INPUT_MB} MB.`;
+/** One line for the UI that states the rules, in the current language. */
+export const avatarRules = () => tr("JPG or PNG, up to {mb} MB.", { mb: MAX_INPUT_MB });
 
 /** A problem the person can fix (wrong file, too big); the message is for them. */
 export class AvatarError extends Error {}
@@ -66,20 +67,20 @@ export function useAvatar(userKey: string | null | undefined): string | null {
  *  problems the person can fix. */
 export async function saveAvatar(userKey: string, file: File): Promise<void> {
   if (!ACCEPTED_TYPES.has(file.type)) {
-    throw new AvatarError("Only JPG and PNG images are allowed.");
+    throw new AvatarError(tr("Only JPG and PNG images are allowed."));
   }
   if (file.size > MAX_INPUT_BYTES) {
-    throw new AvatarError(`That image is over ${MAX_INPUT_MB} MB. Choose a smaller one.`);
+    throw new AvatarError(tr("That image is over {mb} MB. Choose a smaller one.", { mb: MAX_INPUT_MB }));
   }
   if (typeof createImageBitmap === "undefined") {
-    throw new AvatarError("This browser can't process images. Try a current Chrome, Edge, Firefox or Safari.");
+    throw new AvatarError(tr("This browser can't process images. Try a current Chrome, Edge, Firefox or Safari."));
   }
 
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   } catch {
-    throw new AvatarError("That file couldn't be read as an image.");
+    throw new AvatarError(tr("That file couldn't be read as an image."));
   }
 
   const canvas = document.createElement("canvas");
@@ -88,7 +89,7 @@ export async function saveAvatar(userKey: string, file: File): Promise<void> {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     bitmap.close();
-    throw new AvatarError("This browser can't process images.");
+    throw new AvatarError(tr("This browser can't process images."));
   }
   const side = Math.min(bitmap.width, bitmap.height);
   ctx.drawImage(
@@ -108,7 +109,7 @@ export async function saveAvatar(userKey: string, file: File): Promise<void> {
   try {
     localStorage.setItem(PREFIX + userKey, dataUrl);
   } catch {
-    throw new AvatarError("This browser wouldn't save the photo (storage is full or blocked).");
+    throw new AvatarError(tr("This browser wouldn't save the photo (storage is full or blocked)."));
   }
   notify();
 }

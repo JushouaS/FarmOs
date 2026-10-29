@@ -6,9 +6,10 @@ import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import type { BehaviorState, BroilerBird } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { sampleForDay } from "@/lib/farm/sample";
+import { T, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/flock-monitoring")({
-  head: () => ({ meta: [{ title: "Flock Tracking — Cerebroil" }] }),
+  head: () => ({ meta: [{ title: tr("Flock Tracking — Cerebroil") }] }),
   loader: () => getOperationsOverview(),
   component: FlockTrackingPage,
 });
@@ -54,22 +55,20 @@ function BirdCard({ b, stdG, day }: { b: BroilerBird; stdG: number; day: number 
               border: `1px solid ${BCOLOR[b.behavior]}33`,
             }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: BCOLOR[b.behavior] }} />
-            {b.behavior}
+            {tr(b.behavior)}
           </span>
-          {b.flag === "INACTIVE"   && <span className="badge-red">INACT</span>}
-          {b.flag === "LOW_WEIGHT" && <span className="badge-amber">LOW W</span>}
+          {b.flag === "INACTIVE"   && <span className="badge-red">{tr("INACT")}</span>}
+          {b.flag === "LOW_WEIGHT" && <span className="badge-amber">{tr("LOW W")}</span>}
         </div>
       </div>
       {/* Data rows */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <div>
-          <p className="label-section">Est. Weight</p>
-          <p className="font-mono font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>
-            {(b.weightG / 1000).toFixed(3)} kg
-          </p>
+          <p className="label-section">{tr("Est. Weight")}</p>
+          <p className="font-mono font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>{tr("{value} kg", { value: (b.weightG / 1000).toFixed(3) })}</p>
         </div>
         <div>
-          <p className="label-section">vs Day {day} Std</p>
+          <p className="label-section">{tr("vs Day {day} Std", { day })}</p>
           <p className="font-mono font-semibold mt-0.5"
             style={{ color: isAbove ? "var(--status-green)" : "var(--status-red)" }}>
             {isAbove ? "+" : ""}{delta}%
@@ -113,19 +112,16 @@ function FlockTrackingPage() {
 
   return (
     <AppShell>
-      <SampleNotice>
-        Per-bird tracking is not connected to the database yet, so this table is built-in sample data for{" "}
-        {broilers.length} birds on Day {farm.cycle.day}. The Dashboard shows the live flock.
-      </SampleNotice>
+      <SampleNotice>{tr("Per-bird tracking is not connected to the database yet, so this table is built-in sample data for {length} birds on Day {day}. The Dashboard shows the live flock.", { length: broilers.length, day: farm.cycle.day })}</SampleNotice>
 
       {/* Header */}
       <div className="mb-5">
         <div>
           <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Flock Tracking
+            {tr("Flock Tracking")}
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-            {broilers.length} birds · Pen 1 · Day{" "}
+            {broilers.length} {tr("birds · Pen 1 · Day")}{" "}
             <span className="font-mono" style={{ color: "var(--cv-accent)" }}>{farm.cycle.day}</span>
             {`/${sample.endDay}`}
           </p>
@@ -135,9 +131,9 @@ function FlockTrackingPage() {
       {/* One summary card */}
       <div className="cb-card mb-5 grid grid-cols-3 divide-x divide-[color:var(--border-subtle)]">
         {[
-          { label: "Total Birds", value: String(broilers.length), color: "var(--cv-accent)" },
-          { label: "Avg Weight",  value: `${(avgWeight/1000).toFixed(3)} kg`, color: "var(--brand)" },
-          { label: "Inactive",    value: String(inactive), color: inactive > 0 ? "var(--status-red)" : "var(--status-green)" },
+          { label: tr("Total Birds"), value: String(broilers.length), color: "var(--cv-accent)" },
+          { label: tr("Avg Weight"),  value: `${(avgWeight/1000).toFixed(3)} kg`, color: "var(--brand)" },
+          { label: tr("Inactive"),    value: String(inactive), color: inactive > 0 ? "var(--status-red)" : "var(--status-green)" },
         ].map((k) => (
           <div key={k.label} className="min-w-0 px-4 py-3.5 sm:px-6">
             <p className="label-section">{k.label}</p>
@@ -157,8 +153,8 @@ function FlockTrackingPage() {
               ? { background: "var(--brand)", color: "var(--text-inverse)" }
               : { background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
             {b === "All"
-              ? `All (${broilers.length})`
-              : `${b} (${broilers.filter((x) => matchesBehaviorFilter(x.behavior, b)).length})`}
+              ? tr("All ({length})", { length: broilers.length })
+              : `${tr(b)} (${broilers.filter((x) => matchesBehaviorFilter(x.behavior, b)).length})`}
           </button>
         ))}
       </div>
@@ -172,8 +168,8 @@ function FlockTrackingPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
-            aria-label="Search birds by ID"
+            placeholder={tr("Search")}
+            aria-label={tr("Search birds by ID")}
             className="cb-input w-full pl-9 font-mono text-sm"
           />
         </div>
@@ -182,9 +178,7 @@ function FlockTrackingPage() {
       {/* ── Mobile card list (< md) ─────────────────────────── */}
       <div className="md:hidden space-y-3">
         {sorted.map((b) => <BirdCard key={b.id} b={b} stdG={STD_G} day={farm.cycle.day} />)}
-        <p className="text-xs text-right pt-1" style={{ color: "var(--text-tertiary)" }}>
-          {sorted.length} of {broilers.length} birds
-        </p>
+        <p className="text-xs text-right pt-1" style={{ color: "var(--text-tertiary)" }}>{tr("{length} of {length2} birds", { length: sorted.length, length2: broilers.length })}</p>
       </div>
 
       {/* ── Desktop table (>= md) ──────────────────────────── */}
@@ -194,25 +188,25 @@ function FlockTrackingPage() {
           <thead>
             <tr style={{ background: "var(--surface-raised)", borderBottom: "1px solid var(--border-subtle)" }}>
               {([
-                ["id",         "Bird ID",      "w-[16%]"],
-                ["weightG",    "Est. Weight",  "w-[26%]"],
-                ["behavior",   "Status",       "w-[26%]"],
-                [null,         "vs Standard",  "w-[22%]"],
-                [null,         "Flag",         "w-[10%]"],
+                ["id",         T("Bird ID"),      "w-[16%]"],
+                ["weightG",    T("Est. Weight"),  "w-[26%]"],
+                ["behavior",   T("Status"),       "w-[26%]"],
+                [null,         T("vs Standard"),  "w-[22%]"],
+                [null,         T("Flag"),         "w-[10%]"],
               ] as [SortKey | null, string, string][]).map(([k, label, w]) => (
                 <th key={label} className={`${w} px-4 py-3 text-left`}>
                   {k ? (
                     <button onClick={() => handleSort(k)}
                       className="tap flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition-colors hover:text-[color:var(--text-primary)]"
                       style={{ color: "var(--text-tertiary)" }}>
-                      {label}
+                      {tr(label)}
                       <span style={{ color: sortKey === k ? "var(--brand)" : "var(--text-disabled)" }}>
                         {sortKey === k ? (sortAsc ? "↑" : "↓") : "↕"}
                       </span>
                     </button>
                   ) : (
                     <span className="font-mono text-[10px] font-semibold uppercase tracking-wide"
-                      style={{ color: "var(--text-tertiary)" }}>{label}</span>
+                      style={{ color: "var(--text-tertiary)" }}>{tr(label)}</span>
                   )}
                 </th>
               ))}
@@ -243,14 +237,14 @@ function FlockTrackingPage() {
                     <span className="font-mono text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       {(b.weightG / 1000).toFixed(3)}
                     </span>
-                    <span className="font-mono text-[11px] ml-1" style={{ color: "var(--text-tertiary)" }}>kg</span>
+                    <span className="font-mono text-[11px] ml-1" style={{ color: "var(--text-tertiary)" }}>{tr("kg")}</span>
                   </td>
                   {/* Behavior */}
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold"
                       style={{ color: BCOLOR[b.behavior] }}>
                       <span className="h-1.5 w-1.5 rounded-full" style={{ background: BCOLOR[b.behavior] }} />
-                      {b.behavior}
+                      {tr(b.behavior)}
                     </span>
                   </td>
                   {/* vs standard */}
@@ -262,8 +256,8 @@ function FlockTrackingPage() {
                   </td>
                   {/* Flag */}
                   <td className="px-4 py-3">
-                    {b.flag === "INACTIVE"   && <span className="badge-red">INACT</span>}
-                    {b.flag === "LOW_WEIGHT" && <span className="badge-amber">LOW W</span>}
+                    {b.flag === "INACTIVE"   && <span className="badge-red">{tr("INACT")}</span>}
+                    {b.flag === "LOW_WEIGHT" && <span className="badge-amber">{tr("LOW W")}</span>}
                   </td>
                 </tr>
               );
@@ -272,9 +266,7 @@ function FlockTrackingPage() {
         </table>
       </div>
 
-      <p className="mt-3 text-xs text-right" style={{ color: "var(--text-tertiary)" }}>
-        {sorted.length} of {broilers.length} birds
-      </p>
+      <p className="mt-3 text-xs text-right" style={{ color: "var(--text-tertiary)" }}>{tr("{length} of {length2} birds", { length: sorted.length, length2: broilers.length })}</p>
     </AppShell>
   );
 }

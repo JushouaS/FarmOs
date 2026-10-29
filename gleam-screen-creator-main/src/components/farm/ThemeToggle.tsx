@@ -1,4 +1,5 @@
 import { Icon } from "./Icon";
+import { tr } from "@/lib/i18n";
 
 export function ThemeToggle() {
   return (
@@ -14,8 +15,8 @@ export function ThemeToggle() {
         }
       }}
       className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container-highest hover:text-on-surface"
-      aria-label="Toggle light/dark mode"
-      title="Toggle light/dark mode"
+      aria-label={tr("Toggle light/dark mode")}
+      title={tr("Toggle light/dark mode")}
     >
       {/* Icon visibility is CSS-driven so SSR markup matches on both themes */}
       <span className="dark:hidden">

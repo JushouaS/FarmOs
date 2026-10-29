@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { ApiError, submitSus } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { T, tr } from "@/lib/i18n";
 
 /* The System Usability Scale (SUS) questionnaire: ten statements answered from
  * 1 (strongly disagree) to 5 (strongly agree), in the standard order because the
@@ -17,20 +18,20 @@ import { useAuth } from "@/lib/auth-context";
  * API, which appends them to a CSV (see packages/api/src/routes/feedback.ts). */
 
 export const SUS_STATEMENTS = [
-  "I think that I would like to use this system frequently.",
-  "I found the system unnecessarily complex.",
-  "I thought the system was easy to use.",
-  "I think that I would need the support of a technical person to be able to use this system.",
-  "I found the various functions in this system were well integrated.",
-  "I thought there was too much inconsistency in this system.",
-  "I would imagine that most people would learn to use this system very quickly.",
-  "I found the system very cumbersome to use.",
-  "I felt very confident using the system.",
-  "I needed to learn a lot of things before I could get going with this system.",
+  T("I think that I would like to use this system frequently."),
+  T("I found the system unnecessarily complex."),
+  T("I thought the system was easy to use."),
+  T("I think that I would need the support of a technical person to be able to use this system."),
+  T("I found the various functions in this system were well integrated."),
+  T("I thought there was too much inconsistency in this system."),
+  T("I would imagine that most people would learn to use this system very quickly."),
+  T("I found the system very cumbersome to use."),
+  T("I felt very confident using the system."),
+  T("I needed to learn a lot of things before I could get going with this system."),
 ] as const;
 
 const SCALE = [1, 2, 3, 4, 5] as const;
-const SCALE_WORDS = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"];
+const SCALE_WORDS = [T("Strongly disagree"), T("Disagree"), T("Neutral"), T("Agree"), T("Strongly agree")];
 
 const inputClass =
   "w-full rounded-xl border border-[color:var(--border-default)] bg-[color:var(--surface-raised)] px-3 py-2.5 text-sm " +
@@ -127,10 +128,10 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 401
-          ? "Your session ended. Sign in again, then send your answers."
+          ? tr("Your session ended. Sign in again, then send your answers.")
           : err instanceof ApiError && err.status === 429
-            ? "Too many reports sent recently. Please try again later."
-            : "Your answers could not be sent. Check your connection and try again.",
+            ? tr("Too many reports sent recently. Please try again later.")
+            : tr("Your answers could not be sent. Check your connection and try again."),
       );
     } finally {
       setSending(false);
@@ -151,24 +152,24 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
         {done ? (
           <div className="flex flex-col items-center px-6 pb-6 pt-10 text-center">
             <CheckCircle2 className="h-10 w-10" style={{ color: "var(--status-green-text)" }} aria-hidden="true" />
-            <DialogTitle className="mt-4 font-display text-xl">Thank you for your feedback</DialogTitle>
+            <DialogTitle className="mt-4 font-display text-xl">{tr("Thank you for your feedback")}</DialogTitle>
             <DialogDescription className="mt-2 max-w-xs">
-              Your answers help us make the system easier to use.
+              {tr("Your answers help us make the system easier to use.")}
             </DialogDescription>
             <button
               type="button"
               onClick={() => onOpenChange(false)}
               className="tap mt-8 inline-flex items-center justify-center rounded-full bg-[color:var(--brand)] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)]"
             >
-              Done
+              {tr("Done")}
             </button>
           </div>
         ) : (
           <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
             <DialogHeader className="px-5 pb-3 pr-12 pt-5 text-left">
-              <DialogTitle className="font-display text-xl">Usability survey</DialogTitle>
+              <DialogTitle className="font-display text-xl">{tr("Usability survey")}</DialogTitle>
               <DialogDescription>
-                This is the System Usability Scale (SUS). Rate each statement from 1 (strongly disagree) to 5 (strongly agree). It takes about two minutes.
+                {tr("This is the System Usability Scale (SUS). Rate each statement from 1 (strongly disagree) to 5 (strongly agree). It takes about two minutes.")}
               </DialogDescription>
               <div className="pt-2" aria-live="polite">
                 <div className="h-1.5 overflow-hidden rounded-full bg-[color:var(--surface-raised)]">
@@ -177,9 +178,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                     style={{ width: `${(answered / total) * 100}%` }}
                   />
                 </div>
-                <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  {answered} of {total} answered
-                </p>
+                <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("{answered} of {total} answered", { answered, total })}</p>
               </div>
             </DialogHeader>
 
@@ -197,12 +196,12 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                     className="rounded-2xl border bg-[color:var(--surface-raised)] p-3.5"
                     style={{ borderColor: missing ? "var(--status-red-text)" : "var(--border-default)" }}
                   >
-                    <legend className="sr-only">{`Statement ${i + 1} of ${total}: ${statement}`}</legend>
+                    <legend className="sr-only">{tr("Statement {value} of {total}: {statement}", { value: i + 1, total, statement: tr(statement) })}</legend>
                     <p aria-hidden="true" className="text-sm leading-snug">
                       <span className="mr-1.5 font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>
                         {i + 1}.
                       </span>
-                      {statement}
+                      {tr(statement)}
                     </p>
 
                     <div className="mt-3 grid grid-cols-5 gap-1.5">
@@ -218,7 +217,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                             checked={answers[i] === value}
                             onChange={() => setAnswer(i, value)}
                             className="sr-only"
-                            aria-label={`${value}, ${SCALE_WORDS[value - 1]}`}
+                            aria-label={`${value}, ${tr(SCALE_WORDS[value - 1]!)}`}
                           />
                           <span aria-hidden="true">{value}</span>
                         </label>
@@ -229,12 +228,12 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                       className="mt-1.5 flex justify-between text-[11px]"
                       style={{ color: "var(--text-tertiary)" }}
                     >
-                      <span>Strongly disagree</span>
-                      <span>Strongly agree</span>
+                      <span>{tr("Strongly disagree")}</span>
+                      <span>{tr("Strongly agree")}</span>
                     </div>
                     {missing && (
                       <p id={`sus-missing-${i}`} className="mt-1.5 text-xs" style={{ color: "var(--status-red-text)" }}>
-                        Choose a rating for this statement.
+                        {tr("Choose a rating for this statement.")}
                       </p>
                     )}
                   </fieldset>
@@ -245,7 +244,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label htmlFor="sus-respondent" className="text-sm font-medium">
-                      Name or code <span style={{ color: "var(--text-tertiary)" }}>(optional)</span>
+                      {tr("Name or code")} <span style={{ color: "var(--text-tertiary)" }}>{tr("(optional)")}</span>
                     </label>
                     <input
                       id="sus-respondent"
@@ -253,13 +252,13 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                       onChange={(e) => setRespondent(e.target.value)}
                       maxLength={80}
                       autoComplete="off"
-                      placeholder="Leave blank to stay anonymous"
+                      placeholder={tr("Leave blank to stay anonymous")}
                       className={`${inputClass} mt-1.5`}
                     />
                   </div>
                   <div>
                     <label htmlFor="sus-role" className="text-sm font-medium">
-                      Your role <span style={{ color: "var(--text-tertiary)" }}>(optional)</span>
+                      {tr("Your role")} <span style={{ color: "var(--text-tertiary)" }}>{tr("(optional)")}</span>
                     </label>
                     <input
                       id="sus-role"
@@ -267,7 +266,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                       onChange={(e) => setRole(e.target.value)}
                       maxLength={80}
                       autoComplete="off"
-                      placeholder="For example, farm manager"
+                      placeholder={tr("For example, farm manager")}
                       className={`${inputClass} mt-1.5`}
                     />
                   </div>
@@ -278,13 +277,12 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
             <div className="px-5 py-4">
               {(error || (showMissing && answered < total)) && (
                 <p role="alert" className="mb-3 text-sm" style={{ color: "var(--status-red-text)" }}>
-                  {error ?? `Answer all ${total} statements to send. ${total - answered} left.`}
+                  {error ?? tr("Answer all {total} statements to send. {value} left.", { total, value: total - answered })}
                 </p>
               )}
               {sameWarning && !error && (
                 <p role="alert" className="mb-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-                  You gave every statement the same rating. Statements 2, 4, 6, 8 and 10 are worded negatively, so
-                  please check your answers, or press Send anyway if they are right.
+                  {tr("You gave every statement the same rating. Statements 2, 4, 6, 8 and 10 are worded negatively, so please check your answers, or press Send anyway if they are right.")}
                 </p>
               )}
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -293,7 +291,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                   onClick={() => onOpenChange(false)}
                   className="tap inline-flex items-center justify-center rounded-full border border-[color:var(--border-strong)] px-5 py-2.5 text-sm font-medium transition-colors hover:bg-[color:var(--surface-raised)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)]"
                 >
-                  Cancel
+                  {tr("Cancel")}
                 </button>
                 <button
                   type="submit"
@@ -301,7 +299,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                   className="tap inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--brand)] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)] disabled:opacity-60"
                 >
                   {sending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                  {sending ? "Sending…" : sameWarning ? "Send anyway" : "Send answers"}
+                  {sending ? tr("Sending…") : sameWarning ? tr("Send anyway") : tr("Send answers")}
                 </button>
               </div>
             </div>

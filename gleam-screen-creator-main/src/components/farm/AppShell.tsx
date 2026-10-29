@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, type ReactNode } from "
 import { Link } from "@tanstack/react-router";
 import { SideNav } from "./SideNav";
 import { AccountMenu } from "./AccountMenu";
+import { LanguageMenu } from "./LanguageMenu";
 import { AlertPopups } from "./AlertPopups";
 import { useUnacknowledgedAlertCount } from "@/lib/alert-store";
 import {
@@ -14,6 +15,7 @@ import {
   Bird,
   LineChart,
 } from "lucide-react";
+import { T, tr } from "@/lib/i18n";
 
 const COLLAPSE_KEY = "cb-sidenav-collapsed";
 let collapsedCache: boolean | null = null;
@@ -57,8 +59,8 @@ function ThemeToggle() {
     <button
       onClick={toggle}
       className={TOP_BAR_ICON_BUTTON}
-      aria-label="Toggle theme"
-      title={isLight ? "Switch to dark mode" : "Switch to light mode"}
+      aria-label={tr("Toggle theme")}
+      title={isLight ? tr("Switch to dark mode") : tr("Switch to light mode")}
     >
       {isLight ? (
         <Sun className="h-4 w-4" />
@@ -82,9 +84,9 @@ function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
         <button
           onClick={onMenuOpen}
           className={`${TOP_BAR_ICON_BUTTON} lg:hidden`}
-          aria-label="Open navigation menu"
+          aria-label={tr("Open navigation menu")}
           aria-controls="app-sidenav"
-          title="Open menu"
+          title={tr("Open menu")}
         >
           <Menu className="h-4.5 w-4.5" />
         </button>
@@ -93,14 +95,15 @@ function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <LanguageMenu />
         <ThemeToggle />
 
         {/* Alert bell with badge */}
         <Link
           to="/alerts"
           className={TOP_BAR_ICON_BUTTON}
-          aria-label="View alerts"
-          title="View alerts"
+          aria-label={tr("View alerts")}
+          title={tr("View alerts")}
         >
           <Bell className="h-4 w-4" />
           {alertCount > 0 && (
@@ -122,18 +125,18 @@ function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
 
 /* ── Bottom navigation for mobile ────────────────────────── */
 const BOTTOM_ROUTES = [
-  { to: "/",                 label: "Dash",    icon: LayoutDashboard },
-  { to: "/visuals",          label: "Camera",  icon: Video },
-  { to: "/flock-monitoring", label: "Flock",   icon: Bird },
-  { to: "/telemetry",        label: "Data",    icon: LineChart },
-  { to: "/alerts",           label: "Alerts",  icon: Bell },
+  { to: "/",                 label: T("Dash"),    icon: LayoutDashboard },
+  { to: "/visuals",          label: T("Camera"),  icon: Video },
+  { to: "/flock-monitoring", label: T("Flock"),   icon: Bird },
+  { to: "/telemetry",        label: T("Data"),    icon: LineChart },
+  { to: "/alerts",           label: T("Alerts"),  icon: Bell },
 ] as const;
 
 function BottomNav() {
   const alertCount = useUnacknowledgedAlertCount();
   return (
     <nav
-      aria-label="Primary"
+      aria-label={tr("Primary")}
       className="pb-safe fixed bottom-0 inset-x-0 z-20 flex lg:hidden"
       style={{ background: "var(--surface-card)", borderTop: "1px solid var(--border-subtle)" }}
     >
@@ -157,7 +160,7 @@ function BottomNav() {
               </span>
             )}
           </span>
-          {r.label}
+          {tr(r.label)}
         </Link>
       ))}
     </nav>

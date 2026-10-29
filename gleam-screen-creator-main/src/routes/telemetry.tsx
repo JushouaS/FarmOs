@@ -24,9 +24,10 @@ import {
   Calendar,
   OctagonAlert,
 } from "lucide-react";
+import { T, localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/telemetry")({
-  head: () => ({ meta: [{ title: "Analytics - Cerebroil" }] }),
+  head: () => ({ meta: [{ title: tr("Analytics - Cerebroil") }] }),
   loader: () => getGrowthAnalytics(),
   component: AnalyticsPage,
 });
@@ -314,7 +315,7 @@ function AxisLineChart({
           fontWeight="600"
           transform={`rotate(-90, 10, ${TOP + plotH / 2})`}
         >
-          {yLabel === "g" ? "Weight (g)" : yLabel}
+          {yLabel === "g" ? tr("Weight (g)") : yLabel}
         </text>
 
         {/* Axes */}
@@ -471,9 +472,9 @@ function AxisLineChart({
           const deltaAmount =
             yLabel === "g" ? `${sign}${delta} g` : yLabel === "FCR" ? `${sign}${delta.toFixed(2)}` : `${sign}${Number(delta.toFixed(1))}`;
           const rows = [
-            xLabel === "Day" ? `Day ${hoveredPoint.x} Scan` : `${xLabel} ${hoveredPoint.x}`,
-            `Actual: ${formatVal(hoveredPoint.y)}`,
-            ...(hoveredTarget ? [`${targetLabel}: ${formatVal(hoveredTarget.y)}`, `Diff: ${deltaAmount} (${sign}${pctDelta}%)`] : []),
+            xLabel === "Day" ? tr("Day {x} Scan", { x: hoveredPoint.x }) : `${tr(xLabel)} ${hoveredPoint.x}`,
+            tr("Actual: {value}", { value: formatVal(hoveredPoint.y) }),
+            ...(hoveredTarget ? [`${tr(targetLabel)}: ${formatVal(hoveredTarget.y)}`, tr("Diff: {deltaAmount} ({sign}{pctDelta}%)", { deltaAmount, sign, pctDelta })] : []),
           ];
           // About 6.2px per character in the 10px monospace font, plus padding.
           const tipW = Math.min(Math.max(150, Math.ceil(Math.max(...rows.map((r) => r.length)) * 6.2) + 34), plotW - 8);
@@ -597,7 +598,7 @@ function AxisLineChart({
  * centre shows the slice you are on, or the biggest one when idle. */
 function DonutChart({
   segments,
-  unit = "birds",
+  unit = tr("birds"),
 }: {
   segments: { label: string; value: number; color: string }[];
   unit?: string;
@@ -670,7 +671,7 @@ function DonutChart({
         viewBox="0 0 200 200"
         className="w-full"
         role="group"
-        aria-label={`Breakdown of ${total} ${unit}. Focus or tap a segment for details.`}
+        aria-label={tr("Breakdown of {total} {unit}. Focus or tap a segment for details.", { total, unit })}
       >
         {arcs.map((arc) => {
           const on = active?.label === arc.label;
@@ -746,10 +747,10 @@ function projectedHarvestG(sample: SampleFlock): number | null {
 /** What to do about feed on this day of the grow-out (usual stages: grower, then finisher, then withdrawal before catching). */
 function feedAdvice(day: number, endDay: number): string {
   if (day >= endDay - 3)
-    return `Harvest is close (Day ${endDay}). Confirm the catching date and plan the pre-harvest feed withdrawal with the farm manager. Keep drinking water available.`;
+    return tr("Harvest is close (Day {endDay}). Confirm the catching date and plan the pre-harvest feed withdrawal with the farm manager. Keep drinking water available.", { endDay });
   if (day >= 25)
-    return `Finisher feed is in use at Day ${day}. Feed conversion naturally rises with age, so keep checking it against the target and look for feed wastage.`;
-  return `Grower feed is in use at Day ${day}. Plan the switch to Finisher pellet feed around Day 25 and keep the feeders and drinkers adjusted to the birds' height.`;
+    return tr("Finisher feed is in use at Day {day}. Feed conversion naturally rises with age, so keep checking it against the target and look for feed wastage.", { day });
+  return tr("Grower feed is in use at Day {day}. Plan the switch to Finisher pellet feed around Day 25 and keep the feeders and drinkers adjusted to the birds' height.", { day });
 }
 
 /** Share of birds within ±10% of the flock median, the Ross 308 uniformity check. */
@@ -761,10 +762,10 @@ function flockUniformity(sample: SampleFlock) {
   const pct = Math.round((within / sample.broilers.length) * 100);
   const grade =
     pct >= 85
-      ? { letter: "A", label: "High Consistency", color: "var(--cv-accent)" }
+      ? { letter: "A", label: tr("High Consistency"), color: "var(--cv-accent)" }
       : pct >= 75
-        ? { letter: "B", label: "Moderate Consistency", color: "var(--status-amber)" }
-        : { letter: "C", label: "Low Consistency", color: "var(--status-red)" };
+        ? { letter: "B", label: tr("Moderate Consistency"), color: "var(--status-amber)" }
+        : { letter: "C", label: tr("Low Consistency"), color: "var(--status-red)" };
   return { median, lower, upper, within, pct, ...grade };
 }
 
@@ -774,20 +775,18 @@ function UniformityChip({ sample }: { sample: SampleFlock }) {
     <span
       className="rounded-full px-2.5 py-1 font-mono text-xs font-semibold"
       style={{ background: tint(u.color, 12), color: u.color, border: `1px solid ${tint(u.color, 25)}` }}
-    >
-      Uniformity: {u.pct}% · {u.label}
-    </span>
+    >{tr("Uniformity: {pct}% · {label}", { pct: u.pct, label: u.label })}</span>
   );
 }
 
 /** The six brackets, as shares of the breed standard for the day (so they mean the same on Day 16 and Day 40). */
 const WEIGHT_BINS = [
-  { id: "b1", from: 0,                to: 0.85,            statusText: "At-Risk",       color: "var(--status-red)" },
-  { id: "b2", from: 0.85,             to: UNDERWEIGHT_RATIO, statusText: "Monitor",       color: "var(--status-amber)" },
-  { id: "b3", from: UNDERWEIGHT_RATIO, to: 1,               statusText: "Optimal",       color: "var(--brand)" },
-  { id: "b4", from: 1,                to: 1.08,            statusText: "On Standard",   color: "var(--brand)" },
-  { id: "b5", from: 1.08,             to: HEAVY_RATIO,     statusText: "Optimal High",  color: "var(--brand)" },
-  { id: "b6", from: HEAVY_RATIO,      to: Infinity,        statusText: "Heavy",         color: "var(--status-blue)" },
+  { id: "b1", from: 0,                to: 0.85,            statusText: T("At-Risk"),       color: "var(--status-red)" },
+  { id: "b2", from: 0.85,             to: UNDERWEIGHT_RATIO, statusText: T("Monitor"),       color: "var(--status-amber)" },
+  { id: "b3", from: UNDERWEIGHT_RATIO, to: 1,               statusText: T("Optimal"),       color: "var(--brand)" },
+  { id: "b4", from: 1,                to: 1.08,            statusText: T("On Standard"),   color: "var(--brand)" },
+  { id: "b5", from: 1.08,             to: HEAVY_RATIO,     statusText: T("Optimal High"),  color: "var(--brand)" },
+  { id: "b6", from: HEAVY_RATIO,      to: Infinity,        statusText: T("Heavy"),         color: "var(--status-blue)" },
 ];
 
 function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
@@ -816,9 +815,9 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
   const underG = stdG * UNDERWEIGHT_RATIO;
   const heavyG = stdG * HEAVY_RATIO;
   const cohorts = [
-    { label: `Target Cohort (${rangeLabel(underG, heavyG)})`, count: broilers.filter((b) => b.weightG >= underG && b.weightG <= heavyG).length, color: "var(--brand)" },
-    { label: `Underweight Cohort (< ${fmtW(underG)})`,         count: broilers.filter((b) => b.weightG < underG).length,                        color: "var(--status-amber)" },
-    { label: `Heavy Tier (≥ ${fmtW(heavyG)})`,                 count: broilers.filter((b) => b.weightG > heavyG).length,                        color: "var(--status-blue)" },
+    { label: tr("Target Cohort ({value})", { value: rangeLabel(underG, heavyG) }), count: broilers.filter((b) => b.weightG >= underG && b.weightG <= heavyG).length, color: "var(--brand)" },
+    { label: tr("Underweight Cohort (< {value})", { value: fmtW(underG) }),         count: broilers.filter((b) => b.weightG < underG).length,                        color: "var(--status-amber)" },
+    { label: tr("Heavy Tier (≥ {value})", { value: fmtW(heavyG) }),                 count: broilers.filter((b) => b.weightG > heavyG).length,                        color: "var(--status-blue)" },
   ];
 
   // Spread strip: min, median and max on one scale, with the ±10% band and the standard marked.
@@ -827,9 +826,9 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
   const scaleHi = Math.ceil((Math.max(maxWeight, stdG) + step) / step) * step;
   const pos = (g: number) => Math.min(100, Math.max(0, ((g - scaleLo) / (scaleHi - scaleLo)) * 100));
   const markers = [
-    { label: "Min",    g: minWeight, color: "var(--status-amber)" },
-    { label: "Median", g: u.median,  color: "var(--brand)" },
-    { label: "Max",    g: maxWeight, color: "var(--status-blue)" },
+    { label: tr("Min"),    g: minWeight, color: "var(--status-amber)" },
+    { label: tr("Median"), g: u.median,  color: "var(--brand)" },
+    { label: tr("Max"),    g: maxWeight, color: "var(--status-blue)" },
   ];
 
   const stat = (
@@ -855,10 +854,10 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {stat("Min Scanned", `${minWeight} g`, "var(--status-amber)", lightest.id, "var(--status-red)", "Lightest bird")}
-        {stat("Flock Median", `${u.median} g`, "var(--brand)", `${medianDelta >= 0 ? "+" : ""}${medianDelta} g`, "var(--brand)", `Ross 308 standard: ${stdG.toLocaleString()} g`)}
-        {stat("Max Scanned", `${maxWeight} g`, "var(--status-blue)", heaviest.id, "var(--status-blue)", "Heaviest bird")}
-        {stat("Flock Uniformity", `${u.pct}%`, u.color, `Grade ${u.letter}`, u.color, `${u.within}/${totalBirds} within ±10% of median`)}
+        {stat(tr("Min Scanned"), `${minWeight} g`, "var(--status-amber)", lightest.id, "var(--status-red)", tr("Lightest bird"))}
+        {stat(tr("Flock Median"), `${u.median} g`, "var(--brand)", `${medianDelta >= 0 ? "+" : ""}${medianDelta} g`, "var(--brand)", tr("Ross 308 standard: {std} g", { std: stdG.toLocaleString() }))}
+        {stat(tr("Max Scanned"), `${maxWeight} g`, "var(--status-blue)", heaviest.id, "var(--status-blue)", tr("Heaviest bird"))}
+        {stat(tr("Flock Uniformity"), `${u.pct}%`, u.color, tr("Grade {letter}", { letter: u.letter }), u.color, tr("{within}/{total} within ±10% of median", { within: u.within, total: totalBirds }))}
       </div>
 
       <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
@@ -889,12 +888,12 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
                       className="rounded-full px-2 py-0.5 text-[11px] font-medium"
                       style={{ background: tint(bin.color, 14), color: bin.color, border: `1px solid ${tint(bin.color, 35)}` }}
                     >
-                      {bin.statusText}
+                      {tr(bin.statusText)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 font-mono text-sm">
                     <span className="font-bold" style={{ color: bin.color }}>
-                      {bin.count} {bin.count === 1 ? "bird" : "birds"}
+                      {bin.count} {bin.count === 1 ? tr("bird") : tr("birds")}
                     </span>
                     <span className="tabular-nums text-xs" style={{ color: "var(--text-tertiary)" }}>({pct}%)</span>
                   </div>
@@ -913,7 +912,7 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
 
                 {isHovered && bin.birds.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
-                    <span style={{ color: "var(--text-tertiary)" }}>Bird IDs:</span>
+                    <span style={{ color: "var(--text-tertiary)" }}>{tr("Bird IDs:")}</span>
                     {bin.birds.map((id) => (
                       <span key={id} className="rounded px-1.5 py-0.5 font-bold" style={{ color: bin.color, background: tint(bin.color, 12) }}>
                         {id}
@@ -933,13 +932,13 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
         >
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <span className="label-section text-xs">Uniformity Index</span>
+              <span className="label-section text-xs">{tr("Uniformity Index")}</span>
               <span className="flex items-center gap-1 font-mono text-sm font-bold" style={{ color: u.color }}>
-                <CheckCircle2 className="h-4 w-4" /> Grade {u.letter}
+                <CheckCircle2 className="h-4 w-4" /> {tr("Grade")} {u.letter}
               </span>
             </div>
             <div className="mb-1.5 flex justify-between font-mono text-sm">
-              <span style={{ color: "var(--text-tertiary)" }}>Cohort Consistency</span>
+              <span style={{ color: "var(--text-tertiary)" }}>{tr("Cohort Consistency")}</span>
               <span className="font-bold" style={{ color: u.color }}>{u.pct}%</span>
             </div>
             <div className="relative h-3 overflow-hidden rounded-full" style={{ background: "var(--surface-raised)" }}>
@@ -951,7 +950,7 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
               <div className="absolute inset-y-0 w-px" style={{ left: "85%", background: "var(--text-secondary)" }} />
             </div>
             <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-              Ross 308 threshold: &gt;85% (marked) for uniform processing line yield.
+              {tr("Ross 308 threshold: >85% (marked) for uniform processing line yield.")}
             </p>
           </div>
 
@@ -963,14 +962,14 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
                   {c.label}
                 </span>
                 <span className="font-mono font-bold" style={{ color: c.color }}>
-                  {c.count} {c.count === 1 ? "bird" : "birds"} ({Math.round((c.count / totalBirds) * 100)}%)
+                  {c.count} {c.count === 1 ? tr("bird") : tr("birds")} ({Math.round((c.count / totalBirds) * 100)}%)
                 </span>
               </div>
             ))}
           </div>
 
           <div className="border-t pt-4" style={{ borderColor: "var(--border-subtle)" }}>
-            <p className="label-section text-xs">Weight Spread</p>
+            <p className="label-section text-xs">{tr("Weight Spread")}</p>
             <div className="relative mt-8 h-3 rounded-full" style={{ background: "var(--surface-raised)" }}>
               <div
                 className="absolute inset-y-0 rounded-full"
@@ -984,9 +983,7 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
               <span
                 className="absolute -top-6 -translate-x-1/2 whitespace-nowrap font-mono text-[11px]"
                 style={{ left: `${pos(stdG)}%`, color: "var(--status-amber)" }}
-              >
-                Std {stdG.toLocaleString()} g
-              </span>
+              >{tr("Std {stdG} g", { stdG: stdG.toLocaleString() })}</span>
               {markers.map((m) => (
                 <span
                   key={m.label}
@@ -1007,14 +1004,10 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
                 </div>
               ))}
             </div>
-            <p className="mt-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-              Shaded band: ±10% of the median, {Math.round(u.lower)}–{Math.round(u.upper)} g.
-            </p>
+            <p className="mt-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("Shaded band: ±10% of the median, {Math}–{Math2} g.", { Math: Math.round(u.lower), Math2: Math.round(u.upper) })}</p>
           </div>
 
-          <p className="mt-auto border-t pt-4 text-xs leading-relaxed" style={{ borderColor: "var(--border-subtle)", color: "var(--text-tertiary)" }}>
-            High flock uniformity correlates with balanced feeder access and consistent meat harvest margins at Day {sample.endDay}.
-          </p>
+          <p className="mt-auto border-t pt-4 text-xs leading-relaxed" style={{ borderColor: "var(--border-subtle)", color: "var(--text-tertiary)" }}>{tr("High flock uniformity correlates with balanced feeder access and consistent meat harvest margins at Day {endDay}.", { endDay: sample.endDay })}</p>
         </div>
       </div>
     </div>
@@ -1075,7 +1068,7 @@ function DiagnosticsCard({
           clearInterval(timers.current.tick);
           timers.current.done = setTimeout(() => {
             setAnalysisState("ready");
-            setProcessedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+            setProcessedAt(new Date().toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit" }));
           }, 250);
           return 100;
         }
@@ -1161,7 +1154,7 @@ function DiagnosticsCard({
               />
             </div>
             <div className="flex justify-between font-mono text-[10px]" style={{ color: "var(--text-tertiary)" }}>
-              <span>Step {stepIdx + 1} of {steps.length}</span>
+              <span>{tr("Step {value} of {length}", { value: stepIdx + 1, length: steps.length })}</span>
               <span>{progress}%</span>
             </div>
           </div>
@@ -1183,9 +1176,7 @@ function DiagnosticsCard({
                 <h2 className="text-base font-bold leading-none" style={{ color: "var(--text-primary)" }}>
                   {reportTitle}
                 </h2>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                  Generated at {processedAt ?? "just now"} · {evaluated}
-                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Generated at {value} · {evaluated}", { value: processedAt ?? tr("just now"), evaluated })}</p>
               </div>
             </div>
 
@@ -1199,7 +1190,7 @@ function DiagnosticsCard({
               }}
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              <span>Re-run Analysis</span>
+              <span>{tr("Re-run Analysis")}</span>
             </button>
           </div>
 
@@ -1242,50 +1233,50 @@ function GrowthAnalysisSection({
   const hi = fmtW(stdW * HEAVY_RATIO);
   return (
     <DiagnosticsCard
-      title="Automated Growth Diagnostics & Trajectory"
-      description={`Run multi-factor AI diagnostic on current ${total}-bird depth-scan telemetry, Ross 308 standard variance, cohort uniformity, and feed efficiency projections for Day ${endDay} harvest.`}
-      chips={[`${total} Scans Ready`, `Day ${day} Cohort`, "Ross 308 Benchmark", `FCR ${farm.feed.fcr} Correlation`]}
-      buttonLabel="Process & Analyze Growth"
-      processingTitle="Processing Telemetry & Growth Curves..."
+      title={tr("Automated Growth Diagnostics & Trajectory")}
+      description={tr("Run multi-factor AI diagnostic on current {total}-bird depth-scan telemetry, Ross 308 standard variance, cohort uniformity, and feed efficiency projections for Day {endDay} harvest.", { total, endDay })}
+      chips={[tr("{total} Scans Ready", { total }), tr("Day {day} Cohort", { day }), tr("Ross 308 Benchmark"), tr("FCR {fcr} Correlation", { fcr: farm.feed.fcr })]}
+      buttonLabel={tr("Process & Analyze Growth")}
+      processingTitle={tr("Processing Telemetry & Growth Curves...")}
       steps={[
-        `Ingesting ${total} depth-scan weight and morphometric records...`,
-        `Benchmarking flock curve against Ross 308 Day ${day} standards (${signedVar} delta)...`,
-        "Evaluating cohort uniformity & clustering at drinker lines...",
-        "Synthesizing actionable harvest yield projections...",
+        tr("Ingesting {total} depth-scan weight and morphometric records...", { total }),
+        tr("Benchmarking flock curve against Ross 308 Day {day} standards ({signedVar} delta)...", { day, signedVar }),
+        tr("Evaluating cohort uniformity & clustering at drinker lines..."),
+        tr("Synthesizing actionable harvest yield projections..."),
       ]}
-      reportTitle="Flock Growth Diagnostic Report"
-      evaluated={`${total} Broiler Depth-Scans Evaluated`}
+      reportTitle={tr("Flock Growth Diagnostic Report")}
+      evaluated={tr("{total} Broiler Depth-Scans Evaluated", { total })}
     >
           {/* Diagnostic Key Takeaway Scorecards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">Growth Trajectory</p>
+              <p className="label-section text-[10px]">{tr("Growth Trajectory")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: above ? "var(--status-green)" : variancePercent > -5 ? "var(--status-amber)" : "var(--status-red)" }}>{signedVar}</p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{above ? "Above" : "Below"} Ross 308 standard</p>
+              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{value} Ross 308 standard", { value: above ? tr("Above") : tr("Below") })}</p>
             </div>
 
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">Optimal Band</p>
+              <p className="label-section text-[10px]">{tr("Optimal Band")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: "var(--brand)" }}>{optPct}%</p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{wd.Optimal} / {total} birds on target</p>
+              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Optimal} / {total} birds on target", { Optimal: wd.Optimal, total })}</p>
             </div>
 
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">At-Risk Cohort</p>
+              <p className="label-section text-[10px]">{tr("At-Risk Cohort")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: wd.Underweight > 0 ? "var(--status-amber)" : "var(--status-green)" }}>
-                {wd.Underweight} {wd.Underweight === 1 ? "Bird" : "Birds"}
+                {wd.Underweight} {wd.Underweight === 1 ? tr("Bird") : tr("Birds")}
               </p>
               <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                {wd.Underweight > 0 ? `${lightest.id} (${lightest.weightG.toLocaleString()} g) flagged` : "No underweight birds"}
+                {wd.Underweight > 0 ? tr("{id} ({value} g) flagged", { id: lightest.id, value: lightest.weightG.toLocaleString() }) : tr("No underweight birds")}
               </p>
             </div>
 
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">Projected Harvest</p>
+              <p className="label-section text-[10px]">{tr("Projected Harvest")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: "var(--cv-accent)" }}>
-                {harvestG ? `${(harvestG / 1000).toFixed(2)} kg` : "—"}
+                {harvestG ? tr("{value} kg", { value: (harvestG / 1000).toFixed(2) }) : "—"}
               </p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>Estimated Day {endDay} harvest</p>
+              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Estimated Day {endDay} harvest", { endDay })}</p>
             </div>
           </div>
 
@@ -1293,21 +1284,21 @@ function GrowthAnalysisSection({
           <div className="space-y-3">
             <InsightCard
               level={above ? "positive" : variancePercent > -5 ? "info" : "warning"}
-              title={`Flock is ${Math.abs(variancePercent)}% ${above ? "above" : "below"} Ross 308 breed standard`}
-              body={`Average weight of ${avgW} g at Day ${day} ${above ? "exceeds" : "is under"} the standard benchmark of ${stdW} g by ${Math.abs(wDelta)} g. ${above ? "Growth acceleration reflects optimal feed conversion and house environmental controls." : "Check feed access, water flow and house temperature."}`}
+              title={tr("Flock is {value}% {value2} Ross 308 breed standard", { value: Math.abs(variancePercent), value2: above ? tr("above") : tr("below") })}
+              body={tr("Average weight of {avgW} g at Day {day} {value} the standard benchmark of {stdW} g by {value2} g. {value3}", { avgW, day, value: above ? tr("exceeds") : tr("is under"), stdW, value2: Math.abs(wDelta), value3: above ? tr("Growth acceleration reflects optimal feed conversion and house environmental controls.") : tr("Check feed access, water flow and house temperature.") })}
             />
 
             <InsightCard
               level={optPct >= 80 ? "positive" : "info"}
-              title={`${optPct}% of birds in optimal weight range (${rangeLabel(stdW * UNDERWEIGHT_RATIO, stdW * HEAVY_RATIO)})`}
-              body={`${wd.Optimal} of ${total} birds are clustered in the target growth bracket for Day ${day}. Standard deviation is ${sd <= avgW * 0.1 ? "low" : "moderate"} (±${sd} g), ${sd <= avgW * 0.1 ? "showing good flock uniformity" : "so keep an eye on the lighter birds"}.`}
+              title={tr("{optPct}% of birds in optimal weight range ({value})", { optPct, value: rangeLabel(stdW * UNDERWEIGHT_RATIO, stdW * HEAVY_RATIO) })}
+              body={tr("{Optimal} of {total} birds are clustered in the target growth bracket for Day {day}. Standard deviation is {value} (±{sd} g), {value2}.", { Optimal: wd.Optimal, total, day, value: sd <= avgW * 0.1 ? tr("low") : tr("moderate"), sd, value2: sd <= avgW * 0.1 ? tr("showing good flock uniformity") : tr("so keep an eye on the lighter birds") })}
             />
 
             {wd.Underweight > 0 && (
               <InsightCard
                 level="warning"
-                title={`${wd.Underweight} underweight ${wd.Underweight === 1 ? "bird" : "birds"} flagged for feeder access`}
-                body={`Bird ${lightest.id} (${lightest.weightG.toLocaleString()} g) is currently ${Math.max(0, avgW - lightest.weightG)} g below the flock average. Telemetry indicates lower movement frequency near Zone CAM-01. Recommend adjusting drinker nipple height and confirming feed pan distribution.`}
+                title={tr("{Underweight} underweight {value} flagged for feeder access", { Underweight: wd.Underweight, value: wd.Underweight === 1 ? tr("bird") : tr("birds") })}
+                body={tr("Bird {id} ({value} g) is currently {value2} g below the flock average. Telemetry indicates lower movement frequency near Zone CAM-01. Recommend adjusting drinker nipple height and confirming feed pan distribution.", { id: lightest.id, value: lightest.weightG.toLocaleString(), value2: Math.max(0, avgW - lightest.weightG) })}
               />
             )}
 
@@ -1321,9 +1312,7 @@ function GrowthAnalysisSection({
                 <TrendingUp className="h-3.5 w-3.5" />
               </span>
               <div>
-                <p className="text-sm font-semibold leading-snug" style={{ color: "var(--brand)" }}>
-                  Operational Recommendation for Day {day}
-                </p>
+                <p className="text-sm font-semibold leading-snug" style={{ color: "var(--brand)" }}>{tr("Operational Recommendation for Day {day}", { day })}</p>
                 <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
                   {feedAdvice(day, endDay)}
                 </p>
@@ -1377,71 +1366,63 @@ function ConditionsAnalysisSection({
 
   // One plain recommendation, put together from whatever is off.
   const actions: string[] = [];
-  if (huddling > 0) actions.push("check the drinker line and the ventilation where birds are huddling");
-  if (inactPct > 20) actions.push("walk the house and inspect the inactive birds");
-  if (fcr > fcrTarget) actions.push("review feed distribution and wastage");
-  if (outOfRange.length > 0) actions.push(`bring ${outOfRange.map((e) => e.title.toLowerCase()).join(" and ")} back into range`);
+  if (huddling > 0) actions.push(tr("check the drinker line and the ventilation where birds are huddling"));
+  if (inactPct > 20) actions.push(tr("walk the house and inspect the inactive birds"));
+  if (fcr > fcrTarget) actions.push(tr("review feed distribution and wastage"));
+  if (outOfRange.length > 0) actions.push(tr("bring {sensors} back into range", { sensors: outOfRange.map((e) => e.title.toLowerCase()).join(tr(" and ")) }));
   const recommendation =
     actions.length > 0
-      ? `Next round: ${actions.join("; ")}.`
-      : "Feed, behavior and the house environment are all on target. Keep the current feed, ventilation and lighting routine.";
+      ? tr("Next round: {actions}.", { actions: actions.join("; ") })
+      : tr("Feed, behavior and the house environment are all on target. Keep the current feed, ventilation and lighting routine.");
 
   return (
     <DiagnosticsCard
-      title="Automated Conditions Diagnostics"
-      description="Run a multi-factor diagnostic across feed efficiency, flock behavior and house environment, and see how the three affect each other."
-      chips={[`FCR ${fcr}`, `${total} Birds Scanned`, `${sensors.length} Sensors`, `Day ${day}`]}
-      buttonLabel="Process & Analyze Conditions"
-      processingTitle="Processing Feed, Behavior & Environment..."
+      title={tr("Automated Conditions Diagnostics")}
+      description={tr("Run a multi-factor diagnostic across feed efficiency, flock behavior and house environment, and see how the three affect each other.")}
+      chips={[tr("FCR {fcr}", { fcr }), tr("{total} Birds Scanned", { total }), tr("{length} Sensors", { length: sensors.length }), tr("Day {day}", { day })]}
+      buttonLabel={tr("Process & Analyze Conditions")}
+      processingTitle={tr("Processing Feed, Behavior & Environment...")}
       steps={[
-        `Ingesting feed, water and daily-gain records (FCR ${fcr})...`,
-        `Reading behavior telemetry for ${total} birds: movement, huddling and aggression...`,
-        "Checking temperature, humidity and ammonia against their target bands...",
-        "Cross-checking the three and drafting recommendations...",
+        tr("Ingesting feed, water and daily-gain records (FCR {fcr})...", { fcr }),
+        tr("Reading behavior telemetry for {total} birds: movement, huddling and aggression...", { total }),
+        tr("Checking temperature, humidity and ammonia against their target bands..."),
+        tr("Cross-checking the three and drafting recommendations..."),
       ]}
-      reportTitle="Flock Conditions Diagnostic Report"
-      evaluated={`${total} Birds · ${sensors.length} Sensors Evaluated`}
+      reportTitle={tr("Flock Conditions Diagnostic Report")}
+      evaluated={tr("{total} Birds · {length} Sensors Evaluated", { total, length: sensors.length })}
     >
       {/* Scorecards: one per area */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">Feed Efficiency</p>
-          <p className="font-mono text-base font-bold mt-0.5" style={{ color: fcr <= fcrTarget ? "var(--status-green)" : "var(--status-red)" }}>
-            FCR {fcr}
-          </p>
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-            {Math.abs(fcrDelta).toFixed(2)} {fcrDelta >= 0 ? "below" : "above"} the {fcrTarget} target
-          </p>
+          <p className="label-section text-[10px]">{tr("Feed Efficiency")}</p>
+          <p className="font-mono text-base font-bold mt-0.5" style={{ color: fcr <= fcrTarget ? "var(--status-green)" : "var(--status-red)" }}>{tr("FCR {fcr}", { fcr })}</p>
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Math} {value} the {fcrTarget} target", { Math: Math.abs(fcrDelta).toFixed(2), value: fcrDelta >= 0 ? tr("below") : tr("above"), fcrTarget })}</p>
         </div>
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">Activity</p>
+          <p className="label-section text-[10px]">{tr("Activity")}</p>
           <p className="font-mono text-base font-bold mt-0.5"
             style={{ color: inactPct > 30 ? "var(--status-red)" : inactPct > 20 ? "var(--status-amber)" : "var(--status-green)" }}>
             {(movementIndex * 100).toFixed(1)}%
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-            Movement index · {inactive} of {total} birds inactive
-          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Movement index · {inactive} of {total} birds inactive", { inactive, total })}</p>
         </div>
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">Huddling</p>
+          <p className="label-section text-[10px]">{tr("Huddling")}</p>
           <p className="font-mono text-base font-bold mt-0.5" style={{ color: huddling > 0 ? "var(--status-amber)" : "var(--status-green)" }}>
-            {huddling} {huddling === 1 ? "Bird" : "Birds"}
+            {huddling} {huddling === 1 ? tr("Bird") : tr("Birds")}
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-            Cluster risk {(huddlingRisk * 100).toFixed(0)}%
-          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Cluster risk {value}%", { value: (huddlingRisk * 100).toFixed(0) })}</p>
         </div>
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">Environment</p>
+          <p className="label-section text-[10px]">{tr("Environment")}</p>
           <p className="font-mono text-base font-bold mt-0.5" style={{ color: outOfRange.length === 0 ? "var(--status-green)" : "var(--status-amber)" }}>
             {inRange.length} / {sensors.length}
           </p>
           <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-            {outOfRange.length === 0 ? "Sensors in their target band" : `${outOfRange.map((e) => e.title).join(", ")} out of range`}
+            {outOfRange.length === 0 ? tr("Sensors in their target band") : tr("{value} out of range", { value: outOfRange.map((e) => e.title).join(", ") })}
           </p>
         </div>
       </div>
@@ -1449,37 +1430,37 @@ function ConditionsAnalysisSection({
       {/* Findings, grouped by area */}
       <div className="space-y-4">
         <div className="space-y-3">
-          <p className="label-section text-[11px] tracking-widest font-bold">Feed</p>
+          <p className="label-section text-[11px] tracking-widest font-bold">{tr("Feed")}</p>
           <InsightCard level={fcr <= fcrTarget ? "positive" : "warning"}
-            title={`FCR ${fcr} is ${Math.abs(fcrDelta).toFixed(2)} ${fcrDelta >= 0 ? "below" : "above"} target`}
-            body={`FCR trending downward across 8 consecutive measurements (1.72 to ${fcr}), indicating ${fcrDelta >= 0 ? "improving" : "slipping"} feed efficiency as the flock matures.`} />
+            title={tr("FCR {fcr} is {value} {value2} target", { fcr, value: Math.abs(fcrDelta).toFixed(2), value2: fcrDelta >= 0 ? tr("below") : tr("above") })}
+            body={tr("FCR trending downward across 8 consecutive measurements (1.72 to {fcr}), indicating {value} feed efficiency as the flock matures.", { fcr, value: fcrDelta >= 0 ? tr("improving") : tr("slipping") })} />
           <InsightCard level="positive"
-            title={`Daily gain of ${adgG} g/day within normal range`}
-            body={`Consistent with Ross 308 expectations at Day ${day}. Feed intake and weight gain ratio suggest a well-balanced diet and healthy gut function.`} />
+            title={tr("Daily gain of {adgG} g/day within normal range", { adgG })}
+            body={tr("Consistent with Ross 308 expectations at Day {day}. Feed intake and weight gain ratio suggest a well-balanced diet and healthy gut function.", { day })} />
           <InsightCard level="info"
-            title="Water intake at 2.4 L/hr is nominal"
-            body="Water-to-feed ratio is within the expected range. Adequate hydration supports digestion and maintains optimal FCR performance." />
+            title={tr("Water intake at 2.4 L/hr is nominal")}
+            body={tr("Water-to-feed ratio is within the expected range. Adequate hydration supports digestion and maintains optimal FCR performance.")} />
         </div>
 
         <div className="space-y-3">
-          <p className="label-section text-[11px] tracking-widest font-bold">Behavior</p>
+          <p className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior")}</p>
           <InsightCard level={inactPct > 30 ? "critical" : "warning"}
-            title={`${inactPct}% of birds show reduced daytime activity`}
-            body={`${inactive} birds classified as inactive in the current scan. B-019 has been inactive for over 30 minutes and is flagged for manual inspection.`} />
+            title={tr("{inactPct}% of birds show reduced daytime activity", { inactPct })}
+            body={tr("{inactive} birds classified as inactive in the current scan. B-019 has been inactive for over 30 minutes and is flagged for manual inspection.", { inactive })} />
           {huddling > 0 && (
             <InsightCard level="warning"
-              title="B-013 and B-015 huddling detected, open incident"
-              body="Cluster density exceeded threshold near the water drinker zone (CAM-01). Huddling has persisted for 80+ minutes. Inspect the drinker and increase ventilation." />
+              title={tr("B-013 and B-015 huddling detected, open incident")}
+              body={tr("Cluster density exceeded threshold near the water drinker zone (CAM-01). Huddling has persisted for 80+ minutes. Inspect the drinker and increase ventilation.")} />
           )}
           <InsightCard level={aggressionEvents === 0 ? "positive" : "warning"}
-            title={aggressionEvents === 0 ? "Zero aggression events detected" : `${aggressionEvents} aggression events detected`}
+            title={aggressionEvents === 0 ? tr("Zero aggression events detected") : tr("{aggressionEvents} aggression events detected", { aggressionEvents })}
             body={aggressionEvents === 0
-              ? `No pecking or aggressive interactions detected across ${total} birds. Pen density and lighting appear well-calibrated for this growth stage.`
-              : "Pecking or aggressive interactions were detected. Check stocking density and lighting."} />
+              ? tr("No pecking or aggressive interactions detected across {total} birds. Pen density and lighting appear well-calibrated for this growth stage.", { total })
+              : tr("Pecking or aggressive interactions were detected. Check stocking density and lighting.")} />
         </div>
 
         <div className="space-y-3">
-          <p className="label-section text-[11px] tracking-widest font-bold">Environment</p>
+          <p className="label-section text-[11px] tracking-widest font-bold">{tr("Environment")}</p>
           {sensors.map((e) => (
             <InsightCard key={e.title} level={e.insight.level} title={e.insight.title} body={e.insight.body} />
           ))}
@@ -1494,7 +1475,7 @@ function ConditionsAnalysisSection({
         </span>
         <div>
           <p className="text-sm font-semibold leading-snug" style={{ color: "var(--brand)" }}>
-            Operational Recommendation
+            {tr("Operational Recommendation")}
           </p>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
             {recommendation}
@@ -1546,7 +1527,7 @@ function RangeBar({ value, min = 0, max, unit, color }: {
         <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: ok ? color : "var(--status-red)" }} />
       </div>
-      <p className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Optimal: {min}-{max}{unit}</p>
+      <p className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>{tr("Optimal: {min}-{max}{unit}", { min, max, unit })}</p>
     </div>
   );
 }
@@ -1599,22 +1580,22 @@ function AnalyticsPage() {
   const nh3History   = [8, 9, 9, 10, 9, 9, 9].map((v, i) => ({ x: i + 1, y: v }));
   const envSensors = [
     {
-      title: "Temperature", series: tempHistory, value: 29.1, min: 26, max: 32, unit: "°C",
+      title: tr("Temperature"), series: tempHistory, value: 29.1, min: 26, max: 32, unit: "°C",
       color: "var(--brand)",
-      insight: { level: "positive" as InsightLevel, title: "Temperature within optimal range (26–32°C)",
-        body: "Stable over 7 days with a minor peak of 29.5°C on Day 4. No corrective action required. Continue monitoring as ambient temperatures rise mid-afternoon." },
+      insight: { level: "positive" as InsightLevel, title: tr("Temperature within optimal range (26–32°C)"),
+        body: tr("Stable over 7 days with a minor peak of 29.5°C on Day 4. No corrective action required. Continue monitoring as ambient temperatures rise mid-afternoon.") },
     },
     {
-      title: "Humidity", series: humidHistory, value: 63, min: 50, max: 70, unit: "%",
+      title: tr("Humidity"), series: humidHistory, value: 63, min: 50, max: 70, unit: "%",
       color: "var(--status-blue)",
-      insight: { level: "positive" as InsightLevel, title: "Humidity steady at 63%, nominal",
-        body: "Remained within the 50–70% target band. Slight upward creep from 61% to 63% is acceptable and correlates with increased bird respiration as body mass grows." },
+      insight: { level: "positive" as InsightLevel, title: tr("Humidity steady at 63%, nominal"),
+        body: tr("Remained within the 50–70% target band. Slight upward creep from 61% to 63% is acceptable and correlates with increased bird respiration as body mass grows.") },
     },
     {
-      title: "Ammonia (NH3)", series: nh3History, value: 9, min: 0, max: 25, unit: " ppm",
+      title: tr("Ammonia (NH3)"), series: nh3History, value: 9, min: 0, max: 25, unit: " ppm",
       color: "var(--status-amber)",
-      insight: { level: "info" as InsightLevel, title: "NH3 at 9 ppm, well below the 25 ppm alert threshold",
-        body: "Levels are low and stable. A one-day spike to 10 ppm self-resolved, likely due to litter disturbance. Litter moisture and ventilation management are effective." },
+      insight: { level: "info" as InsightLevel, title: tr("NH3 at 9 ppm, well below the 25 ppm alert threshold"),
+        body: tr("Levels are low and stable. A one-day spike to 10 ppm self-resolved, likely due to litter disturbance. Litter moisture and ventilation management are effective.") },
     },
   ];
 
@@ -1625,7 +1606,7 @@ function AnalyticsPage() {
   const domainX: [number, number] = growthRange === "full" ? [startDay, endDay] : [startDay, Math.min(endDay, Math.max(day, startDay + 7))];
   const harvestG = projectedHarvestG(sample);
   // "Day 16–23", or just "Day 16" on the day the window starts.
-  const toDate = day > startDay ? `Day ${startDay}–${day}` : `Day ${day}`;
+  const toDate = day > startDay ? tr("Day {startDay}–{day}", { startDay, day }) : tr("Day {day}", { day });
   const signedVariance = `${farm.weight.variancePercent >= 0 ? "+" : ""}${farm.weight.variancePercent}%`;
   const varianceColor = farm.weight.variancePercent >= 0 ? "var(--status-green)" : farm.weight.variancePercent > -5 ? "var(--status-amber)" : "var(--status-red)";
 
@@ -1640,28 +1621,23 @@ function AnalyticsPage() {
   const fcrDelta = farm.feed.fcrTarget - farm.feed.fcr;
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "growth",     label: "Weight Growth"   },
-    { id: "conditions", label: "Flock Conditions" },
+    { id: "growth",     label: tr("Weight Growth")   },
+    { id: "conditions", label: tr("Flock Conditions") },
   ];
 
   return (
     <AppShell>
-      <SampleNotice>
-        These charts and figures are built-in sample data for Day {farm.cycle.day}, not the live flock. The
-        Dashboard's Growth card shows the live weight and cycle day.
-      </SampleNotice>
+      <SampleNotice>{tr("These charts and figures are built-in sample data for Day {day}, not the live flock. The Dashboard's Growth card shows the live weight and cycle day.", { day: farm.cycle.day })}</SampleNotice>
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>Analytics</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>{tr("Analytics")}</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
           <span className="font-semibold" style={{ color: "var(--brand)" }}>{farm.facility.name}</span>
-          {" · "}{farm.facility.houses[0]?.label}{" · Day "}
+          {" · "}{farm.facility.houses[0]?.label}{tr(" · Day ")}
           <span className="font-mono font-bold" style={{ color: "var(--cv-accent)" }}>{farm.cycle.day}</span>
           {` / ${endDay} `}
-          <span style={{ color: "var(--text-tertiary)" }}>
-            ({Math.round((farm.cycle.day / endDay) * 100)}% of grow-out)
-          </span>
+          <span style={{ color: "var(--text-tertiary)" }}>{tr("({Math}% of grow-out)", { Math: Math.round((farm.cycle.day / endDay) * 100) })}</span>
         </p>
       </div>
 
@@ -1691,21 +1667,17 @@ function AnalyticsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">Avg Weight</p>
+                <p className="label-section text-[10px]">{tr("Avg Weight")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
-                  <span className="font-mono text-lg font-bold" style={{ color: "var(--cv-accent)" }}>
-                    {(avgW / 1000).toFixed(3)} kg
-                  </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(163, 230, 53, 0.15)", color: "var(--cv-accent)" }}>
-                    Day {farm.cycle.day}
-                  </span>
+                  <span className="font-mono text-lg font-bold" style={{ color: "var(--cv-accent)" }}>{tr("{value} kg", { value: (avgW / 1000).toFixed(3) })}</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(163, 230, 53, 0.15)", color: "var(--cv-accent)" }}>{tr("Day {day}", { day: farm.cycle.day })}</span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{avgW} g · Day {farm.cycle.day}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{avgW} g · Day {day}", { avgW, day: farm.cycle.day })}</p>
               </div>
 
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">vs Ross 308</p>
+                <p className="label-section text-[10px]">{tr("vs Ross 308")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: varianceColor }}>
                     {wDelta >= 0 ? "+" : ""}{wDelta} g
@@ -1714,37 +1686,35 @@ function AnalyticsPage() {
                     {signedVariance}
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                  {Math.abs(farm.weight.variancePercent)}% {farm.weight.variancePercent >= 0 ? "above" : "below"} standard
-                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Math}% {value} standard", { Math: Math.abs(farm.weight.variancePercent), value: farm.weight.variancePercent >= 0 ? tr("above") : tr("below") })}</p>
               </div>
 
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">Est. Confidence</p>
+                <p className="label-section text-[10px]">{tr("Est. Confidence")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--brand)" }}>
                     {farm.weight.estimationConfidencePercent}%
                   </span>
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(52, 211, 153, 0.15)", color: "var(--brand)" }}>
-                    Depth Scan
+                    {tr("Depth Scan")}
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>Depth-scan precision</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Depth-scan precision")}</p>
               </div>
 
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">Sample Size</p>
+                <p className="label-section text-[10px]">{tr("Sample Size")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--status-blue)" }}>
                     {farm.weight.sampleSize} / {total}
                   </span>
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(59, 130, 246, 0.15)", color: "var(--status-blue)" }}>
-                    93% Scanned
+                    {tr("93% Scanned")}
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>Birds weighed this scan</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Birds weighed this scan")}</p>
               </div>
             </div>
 
@@ -1757,7 +1727,7 @@ function AnalyticsPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-                      {growthRange === "to-date" ? `Flock Growth Trajectory (${toDate})` : `Full Cycle Growth Curve (Day ${startDay}–${endDay})`}
+                      {growthRange === "to-date" ? tr("Flock Growth Trajectory ({toDate})", { toDate }) : tr("Full Cycle Growth Curve (Day {startDay}–{endDay})", { startDay, endDay })}
                     </h2>
                     <span className="font-mono text-xs px-2.5 py-0.5 rounded-full font-semibold"
                       style={{
@@ -1766,14 +1736,14 @@ function AnalyticsPage() {
                         border: `1px solid ${tint(varianceColor, 30)}`,
                       }}>
                       {growthRange === "to-date"
-                        ? `${signedVariance} vs Standard`
-                        : `Day ${endDay} Harvest: ${harvestG ? (harvestG / 1000).toFixed(2) : "—"} kg`}
+                        ? tr("{signedVariance} vs Standard", { signedVariance })
+                        : tr("Day {endDay} Harvest: {value} kg", { endDay, value: harvestG ? (harvestG / 1000).toFixed(2) : "—" })}
                     </span>
                   </div>
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
                     {growthRange === "to-date"
-                      ? "Hover or tap along the curve to inspect daily weight, standard variance, and growth gain."
-                      : `Day ${startDay} to Day ${endDay} projection with the Ross 308 standard target benchmark.`}
+                      ? tr("Hover or tap along the curve to inspect daily weight, standard variance, and growth gain.")
+                      : tr("Day {startDay} to Day {endDay} projection with the Ross 308 standard target benchmark.", { startDay, endDay })}
                   </p>
                 </div>
 
@@ -1788,7 +1758,7 @@ function AnalyticsPage() {
                         ? { background: "var(--brand)", color: "var(--text-inverse)", fontWeight: 600, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }
                         : { color: "var(--text-secondary)" }}
                     >
-                      {`${toDate} (To Date)`}
+                      {tr("{toDate} (To Date)", { toDate })}
                     </button>
                     <button
                       onClick={() => setGrowthRange("full")}
@@ -1797,7 +1767,7 @@ function AnalyticsPage() {
                         ? { background: "var(--brand)", color: "var(--text-inverse)", fontWeight: 600, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }
                         : { color: "var(--text-secondary)" }}
                     >
-                      {`Day ${startDay}–${endDay} (Full Cycle)`}
+                      {tr("Day {startDay}–{endDay} (Full Cycle)", { startDay, endDay })}
                     </button>
                   </div>
 
@@ -1810,26 +1780,23 @@ function AnalyticsPage() {
                       transition: "all 150ms ease",
                     }}>
                     <span style={{ color: "var(--text-tertiary)" }}>
-                      {activeHoverPoint ? `D${activeHoverPoint.x}:` : `Latest (D${day}):`}
+                      {activeHoverPoint ? `D${activeHoverPoint.x}:` : tr("Latest (D{day}):", { day })}
                     </span>
                     <span className="font-bold text-sm" style={{ color: "var(--brand)" }}>
                       {activeHoverPoint
-                        ? activeHoverPoint.y >= 1000 ? `${(activeHoverPoint.y / 1000).toFixed(2)} kg` : `${activeHoverPoint.y} g`
-                        : `${(avgW / 1000).toFixed(2)} kg`}
+                        ? activeHoverPoint.y >= 1000 ? tr("{value} kg", { value: (activeHoverPoint.y / 1000).toFixed(2) }) : `${activeHoverPoint.y} g`
+                        : tr("{value} kg", { value: (avgW / 1000).toFixed(2) })}
                     </span>
                     {activeHoverPoint?.targetY !== undefined && (
                       <span className="font-semibold text-[11px]" style={{
                         color: activeHoverPoint.y >= activeHoverPoint.targetY ? "var(--status-green)" : "var(--status-amber)"
-                      }}>
-                        ({activeHoverPoint.y >= activeHoverPoint.targetY ? "+" : ""}
-                        {activeHoverPoint.y - activeHoverPoint.targetY}g vs Ross 308)
-                      </span>
+                      }}>{tr("({value}{value2}g vs Ross 308)", { value: activeHoverPoint.y >= activeHoverPoint.targetY ? "+" : "", value2: activeHoverPoint.y - activeHoverPoint.targetY })}</span>
                     )}
                   </div>
 
                   <ChartLegend items={[
-                    { color: "var(--brand)", label: "Actual Scan" },
-                    { color: "var(--status-amber)", label: "Ross 308 Std", dashed: true },
+                    { color: "var(--brand)", label: tr("Actual Scan") },
+                    { color: "var(--status-amber)", label: tr("Ross 308 Std"), dashed: true },
                   ]} />
                 </div>
               </div>
@@ -1849,10 +1816,8 @@ function AnalyticsPage() {
           <div className="cb-card p-5">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div>
-                <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Flock Weight Distribution</h2>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                  Birds sorted into brackets of the Ross 308 standard for Day {day}, from {total} depth-scans
-                </p>
+                <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{tr("Flock Weight Distribution")}</h2>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr("Birds sorted into brackets of the Ross 308 standard for Day {day}, from {total} depth-scans", { day, total })}</p>
               </div>
               <UniformityChip sample={sample} />
             </div>
@@ -1878,27 +1843,25 @@ function AnalyticsPage() {
         <div className="space-y-6">
           {/* Feed */}
           <section aria-labelledby="cond-feed" className="space-y-3">
-            <h2 id="cond-feed" className="label-section text-[11px] tracking-widest font-bold">Feed & Water</h2>
+            <h2 id="cond-feed" className="label-section text-[11px] tracking-widest font-bold">{tr("Feed & Water")}</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="Current FCR"   value={String(farm.feed.fcr)} sub={`Target: ${farm.feed.fcrTarget}`}
+              <StatCard label={tr("Current FCR")}   value={String(farm.feed.fcr)} sub={tr("Target: {fcrTarget}", { fcrTarget: farm.feed.fcrTarget })}
                 accent={farm.feed.fcr <= farm.feed.fcrTarget ? "var(--status-green)" : "var(--status-red)"} />
-              <StatCard label="vs Target"     value={`${fcrDelta >= 0 ? "-" : "+"}${Math.abs(fcrDelta).toFixed(2)}`}
-                sub={fcrDelta >= 0 ? "Below FCR target" : "Above FCR target"}
+              <StatCard label={tr("vs Target")}     value={`${fcrDelta >= 0 ? "-" : "+"}${Math.abs(fcrDelta).toFixed(2)}`}
+                sub={fcrDelta >= 0 ? tr("Below FCR target") : tr("Above FCR target")}
                 accent={fcrDelta >= 0 ? "var(--status-green)" : "var(--status-red)"} />
-              <StatCard label="Daily Gain"    value={`${farm.feed.adgG} g/day`} sub="Avg daily weight gain" />
-              <StatCard label="Feed Consumed" value={`${farm.feed.cycleConsumedKg} kg`} sub="Cycle total to date" />
+              <StatCard label={tr("Daily Gain")}    value={tr("{adgG} g/day", { adgG: farm.feed.adgG })} sub={tr("Avg daily weight gain")} />
+              <StatCard label={tr("Feed Consumed")} value={`${farm.feed.cycleConsumedKg} kg`} sub={tr("Cycle total to date")} />
             </div>
             <div className="cb-card p-5">
               <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
                 <div>
-                  <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>FCR Trend, Last 8 Measurements</h3>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                    Lower = better efficiency · Target {farm.feed.fcrTarget} shown as dashed line
-                  </p>
+                  <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{tr("FCR Trend, Last 8 Measurements")}</h3>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr("Lower = better efficiency · Target {fcrTarget} shown as dashed line", { fcrTarget: farm.feed.fcrTarget })}</p>
                 </div>
                 <ChartLegend items={[
-                  { color: "var(--brand)", label: "FCR" },
-                  { color: "var(--status-amber)", label: "Target", dashed: true },
+                  { color: "var(--brand)", label: tr("FCR") },
+                  { color: "var(--status-amber)", label: tr("Target"), dashed: true },
                 ]} />
               </div>
               <AxisLineChart series={fcrSeries}
@@ -1910,50 +1873,46 @@ function AnalyticsPage() {
 
           {/* Behavior */}
           <section aria-labelledby="cond-behavior" className="space-y-3">
-            <h2 id="cond-behavior" className="label-section text-[11px] tracking-widest font-bold">Behavior</h2>
+            <h2 id="cond-behavior" className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior")}</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="Movement Index" value={`${(farm.behavior.movementIndex * 100).toFixed(1)}%`} sub="Above 88% baseline" accent="var(--status-green)" />
-              <StatCard label="Huddling Risk"  value={`${(farm.behavior.huddlingRisk * 100).toFixed(0)}%`} sub="Low cluster density" accent="var(--status-green)" />
-              <StatCard label="Inactive Birds" value={`${bd.Inactivity} / ${total}`} sub={`${inactPct}% of flock`}
+              <StatCard label={tr("Movement Index")} value={`${(farm.behavior.movementIndex * 100).toFixed(1)}%`} sub={tr("Above 88% baseline")} accent="var(--status-green)" />
+              <StatCard label={tr("Huddling Risk")}  value={`${(farm.behavior.huddlingRisk * 100).toFixed(0)}%`} sub={tr("Low cluster density")} accent="var(--status-green)" />
+              <StatCard label={tr("Inactive Birds")} value={`${bd.Inactivity} / ${total}`} sub={tr("{inactPct}% of flock", { inactPct })}
                 accent={inactPct > 20 ? "var(--status-red)" : "var(--status-amber)"} />
-              <StatCard label="Huddling"       value={`${bd.Huddling} birds`} sub="Cluster detected" accent="var(--status-amber)" />
+              <StatCard label={tr("Huddling")}       value={tr("{n} birds", { n: bd.Huddling })} sub={tr("Cluster detected")} accent="var(--status-amber)" />
             </div>
             <div className="cb-card p-5">
               <h3 className="mb-4 text-base font-bold" style={{ color: "var(--text-primary)" }}>
-                Activity Classification, Current Scan
+                {tr("Activity Classification, Current Scan")}
               </h3>
               <DonutChart segments={[
-                { label: "Active",   value: bd.Active,     color: "var(--status-green)" },
-                { label: "Inactive", value: bd.Inactivity, color: "var(--status-red)" },
-                { label: "Huddling", value: bd.Huddling,   color: "var(--status-amber)" },
+                { label: tr("Active"),   value: bd.Active,     color: "var(--status-green)" },
+                { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
+                { label: tr("Huddling"), value: bd.Huddling,   color: "var(--status-amber)" },
               ]} />
               <p className="mt-3 text-center text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-                Point at a segment, or tap it, for the breakdown.
+                {tr("Point at a segment, or tap it, for the breakdown.")}
               </p>
             </div>
           </section>
 
           {/* Environment */}
           <section aria-labelledby="cond-env" className="space-y-3">
-            <h2 id="cond-env" className="label-section text-[11px] tracking-widest font-bold">Environment</h2>
+            <h2 id="cond-env" className="label-section text-[11px] tracking-widest font-bold">{tr("Environment")}</h2>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {envSensors.map((env) => (
                 <div key={env.title} className="cb-card p-5">
                   <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
                     <div>
                       <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{env.title}</h3>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                        7-day history · Optimal: {env.min}–{env.max}{env.unit}
-                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr("7-day history · Optimal: {min}–{max}{unit}", { min: env.min, max: env.max, unit: env.unit })}</p>
                     </div>
                     <span className="font-mono text-sm font-bold px-3 py-1 rounded-full"
                       style={{
                         color: env.color,
                         background: `${env.color}18`,
                         border: `1px solid ${env.color}40`,
-                      }}>
-                      Current: {env.value}{env.unit}
-                    </span>
+                      }}>{tr("Current: {value}{unit}", { value: env.value, unit: env.unit })}</span>
                   </div>
                   <div className="mt-4">
                     <AxisLineChart series={env.series} color={env.color} xLabel="Day"

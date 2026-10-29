@@ -4,9 +4,11 @@ import { ChevronDown } from "lucide-react";
 import { AppShell } from "@/components/farm/AppShell";
 import { getAlerts, acknowledgeAlertFn } from "@/lib/farm/repository";
 import { removeUnacknowledgedAlert } from "@/lib/alert-store";
+import { T, localeTag, tr } from "@/lib/i18n";
+import { alertKindLabel } from "@/lib/farm/alert-text";
 
 export const Route = createFileRoute("/alerts")({
-  head: () => ({ meta: [{ title: "Alerts — Cerebroil" }] }),
+  head: () => ({ meta: [{ title: tr("Alerts — Cerebroil") }] }),
   component: AlertsPage,
 });
 
@@ -14,20 +16,20 @@ type Filter = "all" | "critical" | "warning" | "info";
 
 const HELP: Record<string, { why: string; action: string }> = {
   "Inactive Bird": {
-    why: "Minimal movement detected for > 30 min. Could indicate heat stress, injury, or illness.",
-    action: "Open Live Camera (CAM-01), inspect the flagged bird ID, and check for physical signs.",
+    why: T("Minimal movement detected for > 30 min. Could indicate heat stress, injury, or illness."),
+    action: T("Open Live Camera (CAM-01), inspect the flagged bird ID, and check for physical signs."),
   },
   "High Temperature": {
-    why: "SN-241-H1 exceeded 31°C. Broilers reduce feed intake above 32°C.",
-    action: "Increase ventilation, add cooling, and ensure water access.",
+    why: T("SN-241-H1 exceeded 31°C. Broilers reduce feed intake above 32°C."),
+    action: T("Increase ventilation, add cooling, and ensure water access."),
   },
   "Low Weight Flag": {
-    why: "Estimated body mass is > 15% below the Ross 308 Day 14 standard of 1,300 g.",
-    action: "Review the flagged bird ID in Flock Tracking. Check feed access.",
+    why: T("Estimated body mass is > 15% below the Ross 308 Day 14 standard of 1,300 g."),
+    action: T("Review the flagged bird ID in Flock Tracking. Check feed access."),
   },
   "System Sync": {
-    why: "Informational — pipeline status update.",
-    action: "No action required.",
+    why: T("Informational — pipeline status update."),
+    action: T("No action required."),
   },
 };
 
@@ -83,13 +85,13 @@ function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps
         <div className="flex min-w-0 flex-wrap items-center gap-2 md:contents">
           <div className="flex shrink-0 items-center gap-1.5 md:col-span-2">
             <span className={isCrit ? "badge-red" : isWarn ? "badge-amber" : "badge-blue"}>
-              {isCrit ? "Critical" : isWarn ? "Warning" : "Info"}
+              {isCrit ? tr("Critical") : isWarn ? tr("Warning") : tr("Info")}
             </span>
           </div>
 
           <div className="min-w-0 md:col-span-3">
             <p className="text-sm font-semibold" style={{ color: a.acknowledged ? "var(--text-secondary)" : "var(--text-primary)" }}>
-              {a.kind}
+              {alertKindLabel(a.kind)}
             </p>
           </div>
         </div>
@@ -97,14 +99,14 @@ function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps
         {/* Message */}
         <div className="md:col-span-4">
           <p className="text-xs line-clamp-3 md:line-clamp-2" style={{ color: "var(--text-secondary)" }}>
-            {a.message}
+            {tr(a.message)}
           </p>
         </div>
 
         {/* Time and actions */}
         <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-2 md:flex-col md:items-end md:gap-1.5">
           <p className="font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-            {new Date(a.raisedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            {new Date(a.raisedAt).toLocaleString(localeTag(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
           </p>
           <div className="flex items-center gap-2">
             {!a.acknowledged && (
@@ -113,7 +115,7 @@ function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps
                 disabled={busy}
                 className="btn-ghost tap text-[11px] py-0.5 px-2"
               >
-                {busy ? "…" : "Mark read"}
+                {busy ? "…" : tr("Mark read")}
               </button>
             )}
             {help && (
@@ -123,7 +125,7 @@ function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps
                 className="tap px-1 text-[11px] font-medium hover:underline"
                 style={{ color: "var(--brand)" }}
               >
-                {isExp ? "Hide" : "Details"}
+                {isExp ? tr("Hide") : tr("Details")}
               </button>
             )}
           </div>
@@ -137,12 +139,12 @@ function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps
           style={{ background: "var(--surface-raised)", borderLeft: `3px solid ${accentColor}` }}
         >
           <div>
-            <p className="label-section mb-1">Why it matters</p>
-            <p className="text-sm" style={{ color: "var(--text-primary)" }}>{help.why}</p>
+            <p className="label-section mb-1">{tr("Why it matters")}</p>
+            <p className="text-sm" style={{ color: "var(--text-primary)" }}>{tr(help.why)}</p>
           </div>
           <div>
-            <p className="label-section mb-1">Recommended action</p>
-            <p className="text-sm" style={{ color: "var(--text-primary)" }}>{help.action}</p>
+            <p className="label-section mb-1">{tr("Recommended action")}</p>
+            <p className="text-sm" style={{ color: "var(--text-primary)" }}>{tr(help.action)}</p>
           </div>
           {isCrit && (
             <Link
@@ -150,7 +152,7 @@ function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps
               className="tap inline-flex items-center gap-1.5 text-xs font-semibold hover:underline"
               style={{ color: "var(--cv-accent)" }}
             >
-              Open Live Camera →
+              {tr("Open Live Camera →")}
             </Link>
           )}
         </div>
@@ -169,10 +171,10 @@ function AlertTable({ list, ...row }: { list: any[] } & Omit<RowProps, "a" | "bu
         style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-tertiary)" }}
       >
         <div className="col-span-1" />
-        <div className="col-span-2">Sev.</div>
-        <div className="col-span-3">Type</div>
-        <div className="col-span-4">Message</div>
-        <div className="col-span-2">Time</div>
+        <div className="col-span-2">{tr("Sev.")}</div>
+        <div className="col-span-3">{tr("Type")}</div>
+        <div className="col-span-4">{tr("Message")}</div>
+        <div className="col-span-2">{tr("Time")}</div>
       </div>
       <div className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
         {list.map((a) => (
@@ -217,7 +219,7 @@ function AlertsPage() {
     try {
       setAlerts((await getAlerts({ data: {} } as never)) as any[]);
     } catch {
-      setError("Could not load alerts. Check your connection and try again.");
+      setError(tr("Could not load alerts. Check your connection and try again."));
     } finally {
       setLoading(false);
     }
@@ -256,7 +258,7 @@ function AlertsPage() {
         setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)));
         removeUnacknowledgedAlert(id);
         setJustRead(id);
-        setAnnounce(`${done?.kind ?? "Alert"} marked read and moved to Read.`);
+        setAnnounce(tr("{kind} marked read and moved to Read.", { kind: done?.kind ?? tr("Alert") }));
         clearTimeout(highlightTimer.current);
         highlightTimer.current = setTimeout(() => setJustRead(null), 2500);
       }
@@ -269,10 +271,10 @@ function AlertsPage() {
     Promise.all(alerts.filter((a) => !a.acknowledged).map((a) => handleAck(a.id)));
 
   const tabs: { id: Filter; label: string; count: number }[] = [
-    { id: "all",      label: "All",      count: alerts.length },
-    { id: "critical", label: "Critical", count: alerts.filter((a) => a.severity === "critical").length },
-    { id: "warning",  label: "Warning",  count: alerts.filter((a) => a.severity === "warning" || a.severity === "deviation").length },
-    { id: "info",     label: "Info",     count: alerts.filter((a) => a.severity === "nominal").length },
+    { id: "all",      label: tr("All"),      count: alerts.length },
+    { id: "critical", label: tr("Critical"), count: alerts.filter((a) => a.severity === "critical").length },
+    { id: "warning",  label: tr("Warning"),  count: alerts.filter((a) => a.severity === "warning" || a.severity === "deviation").length },
+    { id: "info",     label: tr("Info"),     count: alerts.filter((a) => a.severity === "nominal").length },
   ];
 
   const shared = { expanded, setExpanded, onRead: handleAck, busyIds: mutating, justReadId: justRead };
@@ -283,12 +285,12 @@ function AlertsPage() {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
           <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Alerts
+            {tr("Alerts")}
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
             {unread > 0
-              ? <><span className="font-mono" style={{ color: "var(--status-red)" }}>{unread}</span> unread alert{unread !== 1 ? "s" : ""}</>
-              : "All alerts reviewed"}
+              ? <><span className="font-mono" style={{ color: "var(--status-red)" }}>{unread}</span> {tr("unread alert")}{unread !== 1 ? "s" : ""}</>
+              : tr("All alerts reviewed")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -298,14 +300,14 @@ function AlertsPage() {
               className="tap px-1 text-xs font-semibold hover:underline"
               style={{ color: "var(--brand)" }}
             >
-              Mark all read
+              {tr("Mark all read")}
             </button>
           )}
           <button onClick={load} disabled={loading} className="btn-ghost tap text-xs gap-1.5">
             <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0113.9-3.4M20 15a9 9 0 01-13.9 3.4"/>
             </svg>
-            Refresh
+            {tr("Refresh")}
           </button>
         </div>
       </div>
@@ -353,7 +355,7 @@ function AlertsPage() {
           <div>
             <p className="text-sm" style={{ color: "var(--status-red-text)" }}>{error}</p>
             <button onClick={load} className="mt-1 text-xs font-semibold hover:underline" style={{ color: "var(--status-red)" }}>
-              Try again
+              {tr("Try again")}
             </button>
           </div>
         </div>
@@ -370,7 +372,7 @@ function AlertsPage() {
           {/* ── UNREAD: what still needs attention ── */}
           <section aria-labelledby="alerts-unread">
             <div className="mb-2 flex items-center gap-2">
-              <h2 id="alerts-unread" className="label-section text-[11px] font-bold tracking-widest">Unread</h2>
+              <h2 id="alerts-unread" className="label-section text-[11px] font-bold tracking-widest">{tr("Unread")}</h2>
               <Count n={unreadList.length} tone="red" />
             </div>
             {unreadList.length === 0 ? (
@@ -382,9 +384,9 @@ function AlertsPage() {
                   fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>All caught up</p>
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{tr("All caught up")}</p>
                 <p className="mt-0.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  {alerts.length === 0 ? "No alerts yet." : "No unread alerts in this category."}
+                  {alerts.length === 0 ? tr("No alerts yet.") : tr("No unread alerts in this category.")}
                 </p>
               </div>
             ) : (
@@ -406,14 +408,14 @@ function AlertsPage() {
                 style={{ color: "var(--text-tertiary)" }}
                 aria-hidden="true"
               />
-              <span id="alerts-read" className="label-section text-[11px] font-bold tracking-widest">Read</span>
+              <span id="alerts-read" className="label-section text-[11px] font-bold tracking-widest">{tr("Read")}</span>
               <Count n={readList.length} tone="muted" />
             </button>
             <div id="alerts-read-list" hidden={!showRead}>
               {readList.length === 0 ? (
                 <p className="rounded-xl px-4 py-5 text-center text-xs"
                   style={{ border: "1px solid var(--border-subtle)", background: "var(--surface-card)", color: "var(--text-tertiary)" }}>
-                  {readTotal === 0 ? "Alerts you mark as read will move here." : "No read alerts in this category."}
+                  {readTotal === 0 ? tr("Alerts you mark as read will move here.") : tr("No read alerts in this category.")}
                 </p>
               ) : (
                 <AlertTable list={readList} {...shared} />
@@ -423,9 +425,7 @@ function AlertsPage() {
         </div>
       )}
 
-      <p className="mt-3 text-right font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>
-        {unreadList.length} unread · {readList.length} read · {alerts.length} total
-      </p>
+      <p className="mt-3 text-right font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("{length} unread · {length2} read · {length3} total", { length: unreadList.length, length2: readList.length, length3: alerts.length })}</p>
     </AppShell>
   );
 }

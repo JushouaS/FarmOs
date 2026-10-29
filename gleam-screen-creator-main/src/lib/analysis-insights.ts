@@ -13,6 +13,7 @@
  */
 
 import type { CameraScan } from "@/lib/api-client";
+import { T, tr } from "@/lib/i18n";
 
 export type Lang = "en" | "tl" | "ceb";
 export type Severity = "ok" | "info" | "warn" | "alert";
@@ -107,20 +108,21 @@ interface Messages {
 }
 
 /**
- * The panel's own labels. They stay in English; only the analysis (the status,
- * figures, findings and tips below) is translated.
+ * The panel's own labels, marked with T() so they join the system dictionary
+ * (src/lib/i18n); the panel shows them with tr(). The analysis itself (the
+ * status, figures, findings and tips below) has its own tables per language.
  */
 export const CHROME = {
-  title: "Analysis",
-  intro: "Analyze the latest camera data and get tips for your flock.",
-  scan: "Analyze data",
-  scanning: "Analyzing…",
-  again: "Analyze again",
-  translate: "Translate the analysis",
-  err_unavailable: "The camera service is not reachable. Start cerebroil-stream and try again.",
-  err_noFrame: "The camera has no picture right now. Check the camera connection and try again.",
-  err_session: "Your session ended. Sign in again.",
-  err_generic: "The analysis could not finish. Try again.",
+  title: T("Analysis"),
+  intro: T("Analyze the latest camera data and get tips for your flock."),
+  scan: T("Analyze data"),
+  scanning: T("Analyzing…"),
+  again: T("Analyze again"),
+  translate: T("Translate the analysis"),
+  err_unavailable: T("The camera service is not reachable. Start cerebroil-stream and try again."),
+  err_noFrame: T("The camera has no picture right now. Check the camera connection and try again."),
+  err_session: T("Your session ended. Sign in again."),
+  err_generic: T("The analysis could not finish. Try again."),
 } as const;
 
 const en: Messages = {

@@ -34,10 +34,17 @@ async function currentSnapshot(): Promise<string> {
   }
 }
 
-const systemPrompt = (snapshot: string) => `You are the CereBroiler Intelligence Engine inside the FARM_OS operations console.
+/** What to add to a prompt so the model writes for farmers in the language chosen in the app. */
+const LANGUAGE_NOTE: Record<string, string> = {
+  tl: "Write the whole answer in Filipino (Tagalog), in simple everyday words that a poultry farmer with little schooling can understand. Keep numbers, units and sensor or house names as they are.",
+  ceb: "Write the whole answer in Cebuano (Bisaya), in simple everyday words that a poultry farmer with little schooling can understand. Keep numbers, units and sensor or house names as they are.",
+};
+const languageNote = (lang?: string) => (lang && LANGUAGE_NOTE[lang] ? `\n${LANGUAGE_NOTE[lang]}` : "");
+
+const systemPrompt = (snapshot: string, lang?: string) => `You are the CereBroiler Intelligence Engine inside the FARM_OS operations console.
 Produce analysis strictly grounded in the telemetry snapshot below. Be precise and clinical;
 reference sensors, houses and figures from the snapshot. Respond in plain text only
-(no markdown, no headings).
+(no markdown, no headings).${languageNote(lang)}
 
 ${snapshot}`;
 
@@ -162,11 +169,12 @@ const BRIEFING_PROMPT = `Compile the automated situation briefing for the farm o
 Cover: overall flock status, the open incident in the snapshot with its root cause, and the
 immediate outlook. Maximum 130 words, 2-3 short paragraphs separated by blank lines.`;
 
-export const fetchSituationBriefing = createServerFn({ method: "POST" }).handler(async () => {
+export const fetchSituationBriefing = createServerFn({ method: "POST" }).handler(async ({ data }) => {
+  const lang = ((data ?? {}) as { lang?: string }).lang;
   const snapshot = await currentSnapshot();
   const { content, latencyMs, model } = await callEngineWithTiming(
     [
-      { role: "system", content: systemPrompt(snapshot) },
+      { role: "system", content: systemPrompt(snapshot, lang) },
       { role: "user", content: BRIEFING_PROMPT },
     ],
     2000,
@@ -183,11 +191,11 @@ const alertSchema = z.object({
 
 export type FeedbackAlert = z.infer<typeof alertSchema>;
 
-const alertsPrompt = (snapshot: string) => `Analyze the telemetry snapshot and produce feedback alerts for the farm operator.
+const alertsPrompt = (snapshot: string, lang?: string) => `Analyze the telemetry snapshot and produce feedback alerts for the farm operator.
 Return ONLY a JSON array (no markdown fences, no prose) of 3 to 5 objects with exactly these keys:
 "severity" (one of "critical", "warning", "nominal"), "title" (<= 8 words, uppercase),
 "detail" (one sentence citing snapshot figures), "action" (one imperative sentence).
-Order from most to least severe.
+Order from most to least severe.${lang && LANGUAGE_NOTE[lang] ? `\nKeep the JSON keys and the "severity" values in English exactly as listed; only "title", "detail" and "action" are written in the chosen language.${languageNote(lang)}` : ""}
 
 ${snapshot}`;
 
@@ -202,10 +210,11 @@ function extractJsonArray(raw: string): unknown {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-export const fetchFeedbackAlerts = createServerFn({ method: "POST" }).handler(async () => {
+export const fetchFeedbackAlerts = createServerFn({ method: "POST" }).handler(async ({ data }) => {
+  const lang = ((data ?? {}) as { lang?: string }).lang;
   const snapshot = await currentSnapshot();
   const { content, latencyMs, model } = await callEngineWithTiming(
-    [{ role: "user", content: alertsPrompt(snapshot) }],
+    [{ role: "user", content: alertsPrompt(snapshot, lang) }],
     2500,
   );
   const alerts = z.array(alertSchema).min(1).max(6).parse(extractJsonArray(content));

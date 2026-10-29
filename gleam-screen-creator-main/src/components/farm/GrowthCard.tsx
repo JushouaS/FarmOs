@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { formatUnit, type GrowthCardData, type GrowthPoint, type GrowthReading } from "@/lib/farm/growth";
+import { tr } from "@/lib/i18n";
 
 /* The dashboard's growth card: how heavy the birds are against the breed's
  * target weight, as a headline, a plain-language sentence and a chart with real
@@ -19,10 +20,10 @@ const kg = (g: number, digits = 2) => (g / 1000).toFixed(digits);
 
 /** Where the flock stands against the target, in words and a status colour. */
 function standing(variance: number): { label: string; tone: "green" | "amber" | "red" } {
-  if (variance >= 2) return { label: "Ahead of target", tone: "green" };
-  if (variance >= -2) return { label: "On target", tone: "green" };
-  if (variance >= -5) return { label: "Slightly behind", tone: "amber" };
-  return { label: "Behind target", tone: "red" };
+  if (variance >= 2) return { label: tr("Ahead of target"), tone: "green" };
+  if (variance >= -2) return { label: tr("On target"), tone: "green" };
+  if (variance >= -5) return { label: tr("Slightly behind"), tone: "amber" };
+  return { label: tr("Behind target"), tone: "red" };
 }
 
 /** A tick step that gives about five gridlines: 0.25, 0.5, 1 kg and so on. */
@@ -150,7 +151,7 @@ function GrowthChart({
             width={width}
             height={height}
             role="img"
-            aria-label={`Average weight by day against the ${targetLabel}. Day ${last.day}: ${kg(last.actualG, 3)} kilograms, target ${kg(last.standardG, 3)} kilograms.`}
+            aria-label={tr("Average weight by day against the {targetLabel}. Day {day}: {value} kilograms, target {value2} kilograms.", { targetLabel, day: last.day, value: kg(last.actualG, 3), value2: kg(last.standardG, 3) })}
           >
             {/* Gridlines and weight axis */}
             {yTicks.map((t) => (
@@ -162,7 +163,7 @@ function GrowthChart({
               </g>
             ))}
             <text x={m.left - 8} y={m.top - 18} textAnchor="end" fontSize={fs - 1} fontWeight="600" fill="var(--text-tertiary)">
-              kg
+              {tr("kg")}
             </text>
 
             {/* Day axis */}
@@ -189,7 +190,7 @@ function GrowthChart({
               );
             })}
             <text x={m.left + innerW / 2} y={height - 6} textAnchor="middle" fontSize={fs} fill="var(--text-tertiary)">
-              Day of the flock
+              {tr("Day of the flock")}
             </text>
 
             {/* Target and actual */}
@@ -205,7 +206,7 @@ function GrowthChart({
                   key={p.day}
                   tabIndex={0}
                   role="img"
-                  aria-label={`Day ${p.day}: ${kg(p.actualG, 3)} kilograms, target ${kg(p.standardG, 3)} kilograms`}
+                  aria-label={tr("Day {day}: {value} kilograms, target {value2} kilograms", { day: p.day, value: kg(p.actualG, 3), value2: kg(p.standardG, 3) })}
                   className="cursor-pointer outline-none"
                   onPointerEnter={() => setHover(i)}
                   onPointerLeave={() => setHover(null)}
@@ -237,9 +238,7 @@ function GrowthChart({
               stroke="var(--surface-card)"
               strokeWidth="4"
               paintOrder="stroke"
-            >
-              {kg(last.actualG)} kg
-            </text>
+            >{tr("{kg} kg", { kg: kg(last.actualG) })}</text>
           </svg>
 
           {shownPoint && (
@@ -248,14 +247,14 @@ function GrowthChart({
               className="pointer-events-none absolute z-10 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-2 text-sm shadow-lg"
               style={{ left: tipLeft, top: tipTop, width: tipW }}
             >
-              <p className="font-semibold text-[var(--text-primary)]">Day {shownPoint.day}</p>
+              <p className="font-semibold text-[var(--text-primary)]">{tr("Day {day}", { day: shownPoint.day })}</p>
               <p className="mt-1 flex justify-between gap-2 text-[var(--text-secondary)]">
-                <span>Actual</span>
-                <span className="font-mono font-semibold tabular-nums text-[var(--text-primary)]">{kg(shownPoint.actualG, 3)} kg</span>
+                <span>{tr("Actual")}</span>
+                <span className="font-mono font-semibold tabular-nums text-[var(--text-primary)]">{tr("{kg} kg", { kg: kg(shownPoint.actualG, 3) })}</span>
               </p>
               <p className="flex justify-between gap-2 text-[var(--text-secondary)]">
-                <span>Target</span>
-                <span className="font-mono tabular-nums">{kg(shownPoint.standardG, 3)} kg</span>
+                <span>{tr("Target")}</span>
+                <span className="font-mono tabular-nums">{tr("{kg} kg", { kg: kg(shownPoint.standardG, 3) })}</span>
               </p>
               <p
                 className="mt-1 text-right font-mono font-semibold tabular-nums"
@@ -272,12 +271,12 @@ function GrowthChart({
       {/* A table ignores the 1px sr-only width and widens the page on phones, so the wrapper hides it. */}
       <div className="sr-only">
       <table>
-        <caption>Average weight by day against the {targetLabel}</caption>
+        <caption>{tr("Average weight by day against the {targetLabel}", { targetLabel })}</caption>
         <thead>
           <tr>
-            <th>Day</th>
-            <th>Actual (kg)</th>
-            <th>Target (kg)</th>
+            <th>{tr("Day")}</th>
+            <th>{tr("Actual (kg)")}</th>
+            <th>{tr("Target (kg)")}</th>
           </tr>
         </thead>
         <tbody>
@@ -324,10 +323,10 @@ function Small({ label, value, unit, note, tone }: { label: string; value: strin
 function ReadingCell({ label, reading }: { label: string; reading: GrowthReading }) {
   const has = reading.value != null;
   const words =
-    reading.status === "nominal" ? "Within range"
-    : reading.status === "warning" ? "Check"
-    : reading.status === "critical" ? "Out of range"
-    : reading.status === "deviation" ? "Deviation"
+    reading.status === "nominal" ? tr("Within range")
+    : reading.status === "warning" ? tr("Check")
+    : reading.status === "critical" ? tr("Out of range")
+    : reading.status === "deviation" ? tr("Deviation")
     : null;
   const tone: Tone | undefined =
     reading.status === "nominal" ? "green"
@@ -339,7 +338,7 @@ function ReadingCell({ label, reading }: { label: string; reading: GrowthReading
       label={label}
       value={has ? String(reading.value) : "—"}
       unit={has ? formatUnit(reading.unit) : undefined}
-      note={has ? [words, reading.range].filter(Boolean).join(" · ") || undefined : "No reading yet"}
+      note={has ? [words, reading.range].filter(Boolean).join(" · ") || undefined : tr("No reading yet")}
       tone={has ? tone : undefined}
     />
   );
@@ -358,38 +357,36 @@ export function GrowthCard({ data }: Props) {
       }[state.tone]
     : null;
   const gap = has ? Math.round(Math.abs(actualG! - standardG!)) : 0;
-  const dayText = day != null ? ` for day ${day}` : "";
+  const dayText = day != null ? tr(" for day {day}", { day }) : "";
 
   return (
     <section aria-labelledby="growth-title" className="cb-card mb-6 p-5 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 id="growth-title" className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
-            Growth
+            {tr("Growth")}
           </h2>
-          <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Average weight vs {targetLabel}{day != null ? ` · Day ${day} of ${cycleLength}` : ""}
-          </p>
+          <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>{tr("Average weight vs {targetLabel}{value}", { targetLabel, value: day != null ? tr(" · Day {day} of {cycleLength}", { day, cycleLength }) : "" })}</p>
         </div>
         <Link
           to="/telemetry"
           className="tap inline-flex shrink-0 items-center justify-end text-sm font-semibold hover:underline"
           style={{ color: "var(--brand)" }}
         >
-          Full Analytics →
+          {tr("Full Analytics →")}
         </Link>
       </div>
 
       <div className="mt-5 grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
         {/* The answer, in words; on a wide screen the small stats sit at the bottom, level with the chart's baseline */}
         <div className="min-w-0 lg:flex lg:flex-col">
-          <p className="label-section">Average weight</p>
+          <p className="label-section">{tr("Average weight")}</p>
           <p className="mt-1 flex items-baseline gap-1.5">
             <span className="font-mono text-4xl font-bold tabular-nums" style={{ color: "var(--cv-accent)" }}>
               {has ? kg(actualG!, 3) : "—"}
             </span>
             <span className="text-lg" style={{ color: "var(--text-tertiary)" }}>
-              kg
+              {tr("kg")}
             </span>
           </p>
           {state && toneColor && variancePercent != null && (
@@ -404,26 +401,26 @@ export function GrowthCard({ data }: Props) {
           {has && (
             <p className="mt-3 text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               {gap === 0
-                ? `Right on the ${targetLabel} of ${kg(standardG!, 3)} kg${dayText}.`
-                : `${gap} g ${actualG! >= standardG! ? "heavier" : "lighter"} than the ${targetLabel} of ${kg(standardG!, 3)} kg${dayText}.`}
+                ? tr("Right on the {targetLabel} of {value} kg{dayText}.", { targetLabel, value: kg(standardG!, 3), dayText })
+                : tr("{gap} g {value} than the {targetLabel} of {value2} kg{dayText}.", { gap, value: actualG! >= standardG! ? tr("heavier") : tr("lighter"), targetLabel, value2: kg(standardG!, 3), dayText })}
             </p>
           )}
 
           <dl className="mt-4 grid gap-2.5 border-t pt-3 lg:mt-auto" style={{ borderColor: "var(--border-subtle)" }}>
             <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>Estimate confidence</dt>
+              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>{tr("Estimate confidence")}</dt>
               <dd className="font-mono text-sm font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
                 {data.confidencePercent != null ? `${Math.round(data.confidencePercent)}%` : "—"}
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>Birds weighed</dt>
+              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>{tr("Birds weighed")}</dt>
               <dd className="font-mono text-sm font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
                 {data.sampleSize != null ? data.sampleSize.toLocaleString() : "—"}
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>Feed conversion</dt>
+              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>{tr("Feed conversion")}</dt>
               <dd className="font-mono text-sm font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
                 {data.fcr != null ? data.fcr.toFixed(2) : "—"}
               </dd>
@@ -438,7 +435,7 @@ export function GrowthCard({ data }: Props) {
               <svg width="22" height="8" aria-hidden="true">
                 <line x1="1" y1="4" x2="21" y2="4" stroke="var(--brand)" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
-              Actual weight
+              {tr("Actual weight")}
             </span>
             <span className="inline-flex items-center gap-2">
               <svg width="22" height="8" aria-hidden="true">
@@ -447,14 +444,14 @@ export function GrowthCard({ data }: Props) {
               {targetLabel[0]!.toUpperCase() + targetLabel.slice(1)}
             </span>
             <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-              The % under each day is how far above (+) or below (−) target the birds were
+              {tr("The % under each day is how far above (+) or below (−) target the birds were")}
             </span>
           </div>
           {curve.length > 0 ? (
             <GrowthChart curve={curve} standardCurve={standardCurve} firstDay={cycleStart} cycleLength={cycleLength} targetLabel={targetLabel} />
           ) : (
             <p className="py-10 text-center text-base" style={{ color: "var(--text-tertiary)" }}>
-              No weight readings yet for this flock.
+              {tr("No weight readings yet for this flock.")}
             </p>
           )}
         </div>
@@ -463,14 +460,14 @@ export function GrowthCard({ data }: Props) {
       {/* House readings, kept small */}
       <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t pt-4 sm:grid-cols-4" style={{ borderColor: "var(--border-subtle)" }}>
         <Small
-          label="Flock"
+          label={tr("Flock")}
           value={flock.total != null ? flock.total.toLocaleString() : "—"}
-          unit={flock.total != null ? "birds" : undefined}
-          note={flock.active != null && flock.inactive != null ? `${flock.active} active · ${flock.inactive} inactive` : undefined}
+          unit={flock.total != null ? tr("birds") : undefined}
+          note={flock.active != null && flock.inactive != null ? tr("{active} active · {inactive} inactive", { active: flock.active, inactive: flock.inactive }) : undefined}
         />
-        <ReadingCell label="Temperature" reading={data.temperature} />
-        <ReadingCell label="Humidity" reading={data.humidity} />
-        <ReadingCell label="Ammonia NH₃" reading={data.ammonia} />
+        <ReadingCell label={tr("Temperature")} reading={data.temperature} />
+        <ReadingCell label={tr("Humidity")} reading={data.humidity} />
+        <ReadingCell label={tr("Ammonia NH₃")} reading={data.ammonia} />
       </dl>
     </section>
   );

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { saveFlockSize } from "@/lib/api-client";
 import { Block, Hint, NOT_ALLOWED, SaveRow, Section, useSaver } from "./SettingsParts";
+import { tr } from "@/lib/i18n";
 
 /* How many birds are in the pen: set it when a batch is placed, and after
  * losses. The Dashboard's flock figure reads it. One pen, so one number. */
@@ -31,28 +32,26 @@ export function FlockSizeSection({ house, canManage }: { house: HouseSize | null
 
   const save = async () => {
     if (!house || !valid || !dirty) return;
-    const ok = await saver.run(() => saveFlockSize([{ id: house.id, population: Number(trimmed) }]), "Saved.");
+    const ok = await saver.run(() => saveFlockSize([{ id: house.id, population: Number(trimmed) }]), tr("Saved."));
     if (ok) await router.invalidate();
   };
 
   if (!house) {
     return (
-      <Section title="Flock Size">
+      <Section title={tr("Flock Size")}>
         <Block>
-          <Hint>No pen is set up yet.</Hint>
+          <Hint>{tr("No pen is set up yet.")}</Hint>
         </Block>
       </Section>
     );
   }
 
   return (
-    <Section title="Flock Size">
+    <Section title={tr("Flock Size")}>
       <Block>
-        <label htmlFor="flock-size" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-          Number of broiler chickens in {house.label}
-        </label>
+        <label htmlFor="flock-size" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{tr("Number of broiler chickens in {label}", { label: house.label })}</label>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
-          Update it when a new batch is placed and after any losses. The Dashboard shows this number.
+          {tr("Update it when a new batch is placed and after any losses. The Dashboard shows this number.")}
         </p>
         <div className="mt-3 flex items-center gap-2">
           <input
@@ -69,11 +68,11 @@ export function FlockSizeSection({ house, canManage }: { house: HouseSize | null
             aria-invalid={!valid}
             className="cb-input w-36 text-right font-mono text-sm disabled:opacity-60"
           />
-          <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>broiler chickens</span>
+          <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>{tr("broiler chickens")}</span>
         </div>
-        {!valid && <Hint tone="error">Enter a whole number from {MIN_BIRDS} to {MAX_BIRDS.toLocaleString()}.</Hint>}
+        {!valid && <Hint tone="error">{tr("Enter a whole number from {MIN_BIRDS} to {MAX_BIRDS}.", { MIN_BIRDS, MAX_BIRDS: MAX_BIRDS.toLocaleString() })}</Hint>}
         {!canManage ? (
-          <Hint>{NOT_ALLOWED}</Hint>
+          <Hint>{tr(NOT_ALLOWED)}</Hint>
         ) : (
           <SaveRow onSave={save} busy={saver.busy} disabled={!valid || !dirty} note={saver.note} />
         )}

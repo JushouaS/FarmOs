@@ -7,9 +7,10 @@ import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay } from "@/lib/farm/sample";
+import { localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/visuals")({
-  head: () => ({ meta: [{ title: "Live Vision - Cerebroil" }] }),
+  head: () => ({ meta: [{ title: tr("Live Vision - Cerebroil") }] }),
   loader: () => getOperationsOverview(),
   component: VisualsDashboardPage,
 });
@@ -30,7 +31,7 @@ function ShellButtons() {
         onClick={() => shell?.openMobileMenu()}
         className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-raised)] lg:hidden"
         style={{ color: "var(--text-secondary)" }}
-        aria-label="Open menu"
+        aria-label={tr("Open menu")}
         aria-controls="app-sidenav"
       >
         <Menu className="h-5 w-5" />
@@ -102,7 +103,7 @@ export function VisualsDashboardPage() {
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-[var(--cv-accent)]"></span>
               </span>
               <h1 className="truncate font-display text-sm font-semibold tracking-tight text-[var(--text-primary)]">
-                Live Camera Feeds
+                {tr("Live Camera Feeds")}
               </h1>
             </div>
 
@@ -131,10 +132,10 @@ export function VisualsDashboardPage() {
                     ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                   }`}
-                aria-label="Dual camera split layout"
+                aria-label={tr("Dual camera split layout")}
               >
-                <span className="sm:hidden">Split</span>
-                <span className="hidden sm:inline">Split (Dual)</span>
+                <span className="sm:hidden">{tr("Split")}</span>
+                <span className="hidden sm:inline">{tr("Split (Dual)")}</span>
               </button>
               <button
                 type="button"
@@ -144,10 +145,10 @@ export function VisualsDashboardPage() {
                     ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                   }`}
-                aria-label="Dahua overhead view only"
+                aria-label={tr("Dahua overhead view only")}
               >
-                <span className="sm:hidden">Dahua</span>
-                <span className="hidden sm:inline">Dahua CCTV</span>
+                <span className="sm:hidden">{tr("Dahua")}</span>
+                <span className="hidden sm:inline">{tr("Dahua CCTV")}</span>
               </button>
               <button
                 type="button"
@@ -157,10 +158,10 @@ export function VisualsDashboardPage() {
                     ? "bg-[var(--surface-raised)] text-[var(--text-primary)] shadow-sm"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                   }`}
-                aria-label="Kinect 3D depth view only"
+                aria-label={tr("Kinect 3D depth view only")}
               >
-                <span className="sm:hidden">Kinect</span>
-                <span className="hidden sm:inline">Kinect 3D</span>
+                <span className="sm:hidden">{tr("Kinect")}</span>
+                <span className="hidden sm:inline">{tr("Kinect 3D")}</span>
               </button>
             </div>
 
@@ -169,8 +170,8 @@ export function VisualsDashboardPage() {
               type="button"
               onClick={handleFullscreenToggle}
               className="tactile-btn tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              title="Toggle Fullscreen"
-              aria-label="Toggle Fullscreen"
+              title={tr("Toggle Fullscreen")}
+              aria-label={tr("Toggle Fullscreen")}
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
@@ -197,7 +198,7 @@ export function VisualsDashboardPage() {
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--cv-accent)]" />
                       <span className="truncate font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
-                        CAM-01 : BROILERS BEHAVIOR
+                        {tr("CAM-01 : BROILERS BEHAVIOR")}
                       </span>
                     </div>
                   </div>
@@ -209,7 +210,7 @@ export function VisualsDashboardPage() {
                       feedOrigin && (
                         <img
                           src={`${feedOrigin}/video_feed/dahua`}
-                          alt="Live camera feed of the broilers' behavior"
+                          alt={tr("Live camera feed of the broilers' behavior")}
                           className="h-full w-full object-contain"
                           onError={() => setDahuaError(true)}
                         />
@@ -224,19 +225,17 @@ export function VisualsDashboardPage() {
                           </svg>
                         </div>
                         <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                          Vision service not reachable
+                          {tr("Vision service not reachable")}
                         </h3>
                         {/* Only shown when the service itself is down; with the
                             service up but the camera off it streams a placeholder. */}
-                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
-                          Nothing is answering at {feedHost}. Start cerebroil-stream, then retry.
-                        </p>
+                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("Nothing is answering at {feedHost}. Start cerebroil-stream, then retry.", { feedHost })}</p>
                         <button
                           type="button"
                           onClick={() => setDahuaError(false)}
                           className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
                         >
-                          Retry Connection
+                          {tr("Retry Connection")}
                         </button>
                       </div>
                     )}
@@ -255,7 +254,7 @@ export function VisualsDashboardPage() {
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--brand)]" />
                       <span className="truncate font-mono text-xs font-semibold tracking-wider text-[var(--text-primary)]">
-                        CAM-02 : WEIGHING STATION
+                        {tr("CAM-02 : WEIGHING STATION")}
                       </span>
                     </div>
                   </div>
@@ -267,7 +266,7 @@ export function VisualsDashboardPage() {
                       feedOrigin && (
                         <img
                           src={`${feedOrigin}/video_feed/kinect`}
-                          alt="Microsoft Kinect 3D depth sensor station feed"
+                          alt={tr("Microsoft Kinect 3D depth sensor station feed")}
                           className="h-full w-full object-contain"
                           onError={() => setKinectError(true)}
                         />
@@ -282,17 +281,15 @@ export function VisualsDashboardPage() {
                           </svg>
                         </div>
                         <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                          Depth station not reachable
+                          {tr("Depth station not reachable")}
                         </h3>
-                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
-                          No depth feed from {feedHost}. Start cerebroil-stream, then recheck.
-                        </p>
+                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("No depth feed from {feedHost}. Start cerebroil-stream, then recheck.", { feedHost })}</p>
                         <button
                           type="button"
                           onClick={() => setKinectError(false)}
                           className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
                         >
-                          Recheck Sensor
+                          {tr("Recheck Sensor")}
                         </button>
                       </div>
                     )}
@@ -334,16 +331,16 @@ export function VisualsDashboardPage() {
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
                 <span className="flex items-center gap-2">
-                  <span className="label-section text-[11px] tracking-widest font-bold">Behavior Breakdown</span>
+                  <span className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
                   <SampleBadge />
                 </span>
                 <time
                   dateTime={now?.toISOString()}
-                  title={`Local time. Day runs from ${clock12(lighting.dayStart)} until ${clock12(lighting.nightStart)}, night is the rest. It is ${nightModeActive ? "night" : "day"} now.`}
+                  title={tr("Local time. Day runs from {value} until {value2}, night is the rest. It is {value3} now.", { value: clock12(lighting.dayStart), value2: clock12(lighting.nightStart), value3: nightModeActive ? tr("night") : tr("day") })}
                   className="-my-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[var(--text-secondary)]"
                 >
                   {now
-                    ? `${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })} · ${nightModeActive ? "Night" : "Day"}`
+                    ? `${now.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit", second: "2-digit" })} · ${nightModeActive ? tr("Night") : tr("Day")}`
                     : "--:--:--"}
                 </time>
               </div>
@@ -351,7 +348,7 @@ export function VisualsDashboardPage() {
               <div className="mt-3.5 space-y-3 text-xs">
                 <div>
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">Active / Standing</span>
+                    <span className="text-[var(--text-secondary)]">{tr("Active / Standing")}</span>
                     <span className="font-mono font-semibold tabular-nums text-[var(--text-primary)]">
                       {totalBirds - bBreakdown.Inactivity - bBreakdown.Huddling - bBreakdown.Sleeping}
                     </span>
@@ -368,7 +365,7 @@ export function VisualsDashboardPage() {
 
                 <div>
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">Inactivity Alert</span>
+                    <span className="text-[var(--text-secondary)]">{tr("Inactivity Alert")}</span>
                     <span className="font-mono font-semibold tabular-nums text-[var(--status-red)]">
                       {bBreakdown.Inactivity}
                     </span>
@@ -385,7 +382,7 @@ export function VisualsDashboardPage() {
 
                 <div>
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">Huddling Cluster</span>
+                    <span className="text-[var(--text-secondary)]">{tr("Huddling Cluster")}</span>
                     <span className="font-mono font-semibold tabular-nums text-[var(--status-amber)]">
                       {bBreakdown.Huddling}
                     </span>
@@ -403,7 +400,7 @@ export function VisualsDashboardPage() {
                 {nightModeActive && (
                   <div>
                     <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-[var(--text-secondary)]">Sleeping Cycle</span>
+                      <span className="text-[var(--text-secondary)]">{tr("Sleeping Cycle")}</span>
                       <span className="font-mono font-semibold tabular-nums text-[var(--status-blue)]">
                         {bBreakdown.Sleeping}
                       </span>
@@ -424,12 +421,12 @@ export function VisualsDashboardPage() {
             {/* Weight Category Distribution */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                Weight Classification <SampleBadge />
+                {tr("Weight Classification")} <SampleBadge />
               </span>
 
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--status-amber)]">Under</div>
+                  <div className="text-[11px] font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Underweight}
                   </div>
@@ -437,7 +434,7 @@ export function VisualsDashboardPage() {
                 </div>
 
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--brand)]">Optimal</div>
+                  <div className="text-[11px] font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Optimal}
                   </div>
@@ -445,7 +442,7 @@ export function VisualsDashboardPage() {
                 </div>
 
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--status-blue)]">Over</div>
+                  <div className="text-[11px] font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Overweight}
                   </div>
@@ -457,26 +454,26 @@ export function VisualsDashboardPage() {
             {/* Quick Environment Telemetry */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                Pen Sensor Telemetry <SampleBadge />
+                {tr("Pen Sensor Telemetry")} <SampleBadge />
               </span>
 
               <div className="mt-3 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-secondary)] text-xs">Temperature:</span>
+                  <span className="text-[var(--text-secondary)] text-xs">{tr("Temperature:")}</span>
                   <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    29.1°C <span className="text-[11px] text-[var(--status-green)] font-semibold">(Nominal)</span>
+                    29.1°C <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-secondary)] text-xs">Humidity:</span>
+                  <span className="text-[var(--text-secondary)] text-xs">{tr("Humidity:")}</span>
                   <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    63% <span className="text-[11px] text-[var(--status-green)] font-semibold">(Nominal)</span>
+                    63% <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-secondary)] text-xs">Ammonia (NH3):</span>
+                  <span className="text-[var(--text-secondary)] text-xs">{tr("Ammonia (NH3):")}</span>
                   <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    9 ppm <span className="text-[11px] text-[var(--status-green)] font-semibold">(Clean)</span>
+                    {tr("9 ppm")} <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Clean)")}</span>
                   </span>
                 </div>
               </div>

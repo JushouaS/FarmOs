@@ -3,9 +3,10 @@ import { AppShell } from "@/components/farm/AppShell";
 import { GrowthCard } from "@/components/farm/GrowthCard";
 import { buildGrowthCardData } from "@/lib/farm/growth";
 import { getOperationsOverview } from "@/lib/farm/repository";
+import { tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Dashboard — Cerebroil" }] }),
+  head: () => ({ meta: [{ title: tr("Dashboard — Cerebroil") }] }),
   loader: () => getOperationsOverview(),
   component: Dashboard,
 });
@@ -55,7 +56,7 @@ function Dashboard() {
         <div className="flex min-w-0 items-center gap-3">
           <KpiIcon path={KPI_ICON_PATHS.flock} />
           <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: "var(--text-primary)" }}>
-            Dashboard
+            {tr("Dashboard")}
           </h1>
         </div>
         <Link
@@ -67,7 +68,7 @@ function Dashboard() {
             <rect x="2" y="6" width="14" height="12" rx="2" />
             <path d="m16 10 6-3v10l-6-3" />
           </svg>
-          Open live camera
+          {tr("Open live camera")}
         </Link>
       </header>
 

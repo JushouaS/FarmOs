@@ -3,6 +3,7 @@ import { useRouter } from "@tanstack/react-router";
 import { saveLighting } from "@/lib/api-client";
 import { clock12, type LightingHours } from "@/lib/farm/dataset";
 import { Block, Hint, NOT_ALLOWED, SaveRow, Section, useSaver } from "./SettingsParts";
+import { tr } from "@/lib/i18n";
 
 /* When the day starts and when the night starts. At night the birds count as
  * sleeping on Live Camera and in the camera analysis, so this sets that split. */
@@ -18,7 +19,7 @@ const minutesOf = (hhmm: string) => {
 function duration(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  return m === 0 ? `${h} h` : h === 0 ? `${m} min` : `${h} h ${m} min`;
+  return m === 0 ? tr("{h} h", { h }) : h === 0 ? tr("{m} min", { m }) : tr("{h} h {m} min", { h, m });
 }
 
 export function LightingSection({ lighting, canManage }: { lighting: LightingHours; canManage: boolean }) {
@@ -39,7 +40,7 @@ export function LightingSection({ lighting, canManage }: { lighting: LightingHou
 
   const save = async () => {
     if (!valid || !dirty) return;
-    const ok = await saver.run(() => saveLighting({ dayStart: day, nightStart: night }), "Saved.");
+    const ok = await saver.run(() => saveLighting({ dayStart: day, nightStart: night }), tr("Saved."));
     if (ok) await router.invalidate();
   };
 
@@ -64,24 +65,22 @@ export function LightingSection({ lighting, canManage }: { lighting: LightingHou
   );
 
   return (
-    <Section title="Light and Night Hours">
+    <Section title={tr("Light and Night Hours")}>
       <Block>
         <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          At night the birds count as sleeping on Live Camera and in the camera analysis, and inactivity is not flagged.
+          {tr("At night the birds count as sleeping on Live Camera and in the camera analysis, and inactivity is not flagged.")}
         </p>
         <div className="mt-3 flex flex-wrap gap-5">
-          {field("day-start", "Day starts", day, setDay)}
-          {field("night-start", "Night starts", night, setNight)}
+          {field("day-start", tr("Day starts"), day, setDay)}
+          {field("night-start", tr("Night starts"), night, setNight)}
         </div>
         {valid ? (
-          <Hint>
-            Day runs from {clock12(day)} until {clock12(night)} ({duration(dayLength)}). Night is the other {duration(1440 - dayLength)}.
-          </Hint>
+          <Hint>{tr("Day runs from {clock12} until {clock122} ({duration}). Night is the other {duration2}.", { clock12: clock12(day), clock122: clock12(night), duration: duration(dayLength), duration2: duration(1440 - dayLength) })}</Hint>
         ) : (
-          <Hint tone="error">Give both times, and make them different.</Hint>
+          <Hint tone="error">{tr("Give both times, and make them different.")}</Hint>
         )}
         {!canManage ? (
-          <Hint>{NOT_ALLOWED}</Hint>
+          <Hint>{tr(NOT_ALLOWED)}</Hint>
         ) : (
           <SaveRow onSave={save} busy={saver.busy} disabled={!valid || !dirty} note={saver.note} />
         )}

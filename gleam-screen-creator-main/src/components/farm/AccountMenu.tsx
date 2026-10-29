@@ -6,7 +6,8 @@ import { UserAvatar } from "./UserAvatar";
 import { ReportDialog } from "./ReportDialog";
 import { SusDialog } from "./SusDialog";
 import { useAuth } from "@/lib/auth-context";
-import { AVATAR_ACCEPT, AVATAR_RULES, AvatarError, removeAvatar, saveAvatar, useAvatar } from "@/lib/avatar";
+import { AVATAR_ACCEPT, avatarRules, AvatarError, removeAvatar, saveAvatar, useAvatar } from "@/lib/avatar";
+import { tr } from "@/lib/i18n";
 
 /* Account menu: opens from the top bar's avatar, in the shape of Google's
  * account card. A tinted sheet holds the person (email, photo with a camera
@@ -51,7 +52,7 @@ export function AccountMenu() {
   const changeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const name = user?.fullName ?? user?.email ?? "Farm Manager";
+  const name = user?.fullName ?? user?.email ?? tr("Farm Manager");
   const firstName = user?.fullName?.trim().split(/\s+/)[0] ?? user?.email?.split("@")[0] ?? "there";
 
   const onOpenChange = (next: boolean) => {
@@ -70,11 +71,11 @@ export function AccountMenu() {
     setMessage(null);
     try {
       await saveAvatar(userKey, file);
-      setMessage({ kind: "ok", text: "Profile photo updated." });
+      setMessage({ kind: "ok", text: tr("Profile photo updated.") });
     } catch (err) {
       setMessage({
         kind: "error",
-        text: err instanceof AvatarError ? err.message : "Something went wrong saving that photo.",
+        text: err instanceof AvatarError ? err.message : tr("Something went wrong saving that photo."),
       });
     } finally {
       setBusy(false);
@@ -100,7 +101,7 @@ export function AccountMenu() {
     if (!userKey) return;
     removeAvatar(userKey);
     setChoiceOpen(false);
-    setMessage({ kind: "ok", text: "Profile photo removed." });
+    setMessage({ kind: "ok", text: tr("Profile photo removed.") });
     // The choice buttons are about to unmount; keep keyboard focus in the menu.
     requestAnimationFrame(() => avatarBtnRef.current?.focus());
   };
@@ -136,7 +137,7 @@ export function AccountMenu() {
           ref={triggerRef}
           type="button"
           className="relative h-8 w-8 shrink-0 rounded-full shadow-xs transition-transform active:scale-95 pointer-coarse:h-11 pointer-coarse:w-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)]"
-          aria-label={`Account menu for ${name}`}
+          aria-label={tr("Account menu for {name}", { name })}
           aria-haspopup="dialog"
           aria-expanded={open}
           title={name}
@@ -149,7 +150,7 @@ export function AccountMenu() {
         align="end"
         sideOffset={10}
         collisionPadding={12}
-        aria-label="Account"
+        aria-label={tr("Account")}
         className="w-[min(22rem,calc(100vw-1.5rem))] rounded-[28px] border border-[color:var(--border-default)] bg-[color:var(--surface-raised)] p-2 text-[color:var(--text-primary)] shadow-[var(--shadow-elev-3)]"
       >
         {/* The person */}
@@ -166,9 +167,9 @@ export function AccountMenu() {
             onClick={onAvatarPress}
             disabled={busy}
             className="relative mt-4 h-20 w-20 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)] disabled:opacity-60"
-            aria-label={photo ? "Profile photo options" : "Add profile photo"}
+            aria-label={photo ? tr("Profile photo options") : tr("Add profile photo")}
             aria-expanded={photo ? choiceOpen : undefined}
-            title={photo ? "Change or delete your photo" : "Add a profile photo"}
+            title={photo ? tr("Change or delete your photo") : tr("Add a profile photo")}
           >
             <UserAvatar user={user} className="text-3xl" />
             <span
@@ -180,7 +181,7 @@ export function AccountMenu() {
           </button>
 
           {photo && choiceOpen && (
-            <div role="group" aria-label="Profile photo" className="mt-3 grid w-full grid-cols-2 gap-2">
+            <div role="group" aria-label={tr("Profile photo")} className="mt-3 grid w-full grid-cols-2 gap-2">
               <button
                 ref={changeRef}
                 type="button"
@@ -188,7 +189,7 @@ export function AccountMenu() {
                 className="tap inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-[color:var(--border-strong)] bg-[color:var(--surface-card)] px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[color:var(--surface-sunken)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)]"
               >
                 <ImagePlus className="h-4 w-4" aria-hidden="true" />
-                Change photo
+                {tr("Change photo")}
               </button>
               <button
                 type="button"
@@ -197,12 +198,12 @@ export function AccountMenu() {
                 style={{ color: "var(--status-red-text)" }}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
-                Delete photo
+                {tr("Delete photo")}
               </button>
             </div>
           )}
 
-          <h2 className="mt-4 font-display text-2xl font-semibold tracking-tight">Hi, {firstName}!</h2>
+          <h2 className="mt-4 font-display text-2xl font-semibold tracking-tight">{tr("Hi, {firstName}!", { firstName })}</h2>
           <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
             {roleLabel(user?.roles?.[0])}
           </p>
@@ -212,7 +213,7 @@ export function AccountMenu() {
             onClick={() => setOpen(false)}
             className="tap mt-4 inline-flex items-center justify-center rounded-full border border-[color:var(--border-strong)] px-5 py-2 text-sm font-medium transition-colors hover:bg-[color:var(--surface-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--brand)]"
           >
-            Account settings
+            {tr("Account settings")}
           </Link>
         </div>
 
@@ -229,15 +230,15 @@ export function AccountMenu() {
           />
           <button type="button" className={rowClass} onClick={onReport}>
             <MessageSquareWarning className="h-4 w-4 shrink-0" style={{ color: "var(--text-secondary)" }} />
-            Report a problem
+            {tr("Report a problem")}
           </button>
           <button type="button" className={rowClass} onClick={onSurvey}>
             <ClipboardList className="h-4 w-4 shrink-0" style={{ color: "var(--text-secondary)" }} />
-            Usability survey
+            {tr("Usability survey")}
           </button>
           <button type="button" className={rowClass} onClick={onSignOut}>
             <LogOut className="h-4 w-4 shrink-0" style={{ color: "var(--text-secondary)" }} />
-            Sign out
+            {tr("Sign out")}
           </button>
         </div>
 
@@ -251,9 +252,7 @@ export function AccountMenu() {
             {message.text}
           </p>
         )}
-        <p className="px-4 pb-2 pt-3 text-center text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-          {AVATAR_RULES} Saved in this browser only.
-        </p>
+        <p className="px-4 pb-2 pt-3 text-center text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("{AVATAR_RULES} Saved in this browser only.", { AVATAR_RULES: avatarRules() })}</p>
       </PopoverContent>
     </Popover>
 

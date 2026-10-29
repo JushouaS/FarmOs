@@ -1,29 +1,26 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Info, Languages, Loader2, OctagonAlert, ScanSearch } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, CheckCircle2, Info, Loader2, OctagonAlert, ScanSearch } from "lucide-react";
 import { ApiError, scanCamera } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import {
   CHROME,
-  LANGUAGES,
   buildFindings,
   findingText,
   overallSeverity,
   ui,
   type Finding,
-  type Lang,
   type ScanResult,
   type Severity,
 } from "@/lib/analysis-insights";
+import { localeTag, tr, useLanguage } from "@/lib/i18n";
 
 /* Live Camera "Analysis": one button that analyzes the camera data, then shows
- * tips for the farmer. The panel's own labels stay in English; the analysis
- * itself (status, figures, findings, tips) can be translated to Tagalog or
- * Cebuano. What the scan can and cannot tell is described in
- * lib/analysis-insights.ts. */
+ * tips for the farmer, in the language of the whole system (Settings, or the
+ * language menu in the top bar). What the scan can and cannot tell is described
+ * in lib/analysis-insights.ts. */
 
 const CAMERA_ID = "CAM-01";
-const LANG_KEY = "cb-analysis-lang";
 
 const SEVERITY_STYLE: Record<Severity, { color: string; bg: string; border: string; Icon: typeof Info }> = {
   ok: { color: "var(--status-green-text)", bg: "var(--status-green-bg)", border: "var(--status-green-border)", Icon: CheckCircle2 },
@@ -45,39 +42,12 @@ function errorKeyFor(err: unknown): ErrorKey {
   return "err_generic";
 }
 
-function readLang(): Lang {
-  try {
-    const saved = localStorage.getItem(LANG_KEY);
-    if (saved === "tl" || saved === "ceb" || saved === "en") return saved;
-  } catch {
-    /* storage blocked: fall back to English */
-  }
-  return "en";
-}
-
 export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: LightingHours }) {
-  const { refresh, user, updateProfile } = useAuth();
-  const [lang, setLang] = useState<Lang>("en");
+  const { refresh } = useAuth();
+  const { lang } = useLanguage();
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);
   const [scan, setScan] = useState<{ result: ScanResult; at: Date; findings: Finding[] } | null>(null);
-
-  // The language is the account's (Settings > Account), and follows the person
-  // across devices. Until it is known, the last choice made in this browser.
-  // Read after mount so the server render and the first client render match.
-  const savedLang = user?.analysisLanguage;
-  useEffect(() => setLang(savedLang ?? readLang()), [savedLang]);
-
-  const chooseLang = (next: Lang) => {
-    setLang(next);
-    try {
-      localStorage.setItem(LANG_KEY, next);
-    } catch {
-      /* not saved here; still applies for this visit */
-    }
-    // Keep the account's language in step with the choice made on the panel.
-    if (next !== savedLang) updateProfile({ analysisLanguage: next }).catch(() => {});
-  };
 
   const run = async () => {
     if (scanning) return;
@@ -114,13 +84,13 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
     >
       <div className="border-b border-[var(--border-subtle)] pb-2.5">
         <h2 id="analysis-title" className="label-section text-[11px] font-bold tracking-widest">
-          {CHROME.title}
+          {tr(CHROME.title)}
         </h2>
       </div>
 
       <div className="mt-3">
         {!scan && !scanning && (
-          <p className="mb-3 text-xs leading-relaxed text-[var(--text-tertiary)]">{CHROME.intro}</p>
+          <p className="mb-3 text-xs leading-relaxed text-[var(--text-tertiary)]">{tr(CHROME.intro)}</p>
         )}
 
         <button
@@ -134,37 +104,18 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
           ) : (
             <ScanSearch className="h-4 w-4" aria-hidden="true" />
           )}
-          {scanning ? CHROME.scanning : scan ? CHROME.again : CHROME.scan}
+          {tr(scanning ? CHROME.scanning : scan ? CHROME.again : CHROME.scan)}
         </button>
 
         {error && (
           <p role="alert" className="mt-3 text-xs leading-relaxed" style={{ color: "var(--status-red-text)" }}>
-            {CHROME[error]}
+            {tr(CHROME[error])}
           </p>
         )}
       </div>
 
       {scan && overall && (
         <div className="mt-4 space-y-3" aria-live="polite">
-          <div role="group" aria-label={CHROME.translate} className="flex flex-wrap items-center gap-1.5">
-            <Languages className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" aria-hidden="true" />
-            {LANGUAGES.map((l) => (
-              <button
-                key={l.code}
-                type="button"
-                onClick={() => chooseLang(l.code)}
-                aria-pressed={lang === l.code}
-                className={`tactile-btn tap rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                  lang === l.code
-                    ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
-                    : "border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                {l.name}
-              </button>
-            ))}
-          </div>
-
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span
               className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
@@ -181,7 +132,7 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
               {ui(lang, statusKey)}
             </span>
             <span className="text-[11px] text-[var(--text-tertiary)]">
-              {ui(lang, "scannedAt", { time: scan.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
+              {ui(lang, "scannedAt", { time: scan.at.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit" }) })}
             </span>
           </div>
 

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api-client";
 import { STATUS_TONE, formatDateTimeUtc, formatTime } from "@/lib/farm/format";
 import type { StatusLevel } from "@/lib/farm/types";
+import { T, tr } from "@/lib/i18n";
 
 const TITLE = "Notifications | CereBroiler";
 const DESC = "User notification center — delivery channels and read status.";
@@ -44,9 +45,9 @@ const CHANNEL_LABELS: Record<string, string> = {
 };
 
 const FILTER_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "unread", label: "Unread" },
-  { value: "read", label: "Read" },
+  { value: "all", label: T("All") },
+  { value: "unread", label: T("Unread") },
+  { value: "read", label: T("Read") },
 ] as const;
 
 /* -------------------------------------------------------------------------- */
@@ -67,7 +68,7 @@ function NotificationsPage() {
       const data = await fetchNotifications();
       setNotifications(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load notifications");
+      setError(e instanceof Error ? e.message : tr("Failed to load notifications"));
     } finally {
       setIsLoading(false);
     }
@@ -112,12 +113,12 @@ function NotificationsPage() {
             </div>
             <div>
               <h1 className="font-display font-headline-md text-headline-md font-bold text-on-surface">
-                Notification Center
+                {tr("Notification Center")}
               </h1>
               <p className="font-body-md text-body-md text-on-surface-variant">
                 {isLoading
-                  ? "Loading..."
-                  : `${notifications.length} total · ${unreadCount} unread`}
+                  ? tr("Loading...")
+                  : tr("{length} total · {unreadCount} unread", { length: notifications.length, unreadCount })}
               </p>
             </div>
           </div>
@@ -127,7 +128,7 @@ function NotificationsPage() {
             className="tap flex items-center gap-2 self-start rounded-lg border border-outline-variant px-4 py-2 text-sm text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-50"
           >
             <Icon name="refresh" size={16} />
-            Refresh
+            {tr("Refresh")}
           </button>
         </div>
 
@@ -143,7 +144,7 @@ function NotificationsPage() {
                   active ? "text-primary" : "text-on-surface-variant hover:text-on-surface"
                 }`}
               >
-                {f.label}
+                {tr(f.label)}
                 {f.value === "unread" && unreadCount > 0 && (
                   <span className="ml-1.5 rounded-full bg-error px-1.5 py-0.5 text-[10px] text-white">
                     {unreadCount}
@@ -199,9 +200,9 @@ function NotificationFeed({
     return (
       <div className="clinical-card flex flex-col items-center justify-center py-16">
         <Icon name="notifications_none" size={40} className="text-on-surface-variant/40" />
-        <p className="mt-4 font-body-md text-body-md text-on-surface">No notifications</p>
+        <p className="mt-4 font-body-md text-body-md text-on-surface">{tr("No notifications")}</p>
         <p className="mt-1 text-sm text-on-surface-variant">
-          Your inbox is empty for this filter.
+          {tr("Your inbox is empty for this filter.")}
         </p>
       </div>
     );
@@ -252,7 +253,7 @@ function NotificationFeed({
                 </span>
               </div>
               <p className="mt-0.5 text-sm leading-relaxed text-on-surface-variant">
-                {notif.body}
+                {tr(notif.body)}
               </p>
               <span className="mt-1.5 block text-[11px] text-on-surface-variant/70">
                 {formatDateTimeUtc(notif.createdAt)}
@@ -268,8 +269,8 @@ function NotificationFeed({
                   onClick={() => onMarkRead(notif.id)}
                   disabled={isMarking}
                   className="tap rounded-md p-2 text-on-surface-variant transition-all hover:bg-primary/10 hover:text-primary focus-visible:opacity-100 disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
-                  title="Mark as read"
-                  aria-label="Mark as read"
+                  title={tr("Mark as read")}
+                  aria-label={tr("Mark as read")}
                 >
                   <Icon name="done" size={18} />
                 </button>

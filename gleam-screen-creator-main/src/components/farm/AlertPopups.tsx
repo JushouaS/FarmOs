@@ -9,6 +9,8 @@ import {
   setUnacknowledgedAlerts,
   useUnacknowledgedAlerts,
 } from "@/lib/alert-store";
+import { T, localeTag, tr } from "@/lib/i18n";
+import { alertKindTitle } from "@/lib/farm/alert-text";
 
 /* Alert pop-ups: a small card that slides in at the corner of the screen,
  * desktop-notification style, when something abnormal comes in.
@@ -32,9 +34,9 @@ const DISMISSED_KEY = "cb-alert-popups-dismissed";
 const DISMISSED_KEEP = 200;
 
 const STYLE = {
-  critical: { label: "Critical alert", color: "var(--status-red-text)", bg: "var(--status-red-bg)", border: "var(--status-red-border)", bar: "var(--status-red)", Icon: OctagonAlert },
-  deviation: { label: "Deviation", color: "var(--status-amber-text)", bg: "var(--status-amber-bg)", border: "var(--status-amber-border)", bar: "var(--status-amber)", Icon: TrendingDown },
-  warning: { label: "Warning", color: "var(--status-amber-text)", bg: "var(--status-amber-bg)", border: "var(--status-amber-border)", bar: "var(--status-amber)", Icon: AlertTriangle },
+  critical: { label: T("Critical alert"), color: "var(--status-red-text)", bg: "var(--status-red-bg)", border: "var(--status-red-border)", bar: "var(--status-red)", Icon: OctagonAlert },
+  deviation: { label: T("Deviation"), color: "var(--status-amber-text)", bg: "var(--status-amber-bg)", border: "var(--status-amber-border)", bar: "var(--status-amber)", Icon: TrendingDown },
+  warning: { label: T("Warning"), color: "var(--status-amber-text)", bg: "var(--status-amber-bg)", border: "var(--status-amber-border)", bar: "var(--status-amber)", Icon: AlertTriangle },
 } as const;
 
 type Severity = keyof typeof STYLE;
@@ -67,7 +69,7 @@ function whenOf(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? ""
-    : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    : d.toLocaleString(localeTag(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function useIsWide(): boolean {
@@ -161,7 +163,7 @@ export function AlertPopups() {
   return (
     <div
       role="region"
-      aria-label="Alert notifications"
+      aria-label={tr("Alert notifications")}
       className="pointer-events-none fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex flex-col gap-2 sm:left-auto sm:right-4 sm:w-[23rem] lg:bottom-5 lg:right-5"
     >
       {visible.map((alert) => {
@@ -185,15 +187,15 @@ export function AlertPopups() {
 
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>
-                  {label}
+                  {tr(label)}
                 </p>
-                <p className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">{titleOf(alert.kind)}</p>
-                <p className="mt-0.5 line-clamp-2 text-sm leading-snug sm:line-clamp-3 text-[var(--text-secondary)]">{alert.message}</p>
+                <p className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">{alertKindTitle(alert.kind)}</p>
+                <p className="mt-0.5 line-clamp-2 text-sm leading-snug sm:line-clamp-3 text-[var(--text-secondary)]">{tr(alert.message)}</p>
                 <p className="mt-1 font-mono text-xs text-[var(--text-tertiary)]">{whenOf(alert.raisedAt)}</p>
 
                 {failed === alert.id && (
                   <p role="alert" className="mt-1.5 text-xs" style={{ color: "var(--status-red-text)" }}>
-                    Could not save that. Try again.
+                    {tr("Could not save that. Try again.")}
                   </p>
                 )}
 
@@ -205,13 +207,13 @@ export function AlertPopups() {
                     className="tap inline-flex items-center gap-1.5 rounded-full bg-[var(--brand)] px-3.5 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:opacity-60"
                   >
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    {saving === alert.id ? "Saving…" : "Noted"}
+                    {saving === alert.id ? tr("Saving…") : tr("Noted")}
                   </button>
                   <Link
                     to="/alerts"
                     className="tap inline-flex items-center text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
                   >
-                    View alerts
+                    {tr("View alerts")}
                   </Link>
                 </div>
               </div>
@@ -219,8 +221,8 @@ export function AlertPopups() {
               <button
                 type="button"
                 onClick={() => close(alert.id)}
-                aria-label={`Close ${titleOf(alert.kind)} alert`}
-                title="Close (the alert stays on the Alerts page)"
+                aria-label={tr("Close {value} alert", { value: alertKindTitle(alert.kind) })}
+                title={tr("Close (the alert stays on the Alerts page)")}
                 className="tap -mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--surface-card)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
@@ -234,9 +236,7 @@ export function AlertPopups() {
         <Link
           to="/alerts"
           className="pointer-events-auto self-end rounded-full border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] shadow-lg hover:text-[var(--text-primary)]"
-        >
-          +{hidden} more · View all
-        </Link>
+        >{tr("+{hidden} more · View all", { hidden })}</Link>
       )}
     </div>
   );

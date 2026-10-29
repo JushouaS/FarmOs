@@ -9,9 +9,10 @@ import { ApiError, saveCycleStartDay, saveNotificationPreferences, type Notifica
 import { useAuth } from "@/lib/auth-context";
 import { DEFAULT_LIGHTING } from "@/lib/farm/dataset";
 import { getNotificationPreferences, getOperationsOverview } from "@/lib/farm/repository";
+import { T, localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({ meta: [{ title: "Settings — Cerebroil" }] }),
+  head: () => ({ meta: [{ title: tr("Settings — Cerebroil") }] }),
   loader: async () => {
     const [overview, prefs] = await Promise.all([
       getOperationsOverview(),
@@ -54,14 +55,14 @@ function CycleDaySection({ cycle }: { cycle: any }) {
     try {
       await saveCycleStartDay(value);
       await router.invalidate();
-      setNote({ ok: true, text: `Done. The flock is on Day ${value} today.` });
+      setNote({ ok: true, text: tr("Done. The flock is on Day {value} today.", { value }) });
     } catch (err) {
       setNote({
         ok: false,
         text:
           err instanceof ApiError && err.status === 403
-            ? "Only an administrator or farm manager can change the day."
-            : "Could not save the day. Check the connection and try again.",
+            ? tr("Only an administrator or farm manager can change the day.")
+            : tr("Could not save the day. Check the connection and try again."),
       });
     } finally {
       setBusy(false);
@@ -69,22 +70,20 @@ function CycleDaySection({ cycle }: { cycle: any }) {
   };
 
   const harvest = cycle?.projectedYieldDate
-    ? new Date(`${cycle.projectedYieldDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    ? new Date(`${cycle.projectedYieldDate}T00:00:00`).toLocaleDateString(localeTag(), { month: "short", day: "numeric", year: "numeric" })
     : null;
   const left = Math.max(0, endDay - today);
 
   return (
-    <Section title="Grow-out Day">
+    <Section title={tr("Grow-out Day")}>
       <Block>
         <label htmlFor="start-day" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-          Start day
+          {tr("Start day")}
         </label>
-        <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
-          The day the flock is on today, from Day {minDay} to Day {endDay}. It counts up by one each day after that.
-        </p>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{tr("The day the flock is on today, from Day {minDay} to Day {endDay}. It counts up by one each day after that.", { minDay, endDay })}</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <div className="inline-flex items-center overflow-hidden rounded-xl" style={{ border: "1px solid var(--border-default)", background: "var(--surface-sunken)" }}>
-            <button type="button" onClick={() => step(-1)} disabled={valid && value <= minDay} aria-label="One day earlier"
+            <button type="button" onClick={() => step(-1)} disabled={valid && value <= minDay} aria-label={tr("One day earlier")}
               className="tap h-11 w-11 text-lg font-semibold disabled:opacity-40" style={{ color: "var(--text-secondary)" }}>
               −
             </button>
@@ -102,23 +101,21 @@ function CycleDaySection({ cycle }: { cycle: any }) {
               className="h-11 w-16 bg-transparent text-center font-mono text-lg font-bold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               style={{ color: "var(--text-primary)" }}
             />
-            <button type="button" onClick={() => step(1)} disabled={valid && value >= endDay} aria-label="One day later"
+            <button type="button" onClick={() => step(1)} disabled={valid && value >= endDay} aria-label={tr("One day later")}
               className="tap h-11 w-11 text-lg font-semibold disabled:opacity-40" style={{ color: "var(--text-secondary)" }}>
               +
             </button>
           </div>
           <button type="button" onClick={apply} disabled={!valid || busy} className="btn-primary tap disabled:opacity-50">
-            {busy ? "Applying…" : valid ? `Set today as Day ${value}` : "Set the day"}
+            {busy ? tr("Applying…") : valid ? tr("Set today as Day {value}", { value }) : tr("Set the day")}
           </button>
           {startDay !== minDay && (
             <button type="button" onClick={() => { setNote(null); setDraft(String(minDay)); }}
-              className="tap text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>
-              Use Day {minDay}
-            </button>
+              className="tap text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>{tr("Use Day {minDay}", { minDay })}</button>
           )}
         </div>
         <p id="start-day-hint" className="mt-2 text-xs" style={{ color: valid ? "var(--text-tertiary)" : "var(--status-red-text)" }}>
-          {valid ? `Changing it updates the Dashboard, Analytics, Flock Tracking, Live Camera and Insights.` : `Enter a whole number from ${minDay} to ${endDay}.`}
+          {valid ? tr("Changing it updates the Dashboard, Analytics, Flock Tracking, Live Camera and Insights.") : tr("Enter a whole number from {minDay} to {endDay}.", { minDay, endDay })}
         </p>
         {note && (
           <p role="status" className="mt-2 text-sm font-semibold" style={{ color: note.ok ? "var(--status-green-text)" : "var(--status-red-text)" }}>
@@ -126,8 +123,8 @@ function CycleDaySection({ cycle }: { cycle: any }) {
           </p>
         )}
       </Block>
-      <Row label="Today" sub={harvest ? `Last day is ${harvest}` : undefined}>
-        <MonoVal value={`Day ${today} of ${endDay} · ${left} ${left === 1 ? "day" : "days"} left`} />
+      <Row label={tr("Today")} sub={harvest ? tr("Last day is {harvest}", { harvest }) : undefined}>
+        <MonoVal value={left === 1 ? tr("Day {today} of {endDay} · 1 day left", { today, endDay }) : tr("Day {today} of {endDay} · {left} days left", { today, endDay, left })} />
       </Row>
     </Section>
   );
@@ -137,14 +134,14 @@ function CycleDaySection({ cycle }: { cycle: any }) {
  * channels, from which severity up, and the quiet hours. These save the choice;
  * sending email or push is not set up yet, and the card says so. */
 const CHANNELS = [
-  { channel: "email", label: "Email Alerts", sub: "Alerts at your chosen level, by email" },
-  { channel: "push", label: "Push Notifications", sub: "Browser push at your chosen level" },
+  { channel: "email", label: T("Email Alerts"), sub: T("Alerts at your chosen level, by email") },
+  { channel: "push", label: T("Push Notifications"), sub: T("Browser push at your chosen level") },
 ] as const;
 
 const LEVELS = [
-  { value: "critical", label: "Critical only" },
-  { value: "warning", label: "Warning and critical" },
-  { value: "deviation", label: "Everything, including deviations" },
+  { value: "critical", label: T("Critical only") },
+  { value: "warning", label: T("Warning and critical") },
+  { value: "deviation", label: T("Everything, including deviations") },
 ] as const;
 type Level = (typeof LEVELS)[number]["value"];
 
@@ -198,20 +195,20 @@ function NotificationsSection({ stored }: { stored: NotificationPreference[] | n
         })),
       ];
       return saveNotificationPreferences(rows);
-    }, "Saved.");
+    }, tr("Saved."));
     if (ok) await router.invalidate();
   };
 
   return (
-    <Section title="Notifications">
+    <Section title={tr("Notifications")}>
       {CHANNELS.map(({ channel, label, sub }) => (
-        <Row key={channel} label={label} sub={sub}>
-          <Toggle label={label} checked={on[channel]} disabled={unavailable} onChange={(v) => change({ [channel]: v })} />
+        <Row key={channel} label={tr(label)} sub={tr(sub)}>
+          <Toggle label={tr(label)} checked={on[channel]} disabled={unavailable} onChange={(v) => change({ [channel]: v })} />
         </Row>
       ))}
       <Block>
         <label htmlFor="alert-level" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-          Send me
+          {tr("Send me")}
         </label>
         <select
           id="alert-level"
@@ -221,12 +218,12 @@ function NotificationsSection({ stored }: { stored: NotificationPreference[] | n
           className="cb-input mt-1.5 block w-full text-sm disabled:opacity-60"
         >
           {LEVELS.map((l) => (
-            <option key={l.value} value={l.value}>{l.label}</option>
+            <option key={l.value} value={l.value}>{tr(l.label)}</option>
           ))}
         </select>
       </Block>
-      <Row label="Quiet hours" sub="Hold back alerts below critical during these hours">
-        <Toggle label="Quiet hours" checked={on.quietOn} disabled={unavailable} onChange={(v) => change({ quietOn: v })} />
+      <Row label={tr("Quiet hours")} sub={tr("Hold back alerts below critical during these hours")}>
+        <Toggle label={tr("Quiet hours")} checked={on.quietOn} disabled={unavailable} onChange={(v) => change({ quietOn: v })} />
       </Row>
       {on.quietOn && (
         <Block>
@@ -246,14 +243,14 @@ function NotificationsSection({ stored }: { stored: NotificationPreference[] | n
               </div>
             ))}
           </div>
-          {!quietValid && <Hint tone="error">Give both times, and make them different.</Hint>}
+          {!quietValid && <Hint tone="error">{tr("Give both times, and make them different.")}</Hint>}
         </Block>
       )}
       <Block>
         <Hint tone={unavailable ? "error" : undefined}>
           {unavailable
-            ? "Could not load your saved preferences. Refresh the page to try again."
-            : "Your choices are saved to your account. Sending email and push is not set up yet, so no messages go out."}
+            ? tr("Could not load your saved preferences. Refresh the page to try again.")
+            : tr("Your choices are saved to your account. Sending email and push is not set up yet, so no messages go out.")}
         </Hint>
         <SaveRow onSave={save} busy={saver.busy} disabled={!dirty || !quietValid || unavailable} note={saver.note} />
       </Block>
@@ -278,10 +275,10 @@ function SettingsPage() {
     <AppShell>
       <div className="mb-6">
         <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-          Settings
+          {tr("Settings")}
         </h1>
         <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-          System configuration, Cerebroil CV Flock Monitor
+          {tr("System configuration, Cerebroil CV Flock Monitor")}
         </p>
       </div>
 

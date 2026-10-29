@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ApiError } from "@/lib/api-client";
+import { T, tr } from "@/lib/i18n";
 
 /* Building blocks the Settings cards share: the card, its rows, the switch, and
  * the busy flag plus the message shown after a save. */
@@ -70,7 +71,7 @@ export function Block({ children }: { children: ReactNode }) {
 
 export type SaveNote = { ok: boolean; text: string } | null;
 
-export const NOT_ALLOWED = "Only an administrator or farm manager can change this.";
+export const NOT_ALLOWED = T("Only an administrator or farm manager can change this.");
 
 /**
  * The busy flag and the message after a save. `run` does the save and words the
@@ -95,9 +96,9 @@ export function useSaver() {
         text:
           err instanceof ApiError
             ? err.status === 403
-              ? NOT_ALLOWED
-              : (err.detail ?? "Could not save. Try again.")
-            : "Could not save. Check the connection and try again.",
+              ? tr(NOT_ALLOWED)
+              : (err.detail ?? tr("Could not save. Try again."))
+            : tr("Could not save. Check the connection and try again."),
       });
       return false;
     } finally {
@@ -124,7 +125,7 @@ export function SaveRow({
   busy,
   disabled,
   note,
-  label = "Save Changes",
+  label,
 }: {
   onSave: () => void;
   busy: boolean;
@@ -135,7 +136,7 @@ export function SaveRow({
   return (
     <div className="mt-3 flex flex-wrap items-center gap-3">
       <button type="button" onClick={onSave} disabled={disabled || busy} className="btn-primary tap disabled:opacity-50">
-        {busy ? "Saving…" : label}
+        {busy ? tr("Saving…") : (label ?? tr("Save Changes"))}
       </button>
       <NoteLine note={note} />
     </div>

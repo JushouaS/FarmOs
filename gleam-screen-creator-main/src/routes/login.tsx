@@ -4,11 +4,13 @@ import { useAuth, MfaRequiredError, type LoginError } from "@/lib/auth-context";
 import { CerebroilLogo } from "@/components/farm/SideNav";
 import { gmailComposeUrl } from "@/lib/contact";
 import { Chicken, type ChickenMood } from "@/components/farm/Chicken";
+import { tr } from "@/lib/i18n";
+import { LanguageMenu } from "@/components/farm/LanguageMenu";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign In - Cerebroil" },
+      { title: tr("Sign In - Cerebroil") },
       { name: "description", content: "Sign in to Cerebroil CV Flock Monitor." },
     ],
   }),
@@ -67,8 +69,8 @@ function ThemeToggle() {
       onClick={toggle}
       className="tactile-btn tap flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:text-[color:var(--text-primary)]"
       style={{ ...glassCard, boxShadow: "none", color: "var(--text-secondary)" }}
-      aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
-      title={isLight ? "Switch to dark mode" : "Switch to light mode"}
+      aria-label={isLight ? tr("Switch to dark mode") : tr("Switch to light mode")}
+      title={isLight ? tr("Switch to dark mode") : tr("Switch to light mode")}
     >
       {isLight ? (
         <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -131,7 +133,7 @@ function LoginPage() {
     setError(null);
     setHint(null);
     if (!username.trim() || !password) {
-      setError("Enter your username and password.");
+      setError(tr("Enter your username and password."));
       setShaking(true);
       return;
     }
@@ -148,16 +150,16 @@ function LoginPage() {
       }
       const code = err instanceof Error ? err.message : "login_failed";
       const msgs: Record<string, string> = {
-        invalid_credentials: "Incorrect username or password.",
-        user_disabled: "This account is disabled. Contact your administrator.",
-        account_locked: "Account temporarily locked due to too many failed attempts.",
-        rate_limit_exceeded: "Too many attempts. Wait a minute and try again.",
-        login_failed: "Could not reach the server. Check your connection.",
+        invalid_credentials: tr("Incorrect username or password."),
+        user_disabled: tr("This account is disabled. Contact your administrator."),
+        account_locked: tr("Account temporarily locked due to too many failed attempts."),
+        rate_limit_exceeded: tr("Too many attempts. Wait a minute and try again."),
+        login_failed: tr("Could not reach the server. Check your connection."),
       };
-      setError(msgs[code] ?? `Login failed (${code})`);
+      setError(msgs[code] ?? tr("Login failed ({code})", { code }));
       const le = err as LoginError;
       if (le.attemptsRemaining !== undefined && le.attemptsRemaining >= 0)
-        setHint(`${le.attemptsRemaining} attempt${le.attemptsRemaining !== 1 ? "s" : ""} remaining.`);
+        setHint(le.attemptsRemaining === 1 ? tr("1 attempt remaining.") : tr("{n} attempts remaining.", { n: le.attemptsRemaining }));
       setShaking(true);
     } finally {
       setLoading(false);
@@ -176,10 +178,10 @@ function LoginPage() {
       const code = err instanceof Error ? err.message : "mfa_failed";
       setError(
         code === "invalid_mfa_token"
-          ? "Incorrect code. Try again."
+          ? tr("Incorrect code. Try again.")
           : code === "invalid_backup_code"
-            ? "Incorrect backup code."
-            : "Verification failed. Try again.",
+            ? tr("Incorrect backup code.")
+            : tr("Verification failed. Try again."),
       );
       setShaking(true);
     } finally {
@@ -214,10 +216,13 @@ function LoginPage() {
         <div className="flex items-center gap-2.5">
           <CerebroilLogo size={32} />
           <span className="font-display text-base font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Cerebroil
+            {tr("Cerebroil")}
           </span>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <LanguageMenu large />
+          <ThemeToggle />
+        </div>
       </header>
 
       <main className="relative z-10 mx-auto flex min-h-dvh w-full max-w-5xl flex-col items-center justify-center px-4 pb-10 pt-24 lg:flex-row lg:gap-20 lg:px-8 lg:py-16">
@@ -251,18 +256,18 @@ function LoginPage() {
                   </svg>
                 </div>
                 <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-                  Signed in
+                  {tr("Signed in")}
                 </h1>
               </div>
             ) : !mfaPending ? (
               <>
                 <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-                  Sign in
+                  {tr("Sign in")}
                 </h1>
                 <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  Demo access{" "}
+                  {tr("Demo access")}{" "}
                   <span className="font-mono text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                    admin / admin
+                    {tr("admin / admin")}
                   </span>
                 </p>
 
@@ -284,7 +289,7 @@ function LoginPage() {
                 <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
                   <div>
                     <label htmlFor="login-username" className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                      Username
+                      {tr("Username")}
                     </label>
                     <input
                       ref={usernameRef}
@@ -296,14 +301,14 @@ function LoginPage() {
                       spellCheck={false}
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="admin"
+                      placeholder={tr("admin")}
                       className={fieldClass}
                     />
                   </div>
 
                   <div>
                     <label htmlFor="login-password" className="mb-1.5 block text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                      Password
+                      {tr("Password")}
                     </label>
                     <div className="relative">
                       <input
@@ -323,7 +328,7 @@ function LoginPage() {
                         onClick={() => setShowPw((p) => !p)}
                         className="tactile-btn absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg transition-colors hover:text-[color:var(--text-primary)]"
                         style={{ color: "var(--text-tertiary)" }}
-                        aria-label={showPw ? "Hide password" : "Show password"}
+                        aria-label={showPw ? tr("Hide password") : tr("Show password")}
                         aria-pressed={showPw}
                       >
                         {showPw ? <EyeOffIcon /> : <EyeIcon />}
@@ -335,10 +340,10 @@ function LoginPage() {
                     {loading ? (
                       <span className="flex items-center justify-center gap-2">
                         <Spinner />
-                        Signing in
+                        {tr("Signing in")}
                       </span>
                     ) : (
-                      "Sign in"
+                      tr("Sign in")
                     )}
                   </button>
                 </form>
@@ -347,10 +352,10 @@ function LoginPage() {
               /* ── Two-step verification ── */
               <>
                 <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-                  Verify it's you
+                  {tr("Verify it's you")}
                 </h1>
                 <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  {useBackup ? "Enter a backup code." : "Enter the 6-digit code from your authenticator."}
+                  {useBackup ? tr("Enter a backup code.") : tr("Enter the 6-digit code from your authenticator.")}
                 </p>
 
                 {error && (
@@ -365,7 +370,7 @@ function LoginPage() {
 
                 <form onSubmit={handleMfa} className="mt-6 space-y-4">
                   <label htmlFor="login-mfa" className="sr-only">
-                    {useBackup ? "Backup code" : "Verification code"}
+                    {useBackup ? tr("Backup code") : tr("Verification code")}
                   </label>
                   {useBackup ? (
                     <input
@@ -375,7 +380,7 @@ function LoginPage() {
                       autoComplete="off"
                       value={backupCode}
                       onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
-                      placeholder="XXXXXXXXXX"
+                      placeholder={tr("XXXXXXXXXX")}
                       className={`${fieldClass} text-center font-mono tracking-widest`}
                     />
                   ) : (
@@ -394,7 +399,7 @@ function LoginPage() {
                   )}
 
                   <button type="submit" disabled={loading} className={primaryBtnClass}>
-                    {loading ? "Verifying" : "Verify"}
+                    {loading ? tr("Verifying") : tr("Verify")}
                   </button>
 
                   <div className="flex justify-between text-xs">
@@ -407,7 +412,7 @@ function LoginPage() {
                       className="tap font-medium hover:underline"
                       style={{ color: "var(--brand)" }}
                     >
-                      {useBackup ? "Use authenticator" : "Use backup code"}
+                      {useBackup ? tr("Use authenticator") : tr("Use backup code")}
                     </button>
                     <button
                       type="button"
@@ -418,7 +423,7 @@ function LoginPage() {
                       className="tap font-medium hover:underline"
                       style={{ color: "var(--text-tertiary)" }}
                     >
-                      Cancel
+                      {tr("Cancel")}
                     </button>
                   </div>
                 </form>
@@ -428,18 +433,18 @@ function LoginPage() {
 
           {!signedIn && !mfaPending && (
             <p className="mt-5 text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
-              No account?{" "}
+              {tr("No account?")}{" "}
               <a
                 href={gmailComposeUrl({
                   subject: "Cerebroil account request",
-                  body: "Hello, I would like an account for Cerebroil.\n\nName:\nRole:\n",
+                  body: tr("Hello, I would like an account for Cerebroil.\n\nName:\nRole:\n"),
                 })}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-medium hover:underline"
                 style={{ color: "var(--brand)" }}
               >
-                Contact admin
+                {tr("Contact admin")}
               </a>
             </p>
           )}
