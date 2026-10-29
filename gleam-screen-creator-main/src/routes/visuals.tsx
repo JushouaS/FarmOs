@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu, PanelLeft } from "lucide-react";
 import {
@@ -12,8 +12,6 @@ import {
   effectiveBehavior,
   weightCategory,
   BEHAVIOR_COLOR,
-  DAHUA_FEED_STREAM,
-  KINECT_FEED_STREAM,
   type BroilerBird,
   type KinectDetection,
 } from "@/lib/farm/dataset";
@@ -36,6 +34,16 @@ export function VisualsDashboardPage() {
   const [kinectError, setKinectError] = useState(false);
   const [nightModeActive, setNightModeActive] = useState(false);
   const [flashNotice, setFlashNotice] = useState<string | null>(null);
+
+  // Vision service (cerebroil-stream, port 5000) on the host that served this
+  // page, so a phone on the LAN gets this machine's feed instead of its own
+  // localhost. Set after mount: the server render can't know that host, and a
+  // guessed src would mismatch on hydration.
+  const [feedOrigin, setFeedOrigin] = useState<string | null>(null);
+  useEffect(() => {
+    setFeedOrigin(`${window.location.protocol}//${window.location.hostname}:5000`);
+  }, []);
+  const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "port 5000";
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLDivElement>(null);
@@ -256,12 +264,14 @@ export function VisualsDashboardPage() {
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
                     {!dahuaError ? (
-                      <img
-                        src={DAHUA_FEED_STREAM}
-                        alt="Dahua Overhead CCTV live camera feed"
-                        className="h-full w-full object-contain"
-                        onError={() => setDahuaError(true)}
-                      />
+                      feedOrigin && (
+                        <img
+                          src={`${feedOrigin}/video_feed/dahua`}
+                          alt="Dahua Overhead CCTV live camera feed"
+                          className="h-full w-full object-contain"
+                          onError={() => setDahuaError(true)}
+                        />
+                      )
                     ) : (
                       <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
                         <div className="mb-2 rounded-full bg-[var(--status-amber-bg)] p-3 text-[var(--status-amber-text)]">
@@ -272,10 +282,12 @@ export function VisualsDashboardPage() {
                           </svg>
                         </div>
                         <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                          Local Stream Standby
+                          Vision service not reachable
                         </h3>
+                        {/* Only shown when the service itself is down; with the
+                            service up but the camera off it streams a placeholder. */}
                         <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
-                          Vision service at localhost:5000 is waiting for client stream connection.
+                          Nothing is answering at {feedHost}. Start cerebroil-stream, then retry.
                         </p>
                         <button
                           type="button"
@@ -374,12 +386,14 @@ export function VisualsDashboardPage() {
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
                     {!kinectError ? (
-                      <img
-                        src={KINECT_FEED_STREAM}
-                        alt="Microsoft Kinect 3D depth sensor station feed"
-                        className="h-full w-full object-contain"
-                        onError={() => setKinectError(true)}
-                      />
+                      feedOrigin && (
+                        <img
+                          src={`${feedOrigin}/video_feed/kinect`}
+                          alt="Microsoft Kinect 3D depth sensor station feed"
+                          className="h-full w-full object-contain"
+                          onError={() => setKinectError(true)}
+                        />
+                      )
                     ) : (
                       <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
                         <div className="mb-2 rounded-full bg-[var(--status-blue-bg)] p-3 text-[var(--status-blue-text)]">
@@ -390,10 +404,10 @@ export function VisualsDashboardPage() {
                           </svg>
                         </div>
                         <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                          Depth Station Live Channel
+                          Depth station not reachable
                         </h3>
                         <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
-                          Kinect sensor stream is active at port 5000 for depth-to-weight estimation.
+                          No depth feed from {feedHost}. Start cerebroil-stream, then recheck.
                         </p>
                         <button
                           type="button"
