@@ -27,8 +27,13 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-// Generate a strong random password: 20 chars, base64url-safe
-const rawPassword = randomBytes(15).toString("base64url");
+// Container deployments need a reproducible credential, so allow both the
+// email and the password to come from the environment. Without them the
+// original behaviour applies: a random password printed once to stdout.
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "admin@cerebroiler.dev";
+const rawPassword =
+  process.env.ADMIN_PASSWORD ?? randomBytes(15).toString("base64url");
+const generated = !process.env.ADMIN_PASSWORD;
 const passwordHash = await hash(rawPassword, 12);
 
 const sql = postgres(DATABASE_URL, { max: 1 });
@@ -38,7 +43,7 @@ try {
     INSERT INTO users (id, email, password_hash, full_name, is_active)
     VALUES (
       gen_random_uuid(),
-      'admin@cerebroiler.dev',
+      ${ADMIN_EMAIL},
       ${passwordHash},
       'System Administrator',
       true
@@ -51,15 +56,23 @@ try {
     INSERT INTO user_roles (user_id, role_id)
     SELECT u.id, r.id
     FROM users u, roles r
-    WHERE u.email = 'admin@cerebroiler.dev'
+    WHERE u.email = ${ADMIN_EMAIL}
       AND r.code = 'ADMIN'
     ON CONFLICT DO NOTHING
   `;
 
   console.log("\n✅ Admin account ready");
-  console.log("   Email:    admin@cerebroiler.dev");
-  console.log(`   Password: ${rawPassword}`);
-  console.log("\n⚠️  Save this password now — it will NOT be shown again.\n");
+  console.log(`   Email:    ${ADMIN_EMAIL}`);
+  console.log(
+    generated
+      ? `   Password: ${rawPassword}`
+      : "   Password: (from ADMIN_PASSWORD)",
+  );
+  console.log(
+    generated
+      ? "\n⚠️  Save this password now — it will NOT be shown again.\n"
+      : "",
+  );
 } finally {
   await sql.end();
 }

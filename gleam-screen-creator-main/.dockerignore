@@ -1,0 +1,20 @@
+# Dependencies and build artefacts are re-created inside the image.
+node_modules
+packages/*/node_modules
+.output
+.tanstack
+.nitro
+dist
+dist-ssr
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+packages/api/.env
+
+# VCS / editor noise
+.git
+.gitignore
+.vscode
+.idea

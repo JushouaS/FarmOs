@@ -40,6 +40,10 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be >= 32 bytes"),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(15 * 60),
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(30 * 24 * 60 * 60),
+  // "true" only when the app is served over TLS. Left unset, it follows
+  // NODE_ENV — which breaks plain-HTTP deployments (a Secure cookie is never
+  // sent back over http), so container setups pin it explicitly.
+  COOKIE_SECURE: z.enum(["true", "false"]).optional(),
 
   // Vision service (Flask)
   VISION_SERVICE_URL: z.string().url().default("http://127.0.0.1:5000"),

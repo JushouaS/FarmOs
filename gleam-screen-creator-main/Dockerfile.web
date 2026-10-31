@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CereBroiler web dashboard — TanStack Start (SSR) built with the Nitro
+# `node-server` preset, then served by a bare Node runtime.
+#
+# Build context: ./gleam-screen-creator-main
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: dependency install + build ──────────────────────────────────────
+FROM node:22-slim AS builder
+
+# NODE_ENV must stay unset here: npm skips devDependencies under
+# NODE_ENV=production, and the build toolchain (vite, nitro, the shared vite
+# config package) is all dev-only.
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NPM_CONFIG_FUND=false
+
+WORKDIR /app
+
+# Vite injects VITE_* variables at build time; the browser then talks to the
+# API on the host, so this must be a host-reachable URL, not a compose alias.
+ARG VITE_API_URL=http://localhost:4000
+ENV VITE_API_URL=${VITE_API_URL}
+
+# Copy manifests first so dependency layers cache independently of source edits.
+COPY package.json ./
+COPY packages/api/package.json ./packages/api/package.json
+COPY packages/types/package.json ./packages/types/package.json
+RUN npm install --include=dev --no-audit --no-fund
+
+COPY . .
+RUN NODE_ENV=production npm run build
+
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM node:22-slim AS runtime
+
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=8080
+
+WORKDIR /app
+
+# Nitro bundles every runtime dependency into .output/server, so the Node
+# base image is all that is needed here.
+COPY --from=builder /app/.output ./.output
+
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd --system --uid 1001 --gid appgroup appuser && \
+    chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 8080
+
+CMD ["node", ".output/server/index.mjs"]

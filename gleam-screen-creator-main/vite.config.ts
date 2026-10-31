@@ -65,6 +65,9 @@ const ssrDevMiddlewarePlugin: Plugin = {
 };
 
 export default defineConfig({
+  // Self-hosted deployments (Docker) need a Node server build instead of the
+  // Cloudflare default preset, so pin the Nitro target explicitly.
+  nitro: { preset: "node-server" },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

@@ -1,0 +1,263 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# CereBroiler — complete single-stack deployment
+#
+#   web      :8080   TanStack Start dashboard (SSR, Nitro node-server)
+#   api      :4000   Fastify API (packages/api) — BFF for the dashboard
+#   vision   (int.)  Flask + OpenCV vision service
+#   backend  :8000   FastAPI telemetry backend (cerebroil-backend)
+#   stream   :5000   Dahua + Kinect MJPEG stream server (cerebroil-stream)
+#   mediamtx :8554/8889/8888   RTSP → WebRTC/HLS relay
+#   db       :5432   PostgreSQL 16, hosting two databases:
+#                      farmos    → Fastify API
+#                      cerebroil → FastAPI backend
+#
+# Usage:
+#   cp .env.example .env      # then edit secrets
+#   docker compose up -d --build
+#   docker compose ps
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: cerebroil
+
+# ── Shared build/runtime fragments ───────────────────────────────────────────
+x-api-build: &api-build
+  context: ./gleam-screen-creator-main
+  dockerfile: Dockerfile.api
+  target: runtime
+
+x-backend-build: &backend-build
+  context: ./cerebroil-backend
+  dockerfile: ./Dockerfile
+  target: runtime
+
+x-pg-env: &pg-env
+  POSTGRES_USER: ${POSTGRES_USER:-cerebroil}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+
+services:
+
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      <<: *pg-env
+      POSTGRES_DB: farmos
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cerebroil} -d farmos"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ── Fastify API — schema migrations (one-shot) ─────────────────────────────
+  api-migrate:
+    build: *api-build
+    image: cerebroil-api:local
+    command: ["npx", "tsx", "scripts/migrate.ts"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
+      DATABASE_WRITE_URL: postgres://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # ── Fastify API — default admin account (one-shot) ─────────────────────────
+  api-admin-seed:
+    build: *api-build
+    image: cerebroil-api:local
+    command: ["npx", "tsx", "scripts/seed-admin.ts"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@cerebroiler.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # ── Fastify API ────────────────────────────────────────────────────────────
+  api:
+    build: *api-build
+    image: cerebroil-api:local
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_HOST: 0.0.0.0
+      API_PORT: "4000"
+      DATABASE_URL: postgres://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
+      DATABASE_WRITE_URL: postgres://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS:-2592000}
+      # Plain HTTP on the LAN, so session cookies must not be Secure-flagged.
+      # Set to "true" once the stack sits behind TLS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # The dashboard is reached on the host, so allow host origins.
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+      VISION_SERVICE_URL: http://vision:5000
+      VISION_SERVICE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+      api-admin-seed:
+        condition: service_completed_successfully
+      vision:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  # ── Vision service (Flask + OpenCV) ────────────────────────────────────────
+  vision:
+    build:
+      context: ./gleam-screen-creator-main/packages/vision
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      FLASK_HOST: 0.0.0.0
+      FLASK_PORT: "5000"
+      VISION_SERVICE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
+      # psycopg2 needs the plain libpq DSN, not the asyncpg one.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
+      # "camera_id=rtsp_url,..." — empty means no physical cameras are wired.
+      RTSP_SOURCES: ${RTSP_SOURCES:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Web dashboard (SSR) ────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./gleam-screen-creator-main
+      dockerfile: Dockerfile.web
+      args:
+        # Consumed by the browser, so it must be the host-published API port.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "8080"
+      # Server functions in src/lib/intelligence.ts read these at runtime.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  # ── FastAPI telemetry backend — Alembic migrations (one-shot) ──────────────
+  backend-migrate:
+    build: *backend-build
+    image: cerebroil-backend:local
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/cerebroil
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # ── FastAPI telemetry backend — demo farm/house/batch (one-shot) ───────────
+  backend-seed:
+    build: *backend-build
+    image: cerebroil-backend:local
+    command: ["python", "scripts/seed_demo.py"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/cerebroil
+    depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # ── FastAPI telemetry backend ─────────────────────────────────────────────
+  backend:
+    build: *backend-build
+    image: cerebroil-backend:local
+    restart: unless-stopped
+    init: true
+    environment:
+      APP_NAME: Cerebroil API
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/cerebroil
+      API_KEYS: ${BACKEND_API_KEYS:-}
+      CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+      CLUSTER_DENSITY_THRESHOLD: ${CLUSTER_DENSITY_THRESHOLD:-0.75}
+      INACTIVITY_SECONDS_THRESHOLD: ${INACTIVITY_SECONDS_THRESHOLD:-300}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      backend-seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  # ── Dual stream server (Dahua RTSP + Kinect depth MJPEG) ──────────────────
+  stream:
+    build:
+      context: ./cerebroil-stream
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      DAHUA_RTSP_URL: ${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      KINECT_SOURCE: ${KINECT_SOURCE:-simulated}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/status', timeout=3).status == 200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── MediaMTX WebRTC / RTSP relay ──────────────────────────────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    restart: unless-stopped
+    ports:
+      - "8554:8554"      # RTSP
+      - "8889:8889"      # WebRTC / WHEP
+      - "8888:8888"      # HLS
+      - "8189:8189/udp"  # WebRTC ICE
+    environment:
+      MTX_PATHS_DAHUA_SOURCE: ${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      MTX_PATHS_KINECT_SOURCE: ${KINECT_RTSP_URL:-rtsp://localhost:8554/kinect_source}
+
+volumes:
+  postgres_data:

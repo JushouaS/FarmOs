@@ -3,7 +3,7 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/api", "packages/types"],
   "scripts": {
     "dev": "vite dev",
     "dev:api": "npm run dev --workspace=@farm-os/api",
@@ -83,6 +83,7 @@
     "globals": "^15.15.0",
     "nitro": "3.0.260603-beta",
     "prettier": "^3.7.3",
+    "srvx": "^0.12.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.1.5"

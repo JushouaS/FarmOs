@@ -63,9 +63,15 @@ const passwordChangeBody = z.object({
 const ACCESS_COOKIE = "farm_access_token";
 const REFRESH_COOKIE = "farm_refresh_token";
 
+// Defaults to the previous behaviour (on in production); COOKIE_SECURE=false
+// is what makes plain-HTTP deployments able to authenticate at all.
+const cookieSecure = env.COOKIE_SECURE
+  ? env.COOKIE_SECURE === "true"
+  : env.NODE_ENV === "production";
+
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
+  secure: cookieSecure,
   sameSite: "strict" as const,
   path: "/",
   maxAge: env.JWT_ACCESS_TTL_SECONDS,
@@ -73,7 +79,7 @@ const COOKIE_OPTS = {
 
 const REFRESH_COOKIE_OPTS = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
+  secure: cookieSecure,
   sameSite: "strict" as const,
   path: "/",
   maxAge: Number(process.env.JWT_REFRESH_TTL_SECONDS ?? 30 * 24 * 60 * 60),
@@ -82,7 +88,7 @@ const REFRESH_COOKIE_OPTS = {
 const MFA_PENDING_COOKIE = "farm_mfa_pending";
 const MFA_COOKIE_OPTS = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
+  secure: cookieSecure,
   sameSite: "strict" as const,
   path: "/auth/mfa",
   maxAge: 5 * 60, // 5 minutes

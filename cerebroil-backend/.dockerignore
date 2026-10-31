@@ -1,0 +1,14 @@
+# Secrets — injected by Docker Compose at runtime instead.
+.env
+.env.*
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# VCS
+.git
+.gitignore

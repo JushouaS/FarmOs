@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FARM_OS Fastify API (TypeScript, run through tsx) — packages/api
+#
+# Build context: ./gleam-screen-creator-main (npm workspaces root, needed so
+# @farm-os/types resolves).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: dependencies (native modules need a toolchain) ──────────────────
+FROM node:22-slim AS builder
+
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NPM_CONFIG_FUND=false
+
+# bcrypt / any other native addon falls back to compiling on musl-less images
+# and when no prebuilt binary matches the Node ABI.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 \
+        make \
+        g++ \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# tsx is a devDependency but required at runtime because the API runs TS
+# directly, so the full dependency tree is installed.
+COPY package.json ./
+COPY packages/api/package.json ./packages/api/package.json
+COPY packages/types/package.json ./packages/types/package.json
+RUN npm install --no-audit --no-fund
+
+COPY packages/api ./packages/api
+COPY packages/types ./packages/types
+
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM node:22-slim AS runtime
+
+ENV NODE_ENV=production \
+    API_HOST=0.0.0.0 \
+    API_PORT=4000
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/packages/api ./packages/api
+COPY --from=builder /app/packages/types ./packages/types
+
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd --system --uid 1001 --gid appgroup appuser && \
+    chown -R appuser:appgroup /app
+
+USER appuser
+
+WORKDIR /app/packages/api
+
+EXPOSE 4000
+
+CMD ["npx", "tsx", "src/index.ts"]
