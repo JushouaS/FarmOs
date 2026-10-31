@@ -284,7 +284,9 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "empty_video" });
       }
       try {
-        const res = await fetch(`${VISION_BASE}/demo/detect`, {
+        // ?night=1 tells the detector the clip was filmed with the lights off.
+        const night = (request.query as { night?: string }).night === "1";
+        const res = await fetch(`${VISION_BASE}/demo/detect${night ? "?night=1" : ""}`, {
           method: "POST",
           headers: { ...visionHeaders(), "Content-Type": "application/octet-stream" },
           body: new Uint8Array(video),

@@ -140,7 +140,7 @@ def convert_to_mp4(src: str, dst: str) -> None:
         raise UnreadableVideo()
 
 
-def detect_video(path: str) -> dict[str, Any]:
+def detect_video(path: str, night: bool = False) -> dict[str, Any]:
     with _lock:
         _load()
         cap = cv2.VideoCapture(path)
@@ -168,7 +168,7 @@ def detect_video(path: str) -> dict[str, Any]:
         raise UnreadableVideo()
     counts = [len(f["boxes"]) for f in frames]
     # Adds [bird number, state] to every box and works out inactive birds and huddles.
-    behaviour = behavior.analyze(frames, width, height)
+    behaviour = behavior.analyze(frames, width, height, night=night)
     return {
         "behavior": behaviour,
         "model": MODEL_PATH.name,

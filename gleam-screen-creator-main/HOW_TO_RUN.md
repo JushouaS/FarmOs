@@ -397,10 +397,16 @@ installed.
 What the result shows (code: `cerebroil-stream/behavior.py`): each detected bird is followed from
 frame to frame and its box is colored by what it is doing.
 
-- **Moving** (green) and **Inactivity** (grey): normal. Broilers rest a lot, so a still bird is only
-  shown as inactivity when most of the flock is still too.
-- **Inactive** (amber): a bird that stayed within about a third of its own body size for the test
-  time while at least a fifth of the flock was moving. This is the bird to go and look at.
+The dialog has a **Recorded during: Day / Night** choice (it is guessed from the time in a file name
+like `..._0600_to_0700.mkv` and the lighting hours in Settings, and you can change it). What a still
+bird means depends on it:
+
+- **Moving** (green): the bird is walking about.
+- **Resting** (violet): still **at night**. This is normal sleep and is never flagged.
+- **Inactive** (amber): by day, a bird that stayed within about a third of its own body size for the
+  test time while at least a fifth of the flock was moving. This is the bird to go and look at.
+- **Inactivity** (red): by day, when most of the flock is still too. No single bird stands out, so
+  check the house (heat, cold, lighting, illness).
 - **Huddling** (blue): a group of 5 or more touching birds, much denser than the flock as a whole,
   that stays together for the test time. A uniformly crowded house is not a huddle. The summary gives
   the share of birds in huddles (FDI) and warns above 35%.

@@ -368,8 +368,8 @@ export interface CameraScan extends AnalysisResult {
 }
 
 /** Several analysis passes about a second apart, reduced to one result. Takes about 3 seconds. */
-/** A bird's state in one frame: 0 moving, 1 resting, 2 inactive, 3 huddling. */
-export type BirdState = 0 | 1 | 2 | 3;
+/** A bird's state in one frame: 0 moving, 1 resting (night), 2 inactive (alone, by day), 3 huddling, 4 inactivity (the whole flock, by day). */
+export type BirdState = 0 | 1 | 2 | 3 | 4;
 
 /** What the trained detector found in an uploaded video, frame by frame.
  *  Boxes are [x, y, w, h, confidence, class, bird number, state] in video pixels
@@ -391,7 +391,9 @@ export interface VideoDetection {
     fdi_warning: boolean;
     /** Average share of the flock that was moving, or null when the clip was too short to tell. */
     flock_moving: number | null;
-    params: { inactive_seconds: number; huddle_seconds: number; huddle_min_birds: number; fdi_warning: number };
+    /** Share of the clip in which most of the flock was still, or null when it was too short to tell. */
+    flock_still_share: number | null;
+    params: { inactive_seconds: number; huddle_seconds: number; huddle_min_birds: number; fdi_warning: number; night?: boolean };
   };
   summary: { frames: number; frames_with_detections: number; max_per_frame: number; mean_per_frame: number };
 }
@@ -399,9 +401,10 @@ export interface VideoDetection {
 /** Largest video the "Test video" button accepts (the API and the camera service enforce it too). */
 export const DEMO_VIDEO_MAX_MB = 60;
 
-/** Sends a video file to be checked by the trained detector. Nothing is stored. */
-export async function detectVideo(file: File): Promise<VideoDetection> {
-  return apiFetch<VideoDetection>("/visual/demo-detect", {
+/** Sends a video file to be checked by the trained detector. Nothing is stored.
+ *  `night`: the clip was filmed with the lights off, so still birds count as resting. */
+export async function detectVideo(file: File, night = false): Promise<VideoDetection> {
+  return apiFetch<VideoDetection>(`/visual/demo-detect${night ? "?night=1" : ""}`, {
     method: "POST",
     body: file,
     headers: { "Content-Type": file.type.startsWith("video/") ? file.type : "application/octet-stream" },

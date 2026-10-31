@@ -9,6 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ApiError, DEMO_VIDEO_MAX_MB, convertVideo, detectVideo, type VideoDetection } from "@/lib/api-client";
+import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { T, tr } from "@/lib/i18n";
 
 /* "Test video" on Live Camera: pick a clip from this device, the trained
@@ -18,9 +19,29 @@ import { T, tr } from "@/lib/i18n";
 
 const MAX_BYTES = DEMO_VIDEO_MAX_MB * 1024 * 1024;
 const ANALYZED_SECONDS = 30;
-/** Box colors by bird state: moving, inactivity (still with the flock), inactive (still while the flock moves), huddling. */
-const STATE_COLORS = ["#34d399", "#94a3b8", "#fbbf24", "#60a5fa"];
-const STATE_NAMES = [T("Moving"), T("Inactivity"), T("Inactive"), T("Huddling")];
+/* Bird states, indexed by the code the camera computer sends:
+ * 0 moving, 1 resting (still at night), 2 inactive (still by day while the flock moves),
+ * 3 huddling, 4 inactivity (the whole flock still by day). */
+const STATE_COLORS = ["#34d399", "#a78bfa", "#fbbf24", "#60a5fa", "#fb7185"];
+const STATE_NAMES = [T("Moving"), T("Resting"), T("Inactive"), T("Huddling"), T("Inactivity")];
+const LEGEND_ORDER = [0, 1, 4, 2, 3];
+/** States shared by many birds are labelled once, on the lowest numbered bird, with a count. */
+const GROUP_STATES = [1, 3, 4];
+
+/** The time of day in a recording's file name ("..._0600_to_0700.mkv", "...T06:15:00"), or null. */
+function timeInName(name: string): [number, number] | null {
+  const m = name.match(/(?:^|\D)([01]\d|2[0-3])([0-5]\d)_to_\d{4}/) ?? name.match(/T([01]\d|2[0-3])[:.-]?([0-5]\d)/);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+/** Night or day for a clip: from the time in its name and the lighting hours in Settings, else day. */
+function guessNight(name: string, lighting: LightingHours): boolean {
+  const t = timeInName(name);
+  if (!t) return false;
+  const when = new Date();
+  when.setHours(t[0], t[1], 0, 0);
+  return isNightCycle(when, lighting);
+}
 /** Containers every browser plays. Anything else (MKV, AVI, ...) is converted first. */
 const PLAYABLE = /\.(mp4|m4v|webm|mov)$/i;
 
@@ -61,8 +82,10 @@ function frameAt(frames: VideoDetection["frames"], t: number): number {
   return found;
 }
 
-export function VideoDetectDialog() {
+export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: LightingHours }) {
   const [open, setOpen] = useState(false);
+  // Was the clip filmed with the lights off? Still birds are then resting, not inactive.
+  const [night, setNight] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -113,12 +136,14 @@ export function VideoDetectDialog() {
       ctx.font = "12px ui-monospace, monospace";
       let inactive = 0;
       let huddling = 0;
-      let huddleLabelId = Infinity; // a huddle is labelled once, on its lowest numbered bird
+      const groupCount: Record<number, number> = {};
+      const groupLabelId: Record<number, number> = {};
       for (const b of boxes) {
-        if (b[7] === 2) inactive++;
-        if (b[7] === 3) {
-          huddling++;
-          huddleLabelId = Math.min(huddleLabelId, b[6]);
+        if (b[7] === 2 || b[7] === 4) inactive++;
+        if (b[7] === 3) huddling++;
+        if (GROUP_STATES.includes(b[7])) {
+          groupCount[b[7]] = (groupCount[b[7]] ?? 0) + 1;
+          groupLabelId[b[7]] = Math.min(groupLabelId[b[7]] ?? Infinity, b[6]);
         }
       }
       for (const [x, y, bw, bh, conf, , id, stateCode] of boxes) {
@@ -127,10 +152,10 @@ export function VideoDetectDialog() {
         ctx.strokeStyle = color;
         ctx.lineWidth = state >= 2 ? 3 : 2;
         ctx.strokeRect(x * scale, y * scale, bw * scale, bh * scale);
-        // Moving birds only get their number, and a huddle one label, so the picture stays readable.
+        // Moving birds only get their number, and a group (huddle, resting, flock inactivity) one label, so the picture stays readable.
         let label = "";
         if (state === 0 || id == null) label = `${id != null ? `#${id} ` : ""}${Math.round(conf * 100)}%`;
-        else if (state === 3) label = id === huddleLabelId ? `${tr(STATE_NAMES[3])} x${huddling}` : "";
+        else if (GROUP_STATES.includes(state)) label = id === groupLabelId[state] ? `${tr(STATE_NAMES[state])} x${groupCount[state]}` : "";
         else label = `#${id} ${tr(STATE_NAMES[state])}`;
         if (!label) continue;
         const tw = ctx.measureText(label).width + 8;
@@ -156,7 +181,16 @@ export function VideoDetectDialog() {
     setStage(null);
     setCutFrom(null);
     setNeedsConvert(false);
+    setNight(false);
     setError(null);
+    setResult(null);
+    setInFrame([0, 0, 0]);
+  };
+
+  const chooseNight = (value: boolean) => {
+    if (value === night) return;
+    setNight(value);
+    // The answer depends on it, so the old one is dropped; press "Check video" again.
     setResult(null);
     setInFrame([0, 0, 0]);
   };
@@ -173,6 +207,7 @@ export function VideoDetectDialog() {
     setResult(null);
     setInFrame([0, 0, 0]);
     setError(null);
+    setNight(guessNight(picked.name, lighting));
     // A file over the limit is cut to exactly the limit, so only that part is uploaded.
     const tooBig = picked.size > MAX_BYTES;
     setCutFrom(tooBig ? picked.size : null);
@@ -198,13 +233,13 @@ export function VideoDetectDialog() {
       if (needsConvert) await convert();
       setStage("checking");
       try {
-        setResult(await detectVideo(current));
+        setResult(await detectVideo(current, night));
       } catch (err) {
         // The camera computer may not be able to decode this codec (H.265, VP9, ...): convert once and try again.
         if (converted || !(err instanceof ApiError) || err.message !== "unreadable_video") throw err;
         await convert();
         setStage("checking");
-        setResult(await detectVideo(current));
+        setResult(await detectVideo(current, night));
       }
     } catch (err) {
       setError(errorText(err, cutFrom != null));
@@ -266,6 +301,31 @@ export function VideoDetectDialog() {
           </p>
         </div>
 
+        {/* When the clip was filmed decides what a still bird means: sleeping at night, a bird to check by day. */}
+        <div role="radiogroup" aria-label={tr("When was this recorded?")} className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
+          <span>{tr("Recorded during:")}</span>
+          {[
+            { value: false, label: tr("Day") },
+            { value: true, label: tr("Night") },
+          ].map((option) => (
+            <button
+              key={String(option.value)}
+              type="button"
+              role="radio"
+              aria-checked={night === option.value}
+              disabled={busy}
+              onClick={() => chooseNight(option.value)}
+              className={`tap rounded-full border px-3 py-1 font-medium disabled:opacity-60 ${
+                night === option.value
+                  ? "border-[var(--brand)] bg-[var(--brand)] text-white"
+                  : "border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:border-[var(--brand)]"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         {cutFrom != null && (
           <p className="text-xs text-[var(--text-tertiary)]">
             {tr("This file is {size} MB. Only the first {mb} MB are used.", { size: Math.round(cutFrom / 1048576), mb: DEMO_VIDEO_MAX_MB })}
@@ -305,10 +365,10 @@ export function VideoDetectDialog() {
         {result && (
           <div className="space-y-1.5 text-sm">
             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]" aria-label={tr("Colors")}>
-              {STATE_NAMES.map((name, i) => (
-                <li key={name} className="flex items-center gap-1.5">
+              {LEGEND_ORDER.map((i) => (
+                <li key={i} className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATE_COLORS[i] }} aria-hidden="true" />
-                  {tr(name)}
+                  {tr(STATE_NAMES[i])}
                 </li>
               ))}
             </ul>
@@ -324,17 +384,30 @@ export function VideoDetectDialog() {
             </p>
             {behavior && (
               <>
-                <p className="font-medium" style={{ color: behavior.inactive_birds.length ? STATE_COLORS[2] : "var(--text-secondary)" }}>
-                  {behavior.inactive_birds.length
-                    ? tr("Inactive: {n} birds stayed still for {s} seconds or more while the rest of the flock moved.", {
-                        n: behavior.inactive_birds.length,
-                        s: behavior.params.inactive_seconds,
-                      })
-                    : result.analyzed_seconds < behavior.params.inactive_seconds
-                      ? tr("The clip is shorter than {s} seconds, too short to call a bird inactive.", { s: behavior.params.inactive_seconds })
-                      : behavior.flock_moving != null && behavior.flock_moving < 0.2
-                        ? tr("Most of the flock was still, so no single bird is called inactive.")
-                        : tr("No inactive birds found.")}
+                <p
+                  className="font-medium"
+                  style={{
+                    color: behavior.params.night
+                      ? STATE_COLORS[1]
+                      : behavior.inactive_birds.length
+                        ? STATE_COLORS[2]
+                        : (behavior.flock_still_share ?? 0) >= 0.5
+                          ? STATE_COLORS[4]
+                          : "var(--text-secondary)",
+                  }}
+                >
+                  {behavior.params.night
+                    ? tr("Recorded at night: still birds are resting, so none is called inactive.")
+                    : behavior.inactive_birds.length
+                      ? tr("Inactive: {n} birds stayed still for {s} seconds or more while the rest of the flock moved.", {
+                          n: behavior.inactive_birds.length,
+                          s: behavior.params.inactive_seconds,
+                        })
+                      : result.analyzed_seconds < behavior.params.inactive_seconds
+                        ? tr("The clip is shorter than {s} seconds, too short to call a bird inactive.", { s: behavior.params.inactive_seconds })
+                        : (behavior.flock_still_share ?? 0) >= 0.5
+                          ? tr("Most of the flock was still during the day, so no single bird stands out. Check the house.")
+                          : tr("No inactive birds found.")}
                 </p>
                 <p className="font-medium" style={{ color: behavior.huddles.length ? STATE_COLORS[3] : "var(--text-secondary)" }}>
                   {behavior.huddles.length

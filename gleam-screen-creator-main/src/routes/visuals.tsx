@@ -171,7 +171,7 @@ export function VisualsDashboardPage() {
             </div>
 
             {/* Try the trained detector on an uploaded video */}
-            <VideoDetectDialog />
+            <VideoDetectDialog lighting={lighting} />
 
             {/* Fullscreen Trigger Button */}
             <button

@@ -7,9 +7,11 @@ from frame to frame, then two checks run on the followed birds:
 Inactivity
   A bird is "still" when, over the last INACTIVE_SECONDS, it stayed within a
   fraction of its own body size (jitter in the box does not count as movement).
-  Broilers rest a lot, so stillness alone is not a problem. A still bird counts
-  as INACTIVE only while the rest of the flock is moving; when most of the flock
-  is still too, the birds are just RESTING.
+  What stillness means depends on the time of day:
+    - at night (lights off) still birds are RESTING: normal sleep, never flagged;
+    - by day a still bird is INACTIVE while the rest of the flock is moving (the
+      bird to go and look at), and the whole flock is FLOCK_INACTIVE when most of
+      it is still too (worth checking the house: heat, cold, lighting, illness).
 
 Huddling
   Birds that touch or overlap form a group. A group is a huddle when it has
@@ -43,7 +45,7 @@ FDI_WARN = 0.35             # share of the flock in huddles that is worth a warn
 MATCH_GATE = 1.0            # a bird moves less than this many body sizes between two frames
 MAX_MISSED_SECONDS = 2.0    # a bird the detector misses for longer than this gets a new number
 
-MOVING, RESTING, INACTIVE, HUDDLING = 0, 1, 2, 3
+MOVING, RESTING, INACTIVE, HUDDLING, FLOCK_INACTIVE = 0, 1, 2, 3, 4
 
 
 def _iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
@@ -134,10 +136,11 @@ def _groups(items: list[tuple[int, float, float, float, float]]) -> list[list[in
     return list(out.values())
 
 
-def analyze(frames: list[dict[str, Any]], width: int, height: int) -> dict[str, Any]:
+def analyze(frames: list[dict[str, Any]], width: int, height: int, night: bool = False) -> dict[str, Any]:
     """Adds [track id, state] to every box of every frame (in place) and returns the summary.
 
-    frames: [{"t": seconds, "boxes": [[x, y, w, h, conf, cls], ...]}, ...] with x, y the top left corner."""
+    frames: [{"t": seconds, "boxes": [[x, y, w, h, conf, cls], ...]}, ...] with x, y the top left corner.
+    night: the clip was filmed with the lights off, so still birds are resting."""
     if not frames:
         return {}
     gaps = [b["t"] - a["t"] for a, b in zip(frames, frames[1:]) if b["t"] > a["t"]]
@@ -149,6 +152,7 @@ def analyze(frames: list[dict[str, Any]], width: int, height: int) -> dict[str, 
     next_id = 1
     huddles: list[dict[str, Any]] = []
     moving_fractions: list[float] = []
+    still_frames = 0      # frames where most of the flock was still
     fdi_peak = 0.0
     fdi_warning = False
 
@@ -175,6 +179,8 @@ def analyze(frames: list[dict[str, Any]], width: int, height: int) -> dict[str, 
         flock_moving = (sum(1 for s in known if not s) / len(known)) if len(known) >= 3 else None
         if flock_moving is not None:
             moving_fractions.append(flock_moving)
+            if flock_moving < FLOCK_MOVING_MIN:
+                still_frames += 1
 
         # Huddles: groups of touching birds that are much denser than the flock and stay together.
         in_huddle: set[int] = set()
@@ -222,7 +228,12 @@ def analyze(frames: list[dict[str, Any]], width: int, height: int) -> dict[str, 
             if di in in_huddle:
                 state = HUDDLING
             elif still[di]:
-                state = INACTIVE if (flock_moving is not None and flock_moving >= FLOCK_MOVING_MIN) else RESTING
+                if night:
+                    state = RESTING
+                elif flock_moving is not None and flock_moving >= FLOCK_MOVING_MIN:
+                    state = INACTIVE
+                else:
+                    state = FLOCK_INACTIVE
             else:
                 state = MOVING
             if state == INACTIVE:
@@ -248,11 +259,13 @@ def analyze(frames: list[dict[str, Any]], width: int, height: int) -> dict[str, 
         "fdi_peak": round(fdi_peak, 3),
         "fdi_warning": fdi_warning,
         "flock_moving": round(sum(moving_fractions) / len(moving_fractions), 3) if moving_fractions else None,
+        "flock_still_share": round(still_frames / len(moving_fractions), 3) if moving_fractions else None,
         "params": {
             "inactive_seconds": INACTIVE_SECONDS,
             "huddle_seconds": HUDDLE_SECONDS,
             "huddle_min_birds": HUDDLE_MIN_BIRDS,
             "fdi_warning": FDI_WARN,
+            "night": night,
         },
     }
 

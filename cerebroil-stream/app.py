@@ -615,7 +615,8 @@ def demo_detect_route() -> tuple[Response, int] | Response:
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(request.get_data(cache=False))
-        return jsonify(demo_detect.detect_video(path))
+        # ?night=1: the clip was filmed with the lights off, so still birds are resting.
+        return jsonify(demo_detect.detect_video(path, night=request.args.get("night") == "1"))
     except demo_detect.ModelNotInstalled:
         return jsonify({"error": "model_not_installed"}), 503
     except demo_detect.UnreadableVideo:

@@ -41,7 +41,14 @@ export const part12: Messages = {
     "Dili mapunit ang kini nga video sa {mb} MB tungod kay naa sa katapusan sa file ang index niini. Gamita ang MKV o WebM nga file, o mas gamay nga clip.",
   ],
   Moving: ["Gumagalaw", "Naglihok"],
+  Resting: ["Nagpapahinga", "Nagpahulay"],
   Inactivity: ["Kawalan ng galaw", "Walay lihok"],
+  "Recorded during:": ["Kinunan tuwing:", "Gikuha sa panahon sa:"],
+  "When was this recorded?": ["Kailan ito kinunan?", "Kanus-a kini gikuha?"],
+  "Recorded at night: still birds are resting, so none is called inactive.": [
+    "Kinunan sa gabi: nagpapahinga ang mga manok na hindi gumagalaw, kaya wala sa kanila ang tinatawag na hindi aktibo.",
+    "Gikuha sa gabii: nagpahulay ang mga manok nga wala molihok, busa walay usa kanila nga gitawag nga dili aktibo.",
+  ],
   Colors: ["Mga kulay", "Mga kolor"],
   "In this frame: {n} birds, {i} inactive, {h} huddling": [
     "Sa frame na ito: {n} manok, {i} hindi aktibo, {h} nagsisiksikan",
@@ -55,9 +62,9 @@ export const part12: Messages = {
     "Mas maikli ang clip kaysa {s} segundo, kaya masyadong maikli para tawaging hindi aktibo ang isang manok.",
     "Mas mubo ang clip kaysa {s} segundo, busa mubo ra kaayo aron tawgon nga dili aktibo ang usa ka manok.",
   ],
-  "Most of the flock was still, so no single bird is called inactive.": [
-    "Halos hindi gumagalaw ang karamihan sa kawan, kaya walang isang manok na tinatawag na hindi aktibo.",
-    "Kasagaran sa panon wala molihok, busa walay usa ka manok nga gitawag nga dili aktibo.",
+  "Most of the flock was still during the day, so no single bird stands out. Check the house.": [
+    "Halos hindi gumagalaw ang karamihan sa kawan sa araw, kaya walang isang manok na namumukod-tangi. Suriin ang bahay.",
+    "Kasagaran sa panon wala molihok sa adlaw, busa walay usa ka manok nga mahibulong. Susiha ang balay.",
   ],
   "No inactive birds found.": ["Walang nakitang hindi aktibong manok.", "Walay nakitang dili aktibo nga manok."],
   "Huddles: {n}. Up to {p}% of the birds were in a huddle.": [
