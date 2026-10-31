@@ -7,3 +7,6 @@ env/
 
 # Data collection & respondent CSVs
 sus_responses/*.csv
+
+# Trained detector for the "Test video" button (not committed; see demo_detect.py)
+models/

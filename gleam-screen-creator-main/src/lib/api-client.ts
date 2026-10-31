@@ -368,6 +368,67 @@ export interface CameraScan extends AnalysisResult {
 }
 
 /** Several analysis passes about a second apart, reduced to one result. Takes about 3 seconds. */
+/** A bird's state in one frame: 0 moving, 1 resting, 2 inactive, 3 huddling. */
+export type BirdState = 0 | 1 | 2 | 3;
+
+/** What the trained detector found in an uploaded video, frame by frame.
+ *  Boxes are [x, y, w, h, confidence, class, bird number, state] in video pixels
+ *  (the last two are missing when the camera computer is an older version). */
+export interface VideoDetection {
+  model: string;
+  names: Record<string, string>;
+  width: number;
+  height: number;
+  duration: number | null;
+  analyzed_seconds: number;
+  sample_fps: number;
+  frames: { t: number; boxes: number[][]; fdi?: number }[];
+  behavior?: {
+    birds_followed: number;
+    inactive_birds: { id: number; from: number; to: number }[];
+    huddles: { start: number; end: number; birds: number; fdi: number }[];
+    fdi_peak: number;
+    fdi_warning: boolean;
+    /** Average share of the flock that was moving, or null when the clip was too short to tell. */
+    flock_moving: number | null;
+    params: { inactive_seconds: number; huddle_seconds: number; huddle_min_birds: number; fdi_warning: number };
+  };
+  summary: { frames: number; frames_with_detections: number; max_per_frame: number; mean_per_frame: number };
+}
+
+/** Largest video the "Test video" button accepts (the API and the camera service enforce it too). */
+export const DEMO_VIDEO_MAX_MB = 60;
+
+/** Sends a video file to be checked by the trained detector. Nothing is stored. */
+export async function detectVideo(file: File): Promise<VideoDetection> {
+  return apiFetch<VideoDetection>("/visual/demo-detect", {
+    method: "POST",
+    body: file,
+    headers: { "Content-Type": file.type.startsWith("video/") ? file.type : "application/octet-stream" },
+  });
+}
+
+/** Re-encodes a video the browser cannot play as it is (MKV, AVI, a clip cut short) as a small MP4. */
+export async function convertVideo(file: File): Promise<File> {
+  const send = () =>
+    fetch(`${API_BASE}/visual/demo-convert`, {
+      method: "POST",
+      credentials: "include",
+      body: file,
+      headers: { "Content-Type": file.type.startsWith("video/") ? file.type : "application/octet-stream" },
+    });
+  let res = await send();
+  if (res.status === 401) {
+    await renewSession();
+    res = await send();
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new ApiError(res.status, typeof body.error === "string" ? body.error : res.statusText);
+  }
+  return new File([await res.blob()], file.name.replace(/\.[^.]+$/, "") + ".mp4", { type: "video/mp4" });
+}
+
 export async function scanCamera(cameraId: string): Promise<CameraScan> {
   // apiFetch sends a JSON content type, and the API rejects an empty JSON body.
   return apiFetch<CameraScan>(`/visual/scan/${encodeURIComponent(cameraId)}`, { method: "POST", body: "{}" });

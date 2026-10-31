@@ -373,6 +373,56 @@ blocks that. A phone hotspot or a small router works.
 
 Remove those two lines to go back to the camera service on the laptop.
 
+### Test video: the trained model on an uploaded clip (optional)
+
+The small film button in the **Live Camera** header opens "Test video". You pick a clip from the
+device, the camera service runs the trained detector over it, and the clip plays back with the boxes
+drawn over it. Nothing is saved and the live camera is not touched.
+
+The model file is not in the repository. On the machine that runs `cerebroil-stream` (the laptop, or
+the Pi) put the YOLO ONNX export at `cerebroil-stream/models/detector.onnx`, or set
+`DETECTOR_MODEL_PATH` in `cerebroil-stream/.env`. Install the new packages (`onnxruntime` and
+`imageio-ffmpeg`) once there:
+
+```
+pip install -r requirements.txt            (laptop)
+.venv/bin/pip install -r requirements.txt  (Raspberry Pi)
+```
+
+Limits: the first 30 seconds are checked, about 4 frames per second (`DEMO_MAX_SECONDS` and
+`DEMO_SAMPLE_FPS` change that). A Raspberry Pi needs roughly a second per checked frame, so a 30
+second clip can take a minute or two. Without the model file the dialog says the detector is not
+installed.
+
+What the result shows (code: `cerebroil-stream/behavior.py`): each detected bird is followed from
+frame to frame and its box is colored by what it is doing.
+
+- **Moving** (green) and **Inactivity** (grey): normal. Broilers rest a lot, so a still bird is only
+  shown as inactivity when most of the flock is still too.
+- **Inactive** (amber): a bird that stayed within about a third of its own body size for the test
+  time while at least a fifth of the flock was moving. This is the bird to go and look at.
+- **Huddling** (blue): a group of 5 or more touching birds, much denser than the flock as a whole,
+  that stays together for the test time. A uniformly crowded house is not a huddle. The summary gives
+  the share of birds in huddles (FDI) and warns above 35%.
+
+The times are short on purpose so a short clip can show them: 10 seconds for inactive, 6 seconds
+for a huddle (`BEHAVIOR_INACTIVE_SECONDS`, `BEHAVIOR_HUDDLE_SECONDS`, `BEHAVIOR_HUDDLE_MIN_BIRDS` in
+`cerebroil-stream/.env`). For a real house they should be minutes to an hour. It does not know
+about feeder and drinker areas, lights-off hours or temperature yet, so treat a flag as "go and look",
+not as a diagnosis. It was tested on simulated flocks; check it on your own footage before trusting
+the numbers.
+
+Big and odd files:
+
+- **MKV, AVI and similar** are converted automatically to a small MP4 first (browsers cannot play
+  them, and the converted clip is also quicker to check). This uses `imageio-ffmpeg`, which brings its
+  own ffmpeg, so there is nothing else to install: `pip install -r requirements.txt` on the machine
+  that runs `cerebroil-stream`.
+- **A file over 60 MB** can still be chosen. The page cuts it to exactly the first 60 MB in the
+  browser and only sends that part. This works for MKV, WebM and MP4s that keep their index at the
+  start. An MP4 with the index at the end (many camera and phone recordings) cannot be cut this way,
+  and the dialog says so. Use an MKV or a smaller clip for those.
+
 ### Live 3D depth from the Kinect (optional, Window 5)
 
 A browser cannot talk to the Kinect, so a small Windows program streams its depth picture to the

@@ -16,6 +16,8 @@ import { requireAuth } from "../auth/middleware.js";
 
 const VISION_BASE = env.VISION_SERVICE_URL;
 const VISION_TOKEN = env.VISION_SERVICE_TOKEN;
+/** Largest video the "Test video" button accepts. Also enforced by the vision service. */
+const DEMO_VIDEO_MAX_BYTES = 60 * 1024 * 1024;
 
 /** Helper: build headers forwarded to the Flask service. */
 function visionHeaders(): Record<string, string> {
@@ -252,6 +254,81 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         return reply.send(await pending);
       } catch (err) {
         if (err instanceof VisionError) return reply.code(err.status).send(err.body);
+        return reply.code(503).send({ error: "vision_service_unavailable" });
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // POST /visual/demo-detect — the "Test video" button on Live Camera.
+  // The browser sends the video file as the raw body; it goes on to the vision
+  // service, which runs the trained detector over it and answers with the boxes
+  // for each sampled frame. Nothing is stored.
+  // -----------------------------------------------------------------------
+  app.addContentTypeParser(
+    /^(video\/.+|application\/octet-stream)$/,
+    { parseAs: "buffer", bodyLimit: DEMO_VIDEO_MAX_BYTES },
+    (_request, body, done) => done(null, body),
+  );
+
+  app.post(
+    "/demo-detect",
+    {
+      preHandler: [requireAuth],
+      bodyLimit: DEMO_VIDEO_MAX_BYTES,
+      config: { rateLimit: { max: 6, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const video = request.body;
+      if (!Buffer.isBuffer(video) || video.length === 0) {
+        return reply.code(400).send({ error: "empty_video" });
+      }
+      try {
+        const res = await fetch(`${VISION_BASE}/demo/detect`, {
+          method: "POST",
+          headers: { ...visionHeaders(), "Content-Type": "application/octet-stream" },
+          body: new Uint8Array(video),
+          // A small computer takes a while to go through a clip.
+          signal: AbortSignal.timeout(5 * 60_000),
+        });
+        const body = await res.json().catch(() => ({ error: "demo_detect_error" }));
+        return reply.code(res.status).send(body);
+      } catch {
+        return reply.code(503).send({ error: "vision_service_unavailable" });
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // POST /visual/demo-convert — re-encodes an uploaded video (MKV, AVI, a clip
+  // cut short) as a small MP4 that browsers can play. The "Test video" button
+  // calls it first for files a browser cannot play as they are.
+  // -----------------------------------------------------------------------
+  app.post(
+    "/demo-convert",
+    {
+      preHandler: [requireAuth],
+      bodyLimit: DEMO_VIDEO_MAX_BYTES,
+      config: { rateLimit: { max: 6, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const video = request.body;
+      if (!Buffer.isBuffer(video) || video.length === 0) {
+        return reply.code(400).send({ error: "empty_video" });
+      }
+      try {
+        const res = await fetch(`${VISION_BASE}/demo/convert`, {
+          method: "POST",
+          headers: { ...visionHeaders(), "Content-Type": "application/octet-stream" },
+          body: new Uint8Array(video),
+          signal: AbortSignal.timeout(5 * 60_000),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ error: "demo_convert_error" }));
+          return reply.code(res.status).send(body);
+        }
+        return reply.header("Content-Type", "video/mp4").send(Buffer.from(await res.arrayBuffer()));
+      } catch {
         return reply.code(503).send({ error: "vision_service_unavailable" });
       }
     },

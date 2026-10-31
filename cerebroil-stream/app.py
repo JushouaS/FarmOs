@@ -592,6 +592,79 @@ def vision_analyze(camera_id: str) -> Response:
     return jsonify(result)
 
 
+MAX_DEMO_VIDEO_BYTES = 60 * 1024 * 1024
+
+
+@app.post("/demo/detect")
+def demo_detect_route() -> tuple[Response, int] | Response:
+    """Runs the trained detector over an uploaded video (raw request body) for
+    the "Test video" button on Live Camera. See demo_detect.py."""
+    err = _require_vision_token()
+    if err:
+        return err
+    length = request.content_length or 0
+    if length <= 0:
+        return jsonify({"error": "empty_video"}), 400
+    if length > MAX_DEMO_VIDEO_BYTES:
+        return jsonify({"error": "video_too_large"}), 413
+
+    import tempfile
+    import demo_detect
+
+    fd, path = tempfile.mkstemp(suffix=".video")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(request.get_data(cache=False))
+        return jsonify(demo_detect.detect_video(path))
+    except demo_detect.ModelNotInstalled:
+        return jsonify({"error": "model_not_installed"}), 503
+    except demo_detect.UnreadableVideo:
+        return jsonify({"error": "unreadable_video"}), 400
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+@app.post("/demo/convert")
+def demo_convert_route() -> tuple[Response, int] | Response:
+    """Re-encodes an uploaded video (MKV, AVI, a clip cut short, ...) as a small
+    MP4 that browsers can play. The "Test video" button calls this first for
+    files a browser cannot play as they are."""
+    err = _require_vision_token()
+    if err:
+        return err
+    length = request.content_length or 0
+    if length <= 0:
+        return jsonify({"error": "empty_video"}), 400
+    if length > MAX_DEMO_VIDEO_BYTES:
+        return jsonify({"error": "video_too_large"}), 413
+
+    import tempfile
+    import demo_detect
+
+    fd, src = tempfile.mkstemp(suffix=".video")
+    dst = src + ".mp4"
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(request.get_data(cache=False))
+        demo_detect.convert_to_mp4(src, dst)
+        with open(dst, "rb") as f:
+            data = f.read()
+        return Response(data, mimetype="video/mp4")
+    except demo_detect.ConverterNotInstalled:
+        return jsonify({"error": "converter_not_installed"}), 503
+    except demo_detect.UnreadableVideo:
+        return jsonify({"error": "unreadable_video"}), 400
+    finally:
+        for p in (src, dst):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     t_dahua = threading.Thread(target=dahua_capture_loop, daemon=True)

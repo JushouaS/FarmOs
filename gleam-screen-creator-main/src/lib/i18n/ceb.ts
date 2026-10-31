@@ -9,8 +9,9 @@ import { part8 } from "./messages/part8";
 import { part9 } from "./messages/part9";
 import { part10 } from "./messages/part10";
 import { part11 } from "./messages/part11";
+import { part12 } from "./messages/part12";
 
 /** Cebuano. English sentence -> Cebuano. Anything missing shows in English. */
 export const ceb: Record<string, string> = Object.fromEntries(
-  Object.entries({ ...part1, ...part2, ...part3, ...part4, ...part5, ...part6, ...part7, ...part8, ...part9, ...part10, ...part11 }).map(([english, pair]) => [english, pair[1]]),
+  Object.entries({ ...part1, ...part2, ...part3, ...part4, ...part5, ...part6, ...part7, ...part8, ...part9, ...part10, ...part11, ...part12 }).map(([english, pair]) => [english, pair[1]]),
 );
