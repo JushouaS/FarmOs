@@ -328,6 +328,51 @@ What the pieces do:
 The message **"Vision service not reachable. Nothing is answering at localhost:5000"** simply means
 Window 3 is not running, or it crashed. Start it again with `python app.py`.
 
+### Camera plugged into a Raspberry Pi instead of the laptop (optional)
+
+The camera service (`cerebroil-stream`) can run on a Raspberry Pi that has the Dahua camera on its
+Ethernet cable. The laptop then only needs to reach the Pi over Wi-Fi. The Pi is **not** a router, so
+no IP forwarding is needed.
+
+Check first: the laptop and the Pi must be able to see each other. School or campus Wi-Fi often
+blocks that. A phone hotspot or a small router works.
+
+**On the Pi** (over SSH):
+
+1. Give the Ethernet port an address on the camera's network, so it survives a reboot (current Pi OS).
+   Do this only if your SSH session is over Wi-Fi, not over this cable:
+
+   ```
+   sudo nmcli con add type ethernet ifname eth0 con-name camera ipv4.method manual ipv4.addresses 192.168.0.51/24 ipv6.method ignore
+   sudo nmcli con up camera
+   ping -c 3 192.168.0.101
+   ```
+
+2. Copy the `cerebroil-stream` folder to the Pi, including its `.env`. Run this **on the laptop**,
+   with your Pi's user name and Wi-Fi address filled in:
+
+   ```
+   scp -r cerebroil-stream YOUR-PI-USER@PI-WIFI-ADDRESS:~/
+   ```
+
+3. On the Pi, run the setup script. It installs the packages and a service that starts at boot:
+
+   ```
+   cd ~/cerebroil-stream
+   bash setup-pi.sh
+   ```
+
+   It ends by printing the Pi's address. Open `http://PI-WIFI-ADDRESS:5000/video_feed/dahua` in the
+   laptop browser to check the video.
+
+**On the laptop**, point the website and the API at the Pi, then restart both (Windows 2 and 4):
+
+- Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000`
+- `packages\api\.env`: `VISION_SERVICE_URL=http://PI-WIFI-ADDRESS:5000`
+- `VISION_SERVICE_TOKEN` must be the same in `packages\api\.env` and in the Pi's `cerebroil-stream/.env`.
+
+Remove those two lines to go back to the camera service on the laptop.
+
 ### Live 3D depth from the Kinect (optional, Window 5)
 
 A browser cannot talk to the Kinect, so a small Windows program streams its depth picture to the
