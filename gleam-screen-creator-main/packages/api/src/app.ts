@@ -25,7 +25,13 @@ import { registerAlertRoutes } from "./routes/alerts.js";
 import { registerIncidentRoutes } from "./routes/incidents.js";
 import { registerReportRoutes } from "./routes/reports.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
+import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
+import { registerSettingsRoutes } from "./routes/settings.js";
+
+/** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
+const PRIVATE_NETWORK_ORIGIN =
+  /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -34,7 +40,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, {
-    origin: env.API_CORS_ORIGINS,
+    // In development, a phone or laptop on the same network opens the app at
+    // this machine's LAN address, which changes whenever the router hands out
+    // a new one. So development also accepts any private-network origin; the
+    // explicit list is the only thing allowed in production.
+    origin:
+      env.NODE_ENV === "development"
+        ? (origin, callback) => callback(null, !origin || env.API_CORS_ORIGINS.includes(origin) || PRIVATE_NETWORK_ORIGIN.test(origin))
+        : env.API_CORS_ORIGINS,
+    // The plugin's default is GET, HEAD and POST only, which blocks a browser's
+    // PUT (Settings saves the grow-out day with one) and PATCH.
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   });
   await app.register(cookie, { secret: env.JWT_SECRET });
@@ -80,6 +96,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerIncidentRoutes, { prefix: "/incidents" });
   await app.register(registerReportRoutes, { prefix: "/reports" });
   await app.register(registerNotificationRoutes, { prefix: "/notifications" });
+  await app.register(registerFeedbackRoutes, { prefix: "/feedback" });
+  await app.register(registerSettingsRoutes, { prefix: "/settings" });
 
   return app;
 }

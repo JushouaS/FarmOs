@@ -13,26 +13,46 @@ from __future__ import annotations
 import csv
 import math
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
 
+import base64
 import cv2
 import numpy as np
+from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
 
+# Load cerebroil-stream/.env (if present) before reading any of the vars below.
+load_dotenv()
+
 # ── Configuration ─────────────────────────────────────────────────────────────
-DAHUA_RTSP_URL = os.getenv(
-    "DAHUA_RTSP_URL",
-    os.getenv("RTSP_URL", "rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1"),
-)
+# No default: the URL carries the camera's login, so it must come from .env
+# (see .env.example). Unset means the Dahua stream stays off.
+DAHUA_RTSP_URL = os.getenv("DAHUA_RTSP_URL", os.getenv("RTSP_URL", ""))
 KINECT_SOURCE = os.getenv("KINECT_SOURCE", "simulated")  # "0", "1", rtsp url, or "simulated"
+
+
+def _redact_url(url: str) -> str:
+    """Camera URL with its password replaced by ***, for logs and responses."""
+    return re.sub(r"(://[^:/@]*:)[^@]*@", r"\1***@", url)
+
+# Shared secret expected from packages/api (X-Vision-Token header). No
+# insecure default: an empty value means every protected route below refuses.
+VISION_SERVICE_TOKEN = os.getenv("VISION_SERVICE_TOKEN", "")
 
 JPEG_QUALITY   = 75       # 70-80% is optimal for LAN MJPEG
 FRAME_TIMEOUT  = 5.0      # seconds before camera reconnect
 RETRY_DELAY    = 3.0      # seconds between reconnect attempts
+# A camera that changes its encoder settings (resolution, frame rate, codec)
+# can leave an open connection delivering nothing new, or the same picture
+# over and over. If the decoded picture has not changed for this long, the
+# stream is treated as dead: reconnect, and show "no signal" meanwhile.
+PICTURE_STALL  = 12.0     # seconds without a changed picture
+IO_TIMEOUT_MS  = 8000     # open/read timeout handed to OpenCV's FFmpeg backend
 SUS_CSV        = Path("sus_responses") / "responses.csv"
 
 app = Flask(__name__)
@@ -41,20 +61,52 @@ app = Flask(__name__)
 _dahua_lock          = threading.Lock()
 _latest_dahua_frame: bytes | None = None
 _dahua_ok            = False
+_dahua_changed_at    = 0.0     # time.monotonic() when the picture last changed
+
+
+def _dahua_alive() -> bool:
+    """Connected AND the picture is still changing (see PICTURE_STALL)."""
+    return _dahua_ok and (time.monotonic() - _dahua_changed_at) < PICTURE_STALL
+
+
+def _dahua_frame_or_none() -> bytes | None:
+    """Latest Dahua frame, or None when the stream is stale so the page shows
+    the "no signal" picture instead of a frozen last frame."""
+    return _latest_dahua_frame if _dahua_alive() else None
+
 
 _kinect_lock         = threading.Lock()
 _latest_kinect_frame: bytes | None = None
 _kinect_ok           = False
 
+# State for the lightweight frame-diff analysis used by /analyze (see below).
+_ANALYZE_LOCK        = threading.Lock()
+_dahua_prev_gray: np.ndarray | None = None
+
+# Camera ids as used by the frontend/packages/api (dataset.ts: CAM-01, KINECT-01)
+# mapped to this service's internal stream names.
+_CAMERA_SOURCES = {
+    "CAM-01": "dahua", "dahua": "dahua", "DAHUA": "dahua",
+    "KINECT-01": "kinect", "kinect": "kinect", "KINECT": "kinect",
+}
+
 
 # ── Dahua CCTV IR Camera Loop ─────────────────────────────────────────────────
 def dahua_capture_loop() -> None:
-    global _latest_dahua_frame, _dahua_ok
+    global _latest_dahua_frame, _dahua_ok, _dahua_changed_at
     encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
 
+    if not DAHUA_RTSP_URL:
+        print("[dahua] DAHUA_RTSP_URL is not set in .env; Dahua stream disabled.")
+        return
+
     while True:
-        print(f"[dahua] Connecting to {DAHUA_RTSP_URL} …")
-        cap = cv2.VideoCapture(DAHUA_RTSP_URL, cv2.CAP_FFMPEG)
+        print(f"[dahua] Connecting to {_redact_url(DAHUA_RTSP_URL)} …")
+        cap = cv2.VideoCapture(
+            DAHUA_RTSP_URL,
+            cv2.CAP_FFMPEG,
+            [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, IO_TIMEOUT_MS, cv2.CAP_PROP_READ_TIMEOUT_MSEC, IO_TIMEOUT_MS],
+        )
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         if not cap.isOpened():
@@ -63,9 +115,12 @@ def dahua_capture_loop() -> None:
             time.sleep(RETRY_DELAY)
             continue
 
-        print("[dahua] Connected.")
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"[dahua] Connected ({w}x{h}).")
         _dahua_ok = True
         last_frame_time = time.monotonic()
+        _dahua_changed_at = last_frame_time
+        last_signature: bytes | None = None
 
         while True:
             ret, frame = cap.read()
@@ -77,7 +132,21 @@ def dahua_capture_loop() -> None:
                 time.sleep(0.01)
                 continue
 
-            last_frame_time = time.monotonic()
+            now = time.monotonic()
+            last_frame_time = now
+
+            # Cheap fingerprint of the picture (a sparse sample of pixels).
+            # Real cameras have sensor noise, so a live picture changes
+            # constantly; an identical one for PICTURE_STALL seconds means
+            # the stream is stuck.
+            signature = frame[::48, ::48].tobytes()
+            if signature != last_signature:
+                last_signature = signature
+                _dahua_changed_at = now
+            elif now - _dahua_changed_at > PICTURE_STALL:
+                print(f"[dahua] Picture unchanged for {now - _dahua_changed_at:.0f}s — reconnecting …")
+                break
+
             _, buffer = cv2.imencode(".jpg", frame, encode_params)
             with _dahua_lock:
                 _latest_dahua_frame = buffer.tobytes()
@@ -158,7 +227,7 @@ def kinect_capture_loop() -> None:
     frame_count = 0
     while True:
         if is_device:
-            print(f"[kinect] Opening video source {source} …")
+            print(f"[kinect] Opening video source {_redact_url(str(source))} …")
             cap = cv2.VideoCapture(source)
             if cap.isOpened():
                 print("[kinect] Connected to device.")
@@ -175,7 +244,7 @@ def kinect_capture_loop() -> None:
                 cap.release()
                 _kinect_ok = False
             else:
-                print(f"[kinect] Cannot open {source}, falling back to real-time depth synthesis.")
+                print(f"[kinect] Cannot open {_redact_url(str(source))}, falling back to real-time depth synthesis.")
 
         # Real-time depth generator mode
         _kinect_ok = True
@@ -188,20 +257,23 @@ def kinect_capture_loop() -> None:
 
 
 # ── MJPEG Stream Generators ───────────────────────────────────────────────────
-PLACEHOLDER = (
-    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
-    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t"
-    b"\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a"
-    b"\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\x1e"
-    b"\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f"
-    b"\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00"
-    b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xc4\x00\xb5\x10\x00"
-    b"\x02\x01\x03\x03\x02\x04\x03\x05\x05\x04\x04\x00\x00\x01}\x01\x02"
-    b"\x03\x00\x04\x11\x05\x12!1A\x06\x13Qa\x07\"q\x142\x81\x91\xa1\x08"
-    b"#B\xb1\xc1\x15R\xd1\xf0$3br\x82\t\n\x16\x17\x18\x19\x1a%&'()*456789"
-    b":CDEFGHIJSTUVWXYZcdefghijstuvwxyz\xff\xda\x00\x08\x01\x01\x00\x00?"
-    b"\x00\xfb\xd4P\x00\x00\x00\x1f\xff\xd9"
-)
+def _make_placeholder_jpeg() -> bytes:
+    """Frame streamed while a camera has no signal. Encoded by OpenCV so every
+    browser can decode it: an undecodable frame makes the page's <img> fire
+    onError, which the dashboard reports as the whole service being down."""
+    frame = np.full((360, 640, 3), (23, 15, 2), dtype=np.uint8)  # slate-950 (BGR)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    for text, scale, y, color in (
+        ("NO CAMERA SIGNAL", 0.9, 170, (241, 245, 241)),
+        ("Camera off or unreachable - retrying", 0.55, 205, (184, 163, 148)),
+    ):
+        (w, _), _ = cv2.getTextSize(text, font, scale, 2)
+        cv2.putText(frame, text, ((640 - w) // 2, y), font, scale, color, 2, cv2.LINE_AA)
+    _, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+    return buffer.tobytes()
+
+
+PLACEHOLDER = _make_placeholder_jpeg()
 
 
 def _generate_mjpeg_stream(lock: threading.Lock, frame_accessor: callable) -> Generator[bytes, None, None]:
@@ -229,7 +301,7 @@ def index() -> str:
 def video_feed_dahua() -> Response:
     """Overhead Dahua IR CCTV stream."""
     return Response(
-        _generate_mjpeg_stream(_dahua_lock, lambda: _latest_dahua_frame),
+        _generate_mjpeg_stream(_dahua_lock, _dahua_frame_or_none),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
@@ -247,11 +319,11 @@ def video_feed_kinect() -> Response:
 def status() -> Response:
     """Status probe for both Dahua and Kinect streams."""
     return jsonify({
-        "camera_ok": _dahua_ok or _kinect_ok,
-        "dahua_ok": _dahua_ok,
+        "camera_ok": _dahua_alive() or _kinect_ok,
+        "dahua_ok": _dahua_alive(),
         "kinect_ok": _kinect_ok,
-        "dahua_url": DAHUA_RTSP_URL,
-        "kinect_source": KINECT_SOURCE,
+        "dahua_url": _redact_url(DAHUA_RTSP_URL),
+        "kinect_source": _redact_url(KINECT_SOURCE),
     })
 
 
@@ -307,6 +379,217 @@ def _interpret(score: float) -> str:
     if score >= 68:  return "OK"
     if score >= 51:  return "Poor"
     return "Awful"
+
+
+
+# ── Vision-proxy contract (consumed by packages/api's vision-proxy.ts) ───────
+#
+# packages/api never lets the browser talk to this service directly: it
+# forwards requests here with an X-Vision-Token header and proxies the
+# response. The routes below implement the contract packages/api expects
+# (/health, /cameras, /stream/<id>, /capture/<id>, /analyze/<id>) — these did
+# not previously exist, which made every "Live Camera" / analyze call fail.
+
+def _require_vision_token() -> tuple[Response, int] | None:
+    """Returns an (error response, status) pair if the shared-secret header
+    is missing/wrong, else None. No insecure default: an unset token refuses
+    every protected route rather than silently allowing access."""
+    if not VISION_SERVICE_TOKEN:
+        return jsonify({"error": "vision_token_not_configured"}), 500
+    if request.headers.get("X-Vision-Token", "") != VISION_SERVICE_TOKEN:
+        return jsonify({"error": "unauthorized"}), 401
+    return None
+
+
+def _resolve_camera(camera_id: str) -> str | None:
+    return _CAMERA_SOURCES.get(camera_id)
+
+
+def _connected(source: str) -> bool:
+    return _dahua_alive() if source == "dahua" else _kinect_ok
+
+
+def _latest_frame_bytes(source: str) -> bytes | None:
+    if source == "dahua":
+        with _dahua_lock:
+            return _dahua_frame_or_none()
+    with _kinect_lock:
+        return _latest_kinect_frame
+
+
+@app.get("/health")
+def vision_health() -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    connected = sum(1 for s in ("dahua", "kinect") if _connected(s))
+    return jsonify({
+        "status": "ok" if connected > 0 else "degraded",
+        "cameras_configured": len(set(_CAMERA_SOURCES.values())),
+        "cameras_connected": connected,
+    })
+
+
+@app.get("/cameras")
+def vision_cameras() -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    return jsonify([
+        {"camera_id": "CAM-01", "rtsp_url": _redact_url(DAHUA_RTSP_URL), "connected": _dahua_alive()},
+        {"camera_id": "KINECT-01", "rtsp_url": _redact_url(KINECT_SOURCE), "connected": _kinect_ok},
+    ])
+
+
+@app.get("/stream/<camera_id>")
+def vision_stream(camera_id: str) -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    source = _resolve_camera(camera_id)
+    if source is None:
+        return jsonify({"error": "unknown_camera"}), 404
+    lock = _dahua_lock if source == "dahua" else _kinect_lock
+    accessor = _dahua_frame_or_none if source == "dahua" else (lambda: _latest_kinect_frame)
+    return Response(
+        _generate_mjpeg_stream(lock, accessor),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+@app.post("/capture/<camera_id>")
+def vision_capture(camera_id: str) -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    source = _resolve_camera(camera_id)
+    if source is None:
+        return jsonify({"error": "unknown_camera"}), 404
+    frame_bytes = _latest_frame_bytes(source)
+    if frame_bytes is None:
+        return jsonify({"error": "no_frame_available"}), 503
+    return jsonify({
+        "camera_id": camera_id,
+        "connected": _connected(source),
+        "image": base64.b64encode(frame_bytes).decode("ascii"),
+        "content_type": "image/jpeg",
+        "size_bytes": len(frame_bytes),
+    })
+
+
+def _analyze_dahua(frame_bytes: bytes) -> dict:
+    """Frame-difference + contour activity analysis on the real captured
+    frame. This is a lightweight, honest stand-in for the YOLOv8/ByteTrack
+    pipeline described in CEREBROILER.md/cerebroil-backend — it reports real
+    motion signal from the camera, not a trained detector's output. Swap this
+    for an actual model inference call when one is wired up."""
+    global _dahua_prev_gray
+    arr = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if arr is None:
+        return {"detections": [], "movement_index": 0.0, "aggression_events": 0}
+
+    gray = cv2.GaussianBlur(cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY), (5, 5), 0)
+    detections: list[dict] = []
+    movement_index = 0.0
+
+    with _ANALYZE_LOCK:
+        prev = _dahua_prev_gray
+        _dahua_prev_gray = gray
+
+    if prev is not None and prev.shape == gray.shape:
+        diff = cv2.absdiff(prev, gray)
+        movement_index = round(float(np.mean(diff)) / 255.0, 4)
+        _, thresh = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)
+        thresh = cv2.dilate(thresh, None, iterations=2)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in contours:
+            if cv2.contourArea(c) < 80:  # drop compression/sensor noise
+                continue
+            x, y, w, h = cv2.boundingRect(c)
+            detections.append({
+                "box_x": float(x), "box_y": float(y), "box_w": float(w), "box_h": float(h),
+                "behavior": "ACTIVE", "estimated_weight_g": None,
+                "weight_confidence": None, "flag": None,
+            })
+
+    return {"detections": detections[:50], "movement_index": movement_index, "aggression_events": 0}
+
+
+def _analyze_kinect(frame_bytes: bytes) -> dict | None:
+    """ROI mean-intensity mass estimate from the depth colormap frame.
+    Calibrated against the synthetic generator's bird-ellipse vs. empty-
+    platform depth bands. Treat as an estimate pending a real depth-SDK
+    integration, not a calibrated measurement."""
+    arr = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if arr is None:
+        return None
+    h, w = arr.shape[:2]
+    roi = arr[int(h * 0.25):int(h * 0.75), int(w * 0.25):int(w * 0.75)]
+    mean_intensity = float(np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)))
+    calculated_mass_g = max(0.0, round(2400.0 - mean_intensity * 9.5, 1))
+    return {
+        "median_g": calculated_mass_g,
+        "std_dev_g": round(calculated_mass_g * 0.06, 1),
+        "sample_size": 1,
+        "confidence": 0.55,
+    }
+
+
+@app.post("/analyze/<camera_id>")
+def vision_analyze(camera_id: str) -> Response:
+    err = _require_vision_token()
+    if err:
+        return err
+    source = _resolve_camera(camera_id)
+    if source is None:
+        return jsonify({"error": "unknown_camera"}), 404
+    frame_bytes = _latest_frame_bytes(source)
+    if frame_bytes is None:
+        return jsonify({"error": "no_frame_available"}), 503
+
+    result = {
+        "camera_id": camera_id,
+        # This service has no database connection by design — persistence is
+        # packages/api's job. It overwrites this field after it actually
+        # writes the rows; never report true from here.
+        "db_written": False,
+        "detections": [],
+        "detection_count": 0,
+        "behaviour": {
+            "movement_index": 0.0, "movement_label": "Unknown", "movement_status": "nominal",
+            "huddling_risk": 0.0, "huddling_label": "Low", "huddling_status": "nominal",
+            "aggression_events": 0,
+        },
+        "weight": None,
+        "clusters": [],
+        "cluster_count": 0,
+    }
+
+    if source == "dahua":
+        analysis = _analyze_dahua(frame_bytes)
+        result["detections"] = analysis["detections"]
+        result["detection_count"] = len(analysis["detections"])
+        mi = analysis["movement_index"]
+        result["behaviour"] = {
+            "movement_index": mi,
+            "movement_label": "Active" if mi > 0.02 else "Inactive",
+            "movement_status": "nominal" if mi > 0.02 else "warning",
+            "huddling_risk": round(max(0.0, 1.0 - mi * 10), 4),
+            "huddling_label": "Low" if mi > 0.02 else "High",
+            "huddling_status": "nominal" if mi > 0.02 else "warning",
+            "aggression_events": analysis["aggression_events"],
+        }
+        if result["detection_count"] >= 6:
+            result["clusters"] = [{
+                "label": "High density cluster",
+                "risk": round(min(1.0, result["detection_count"] / 20), 4),
+                "box": "roi",
+            }]
+            result["cluster_count"] = 1
+    else:
+        result["weight"] = _analyze_kinect(frame_bytes)
+
+    return jsonify(result)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

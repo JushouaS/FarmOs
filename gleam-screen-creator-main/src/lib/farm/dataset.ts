@@ -7,7 +7,7 @@ import type { FarmDataset, SensorReading, StatusLevel } from "./types";
  * Behavioral classification (3-state model per system architecture):
  *   "Inactivity" — low motion score during daytime
  *   "Huddling"   — high bounding-box cluster density
- *   "Sleeping"   — time-based override: 21:00–03:59 local time
+ *   "Sleeping"   — time-based override: 17:00–04:59 local time
  *
  * Weight categories (Kinect depth-volume regression):
  *   "Underweight" — < 1.20 kg   (#F59E0B amber)
@@ -31,14 +31,39 @@ const INCIDENT_STILL =
 
 /* ─── Night cycle ─────────────────────────────────────────────────────────── */
 
+/** When the day starts and when the night starts, local time as "HH:MM" (Settings > Light and night hours). */
+export interface LightingHours {
+  dayStart: string;
+  nightStart: string;
+}
+
+/** Day 05:00 to 16:59, night the rest, until Settings says otherwise. */
+export const DEFAULT_LIGHTING: LightingHours = { dayStart: "05:00", nightStart: "17:00" };
+
+const minutesOf = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+};
+
+/** "17:00" -> "5:00 PM". */
+export function clock12(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const hour = (h ?? 0) % 12 || 12;
+  return `${hour}:${String(m ?? 0).padStart(2, "0")} ${(h ?? 0) < 12 ? "AM" : "PM"}`;
+}
+
 /**
- * Returns true if local time is between 21:00 (9 PM) and 03:59 AM.
- * During this window all birds are classified "Sleeping" and inactivity/
- * huddling alert triggers are suppressed.
+ * Between the day start and the night start (05:00 and 17:00 unless Settings
+ * says otherwise) it is day; the rest is night, and the night may run past
+ * midnight. During the night all birds are classified "Sleeping" and
+ * inactivity/huddling alert triggers are suppressed.
  */
-export function isNightCycle(date: Date = new Date()): boolean {
-  const h = date.getHours();
-  return h >= 21 || h < 4;
+export function isNightCycle(date: Date = new Date(), lighting: LightingHours = DEFAULT_LIGHTING): boolean {
+  const now = date.getHours() * 60 + date.getMinutes();
+  const day = minutesOf(lighting.dayStart);
+  const night = minutesOf(lighting.nightStart);
+  const isDay = day < night ? now >= day && now < night : now >= day || now < night;
+  return !isDay;
 }
 
 /* ─── Behavior states ─────────────────────────────────────────────────────── */
@@ -47,7 +72,7 @@ export function isNightCycle(date: Date = new Date()): boolean {
  * Three-state behavioral model:
  * - "Inactivity" : minimal pixel movement, daytime only
  * - "Huddling"   : high bounding-box cluster density, daytime only
- * - "Sleeping"   : time-based override active 21:00–03:59
+ * - "Sleeping"   : time-based override active 17:00–04:59
  */
 export type BehaviorState = "Active" | "Inactive" | "Inactivity" | "Huddling" | "Sleeping";
 
@@ -154,7 +179,7 @@ const RAW_BIRDS: Array<[number, BehaviorState, number, BroilerBird["flag"]?]> = 
   [1520, "Inactivity", 0.98],
 ];
 
-function morpho(weightG: number): Pick<BroilerBird, "breastWidthMm" | "totalLengthMm" | "depthZMm"> {
+export function morpho(weightG: number): Pick<BroilerBird, "breastWidthMm" | "totalLengthMm" | "depthZMm"> {
   const w = weightG / 1000;
   return {
     breastWidthMm: parseFloat((52 + w * 11.6).toFixed(1)),

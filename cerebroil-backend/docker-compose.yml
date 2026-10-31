@@ -80,7 +80,8 @@ services:
       - "8889:8889"   # WebRTC / WHEP
       - "8888:8888"   # HLS
     environment:
-      - MTX_PATHS_DAHUA_SOURCE=${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      # Camera login comes from DAHUA_RTSP_URL in this folder's .env; never a default here.
+      - MTX_PATHS_DAHUA_SOURCE=${DAHUA_RTSP_URL:-}
       - MTX_PATHS_KINECT_SOURCE=${KINECT_RTSP_URL:-rtsp://localhost:8554/kinect_source}
 
   # ── Dual Stream Server (Dahua + 3D Kinect MJPEG) ─────────────────────────────
@@ -91,7 +92,7 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - DAHUA_RTSP_URL=${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      - DAHUA_RTSP_URL=${DAHUA_RTSP_URL:-}
       - KINECT_SOURCE=${KINECT_SOURCE:-simulated}
 
 volumes:

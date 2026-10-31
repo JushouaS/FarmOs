@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
-import { unacknowledgedAlerts } from "@/lib/farm/dataset";
+import { UserAvatar } from "./UserAvatar";
+import { useUnacknowledgedAlertCount } from "@/lib/alert-store";
 import {
   LayoutDashboard,
   Video,
@@ -13,6 +14,7 @@ import {
   PanelLeftOpen,
   X,
 } from "lucide-react";
+import { T, tr } from "@/lib/i18n";
 
 /* ── Brand Logo ────────────────────────────────────────────── */
 export function CerebroilLogo({ size = 34 }: { size?: number }) {
@@ -49,12 +51,12 @@ export function CerebroilLogo({ size = 34 }: { size?: number }) {
 }
 
 const NAV_ITEMS = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/visuals", icon: Video, label: "Live Camera" },
-  { to: "/flock-monitoring", icon: Bird, label: "Flock Tracking" },
-  { to: "/telemetry", icon: LineChart, label: "Analytics" },
-  { to: "/alerts", icon: Bell, label: "Alerts", badge: true },
-  { to: "/settings", icon: Settings, label: "Settings" },
+  { to: "/", icon: LayoutDashboard, label: T("Dashboard") },
+  { to: "/visuals", icon: Video, label: T("Live Camera") },
+  { to: "/flock-monitoring", icon: Bird, label: T("Flock Tracking") },
+  { to: "/telemetry", icon: LineChart, label: T("Analytics") },
+  { to: "/alerts", icon: Bell, label: T("Alerts"), badge: true },
+  { to: "/settings", icon: Settings, label: T("Settings") },
 ] as const;
 
 export function SideNav({
@@ -68,7 +70,7 @@ export function SideNav({
 }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const alertCount = unacknowledgedAlerts();
+  const alertCount = useUnacknowledgedAlertCount();
 
   const handleLogout = async () => {
     await logout();
@@ -77,13 +79,13 @@ export function SideNav({
 
   // Modern inset rounded pill navigation items
   const base = [
-    "flex items-center gap-3 py-2.5 text-sm font-medium transition-all duration-150 rounded-lg group",
+    "flex items-center gap-3 py-2.5 pointer-coarse:py-3 text-sm font-medium transition-all duration-150 rounded-lg group",
     "text-[color:var(--sidebar-text)] hover:bg-[color:var(--sidebar-hover-bg)] hover:text-[color:var(--sidebar-hover-text)]",
     collapsed ? "mx-2 px-0 justify-center" : "mx-2.5 px-3",
   ].join(" ");
 
   const active = [
-    "flex items-center gap-3 py-2.5 text-sm font-semibold rounded-lg",
+    "flex items-center gap-3 py-2.5 pointer-coarse:py-3 text-sm font-semibold rounded-lg",
     "text-[color:var(--sidebar-active-text)] bg-[color:var(--sidebar-active-bg)]",
     "border border-emerald-500/20 shadow-xs",
     collapsed ? "mx-2 px-0 justify-center" : "mx-2.5 px-3",
@@ -104,8 +106,8 @@ export function SideNav({
           <button
             onClick={onToggle}
             className="flex items-center justify-center rounded-xl p-1 transition-transform hover:scale-105"
-            title="Expand sidebar"
-            aria-label="Expand sidebar"
+            title={tr("Expand sidebar")}
+            aria-label={tr("Expand sidebar")}
           >
             <CerebroilLogo size={34} />
           </button>
@@ -118,13 +120,13 @@ export function SideNav({
                   className="font-display text-sm font-bold leading-none tracking-tight"
                   style={{ color: "var(--sidebar-heading)" }}
                 >
-                  Cerebroil
+                  {tr("Cerebroil")}
                 </div>
                 <div
                   className="text-[11px] font-medium leading-none mt-1"
                   style={{ color: "var(--sidebar-muted)" }}
                 >
-                  Flock Monitor
+                  {tr("Flock Monitor")}
                 </div>
               </div>
             </div>
@@ -135,18 +137,18 @@ export function SideNav({
                 onClick={onToggle}
                 className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--sidebar-hover-bg)] hover:text-[color:var(--sidebar-hover-text)]"
                 style={{ color: "var(--sidebar-muted)" }}
-                title="Collapse sidebar"
-                aria-label="Collapse sidebar"
+                title={tr("Collapse sidebar")}
+                aria-label={tr("Collapse sidebar")}
               >
                 <PanelLeftClose className="h-4 w-4" />
               </button>
 
               <button
                 onClick={onMobileClose}
-                className="flex lg:hidden h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--sidebar-hover-bg)] hover:text-[color:var(--sidebar-hover-text)]"
+                className="tap flex lg:hidden h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--sidebar-hover-bg)] hover:text-[color:var(--sidebar-hover-text)]"
                 style={{ color: "var(--sidebar-muted)" }}
-                title="Close navigation"
-                aria-label="Close navigation"
+                title={tr("Close navigation")}
+                aria-label={tr("Close navigation")}
               >
                 <X className="h-4.5 w-4.5" />
               </button>
@@ -162,7 +164,7 @@ export function SideNav({
             className="px-4 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider"
             style={{ color: "var(--sidebar-muted)" }}
           >
-            Navigation
+            {tr("Navigation")}
           </p>
         )}
         {NAV_ITEMS.map((item) => (
@@ -173,7 +175,7 @@ export function SideNav({
             onClick={onMobileClose}
             className={base}
             activeProps={{ className: active }}
-            title={collapsed ? item.label : undefined}
+            title={collapsed ? tr(item.label) : undefined}
           >
             {/* Icon + small badge when collapsed */}
             <span className="relative flex shrink-0 items-center justify-center">
@@ -191,7 +193,7 @@ export function SideNav({
             {/* Label and right pill badge ONLY when expanded */}
             {!collapsed && (
               <span className="flex flex-1 items-center justify-between min-w-0">
-                <span className="truncate">{item.label}</span>
+                <span className="truncate">{tr(item.label)}</span>
                 {"badge" in item && item.badge && alertCount > 0 && (
                   <span
                     className="ml-auto rounded-full px-2 py-0.5 font-mono text-[10px] font-bold shrink-0"
@@ -230,10 +232,10 @@ export function SideNav({
             </span>
             <div className="min-w-0">
               <p className="text-xs font-semibold leading-tight text-[var(--sidebar-heading)]">
-                System Online
+                {tr("System Online")}
               </p>
               <p className="text-[10px] leading-tight text-[var(--sidebar-muted)]">
-                Pen 1 Connected
+                {tr("Pen 1 Connected")}
               </p>
             </div>
           </div>
@@ -241,7 +243,7 @@ export function SideNav({
           <div className="flex justify-center py-1">
             <span
               className="relative flex h-2.5 w-2.5 cursor-pointer"
-              title="System Online · Pen 1 Connected"
+              title={tr("System Online · Pen 1 Connected")}
               onClick={onToggle}
             >
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -256,22 +258,16 @@ export function SideNav({
             }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs"
-              style={{
-                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                border: "1px solid rgba(52,211,153,0.3)",
-              }}
-            >
-              {user?.email?.[0]?.toUpperCase() ?? "U"}
+            <div className="h-8 w-8 shrink-0 shadow-xs">
+              <UserAvatar user={user} />
             </div>
             {!collapsed && (
               <div className="min-w-0 text-left">
                 <p className="text-xs font-semibold leading-tight truncate text-[var(--sidebar-heading)]">
-                  {user?.fullName ?? user?.email ?? "Farm Manager"}
+                  {user?.fullName ?? user?.email ?? tr("Farm Manager")}
                 </p>
                 <p className="text-[10px] truncate text-[var(--sidebar-muted)]">
-                  {user?.roles?.[0] ?? "Manager"}
+                  {user?.roles?.[0] ?? tr("Manager")}
                 </p>
               </div>
             )}
@@ -279,9 +275,9 @@ export function SideNav({
           {!collapsed ? (
             <button
               onClick={handleLogout}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--sidebar-muted)] hover:text-[var(--sidebar-hover-text)] hover:bg-[var(--surface-raised)] transition-colors shrink-0"
-              title="Sign out"
-              aria-label="Sign out"
+              className="tap flex h-7 w-7 items-center justify-center rounded-md text-[var(--sidebar-muted)] hover:text-[var(--sidebar-hover-text)] hover:bg-[var(--surface-raised)] transition-colors shrink-0"
+              title={tr("Sign out")}
+              aria-label={tr("Sign out")}
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -289,9 +285,9 @@ export function SideNav({
             <button
               onClick={handleLogout}
               className="sr-only"
-              title="Sign out"
+              title={tr("Sign out")}
             >
-              Sign out
+              {tr("Sign out")}
             </button>
           )}
         </div>

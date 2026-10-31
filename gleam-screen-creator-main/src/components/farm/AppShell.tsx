@@ -1,11 +1,12 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { SideNav } from "./SideNav";
-import { unacknowledgedAlerts } from "@/lib/farm/dataset";
-import { useAuth } from "@/lib/auth-context";
+import { AccountMenu } from "./AccountMenu";
+import { LanguageMenu } from "./LanguageMenu";
+import { AlertPopups } from "./AlertPopups";
+import { useUnacknowledgedAlertCount } from "@/lib/alert-store";
 import {
   Menu,
-  PanelLeft,
   Sun,
   Moon,
   Bell,
@@ -14,6 +15,7 @@ import {
   Bird,
   LineChart,
 } from "lucide-react";
+import { T, tr } from "@/lib/i18n";
 
 const COLLAPSE_KEY = "cb-sidenav-collapsed";
 let collapsedCache: boolean | null = null;
@@ -31,6 +33,11 @@ const AppShellContext = createContext<AppShellContextValue | null>(null);
 export function useAppShell() {
   return useContext(AppShellContext);
 }
+
+/* One style for every square icon control in the top bar (menu, sidebar
+ * toggle, theme, alerts) so the left and right clusters read as one set. */
+const TOP_BAR_ICON_BUTTON =
+  "tap relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all";
 
 /* ── Theme toggle ─────────────────────────────────────────── */
 function ThemeToggle() {
@@ -51,10 +58,9 @@ function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
-      style={{ color: "var(--text-secondary)" }}
-      aria-label="Toggle theme"
-      title={isLight ? "Switch to dark mode" : "Switch to light mode"}
+      className={TOP_BAR_ICON_BUTTON}
+      aria-label={tr("Toggle theme")}
+      title={isLight ? tr("Switch to dark mode") : tr("Switch to light mode")}
     >
       {isLight ? (
         <Sun className="h-4 w-4" />
@@ -65,76 +71,39 @@ function ThemeToggle() {
   );
 }
 
-/* ── Location status strip ─────────────────────────────────── */
-function LocationStatus() {
-  return (
-    <div
-      className="hidden sm:flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs"
-      style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)" }}
-    >
-      <span className="relative flex h-2 w-2 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-      </span>
-      <span className="font-semibold text-[var(--text-primary)]">Pen 1</span>
-      <span style={{ color: "var(--border-strong)" }}>·</span>
-      <span style={{ color: "var(--text-secondary)" }}>House 1 (Ross 308)</span>
-    </div>
-  );
-}
-
 /* ── Top bar ──────────────────────────────────────────────── */
-function TopBar({
-  onMenuOpen,
-  onToggleSidebar,
-  collapsed,
-}: {
-  onMenuOpen: () => void;
-  onToggleSidebar: () => void;
-  collapsed: boolean;
-}) {
-  const alertCount = unacknowledgedAlerts();
-  const { user } = useAuth();
-  const initial = user?.fullName?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U";
+function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
+  const alertCount = useUnacknowledgedAlertCount();
 
   return (
     <div
-      className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4"
+      className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 sm:px-5 lg:px-6"
     >
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {/* Mobile hamburger menu button */}
         <button
           onClick={onMenuOpen}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all lg:hidden"
-          aria-label="Open navigation menu"
-          title="Open menu"
+          className={`${TOP_BAR_ICON_BUTTON} lg:hidden`}
+          aria-label={tr("Open navigation menu")}
+          aria-controls="app-sidenav"
+          title={tr("Open menu")}
         >
           <Menu className="h-4.5 w-4.5" />
         </button>
-
-        {/* Desktop sidebar toggle button */}
-        <button
-          onClick={onToggleSidebar}
-          className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <PanelLeft className="h-4 w-4" />
-        </button>
-
-        <LocationStatus />
+        {/* Desktop has no button here: the sidebar's own header collapses it,
+            and its logo expands it again. */}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
+        <LanguageMenu />
         <ThemeToggle />
 
         {/* Alert bell with badge */}
         <Link
           to="/alerts"
-          className="relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[color:var(--surface-raised)]"
-          style={{ color: "var(--text-secondary)" }}
-          aria-label="View alerts"
-          title="View alerts"
+          className={TOP_BAR_ICON_BUTTON}
+          aria-label={tr("View alerts")}
+          title={tr("View alerts")}
         >
           <Bell className="h-4 w-4" />
           {alertCount > 0 && (
@@ -147,17 +116,8 @@ function TopBar({
           )}
         </Link>
 
-        {/* User avatar */}
-        <div
-          className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white select-none shadow-xs"
-          style={{
-            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-            border: "1px solid rgba(52,211,153,0.3)",
-          }}
-          title={user?.fullName ?? user?.email ?? "Farm Manager"}
-        >
-          {initial}
-        </div>
+        {/* Account menu (opens from the avatar) */}
+        <AccountMenu />
       </div>
     </div>
   );
@@ -165,18 +125,19 @@ function TopBar({
 
 /* ── Bottom navigation for mobile ────────────────────────── */
 const BOTTOM_ROUTES = [
-  { to: "/",                 label: "Dash",    icon: LayoutDashboard },
-  { to: "/visuals",          label: "Camera",  icon: Video },
-  { to: "/flock-monitoring", label: "Flock",   icon: Bird },
-  { to: "/telemetry",        label: "Data",    icon: LineChart },
-  { to: "/alerts",           label: "Alerts",  icon: Bell },
+  { to: "/",                 label: T("Dash"),    icon: LayoutDashboard },
+  { to: "/visuals",          label: T("Camera"),  icon: Video },
+  { to: "/flock-monitoring", label: T("Flock"),   icon: Bird },
+  { to: "/telemetry",        label: T("Data"),    icon: LineChart },
+  { to: "/alerts",           label: T("Alerts"),  icon: Bell },
 ] as const;
 
 function BottomNav() {
-  const alertCount = unacknowledgedAlerts();
+  const alertCount = useUnacknowledgedAlertCount();
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 flex lg:hidden"
+      aria-label={tr("Primary")}
+      className="pb-safe fixed bottom-0 inset-x-0 z-20 flex lg:hidden"
       style={{ background: "var(--surface-card)", borderTop: "1px solid var(--border-subtle)" }}
     >
       {BOTTOM_ROUTES.map((r) => (
@@ -184,7 +145,7 @@ function BottomNav() {
           key={r.to}
           to={r.to}
           activeOptions={{ exact: r.to === "/" }}
-          className="relative flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium transition-colors"
+          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors"
           style={{ color: "var(--text-tertiary)" }}
           activeProps={{ style: { color: "var(--brand)" } }}
         >
@@ -199,7 +160,7 @@ function BottomNav() {
               </span>
             )}
           </span>
-          {r.label}
+          {tr(r.label)}
         </Link>
       ))}
     </nav>
@@ -217,6 +178,27 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
     return false;
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // While the drawer is open: Escape closes it (R-32) and the page behind
+  // it stops scrolling, so a swipe on the drawer doesn't move the page.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    // The drawer is lg:hidden, so a resize past the breakpoint must release it.
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const onDesktop = () => desktop.matches && setMobileOpen(false);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    desktop.addEventListener("change", onDesktop);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+      desktop.removeEventListener("change", onDesktop);
+    };
+  }, [mobileOpen]);
 
   const toggleCollapsed = () =>
     setCollapsed((prev) => {
@@ -238,7 +220,7 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
 
   return (
     <AppShellContext.Provider value={contextValue}>
-      <div className="flex min-h-screen" style={{ background: "var(--surface-page)" }}>
+      <div className="flex min-h-dvh" style={{ background: "var(--surface-page)" }}>
         {/* Mobile/tablet backdrop overlay */}
         {mobileOpen && (
           <div
@@ -250,39 +232,43 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
 
         {/* Sidebar — hidden on mobile by default, slide-in on mobileOpen */}
         <div
+          id="app-sidenav"
           className={`
             fixed left-0 top-0 z-40 h-full transition-[width,transform] duration-200
             ${sidebarW}
-            ${mobileOpen ? "translate-x-0 w-60 shadow-2xl" : "-translate-x-full lg:translate-x-0"}
+            ${mobileOpen ? "translate-x-0 w-[min(18rem,85vw)] shadow-2xl" : "-translate-x-full lg:translate-x-0"}
           `}
         >
+          {/* The drawer always opens expanded: the desktop collapse preference
+              would otherwise leave phones with an icon-only menu. */}
           <SideNav
-            collapsed={collapsed}
+            collapsed={collapsed && !mobileOpen}
             onToggle={toggleCollapsed}
             onMobileClose={() => setMobileOpen(false)}
           />
         </div>
 
         {/* Main layout container */}
-        <div className={`flex flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
+        <div className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
           {bare ? (
-            <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
+            <main className="flex flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:overflow-hidden lg:pb-0">
+              {children}
+            </main>
           ) : (
             <>
-              <TopBar
-                onMenuOpen={() => setMobileOpen(true)}
-                onToggleSidebar={toggleCollapsed}
-                collapsed={collapsed}
-              />
-              <main className="flex-1 overflow-auto p-4 pb-20 sm:p-5 lg:p-6 lg:pb-6">
+              <TopBar onMenuOpen={() => setMobileOpen(true)} />
+              <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-5 sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:p-6 lg:pb-6">
                 {children}
               </main>
             </>
           )}
         </div>
 
-        {/* Bottom nav — mobile only */}
-        {!bare && <BottomNav />}
+        {/* Bottom nav — below lg, on every page including the bare camera view */}
+        <BottomNav />
+
+        {/* Corner pop-ups for abnormal alerts, on every page */}
+        <AlertPopups />
       </div>
     </AppShellContext.Provider>
   );

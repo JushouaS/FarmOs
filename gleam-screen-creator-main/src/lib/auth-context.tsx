@@ -10,8 +10,9 @@ import {
 
 /**
  * The API base URL is read from the Vite env variable `VITE_API_URL`.
- * Falls back to `http://localhost:4000` which matches the default
- * `packages/api` configuration.
+ * Falls back to port 4000 on whatever host served the page, so opening the
+ * app from another device on the network (http://<lan-ip>:8080) reaches
+ * this machine's API rather than that device's own localhost.
  *
  * Authentication is carried in httpOnly, Secure, SameSite=Strict cookies
  * issued by the API. The frontend never stores tokens in localStorage.
@@ -22,13 +23,18 @@ import {
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
-  "http://localhost:4000";
+  (typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    : "http://localhost:4000");
 
 const fetchOpts: RequestInit = { credentials: "include" };
 
 /* ── Local admin account ────────────────────────────────────────
- * Checked before the API so the dashboard is reachable even when
- * no backend is running. Username "admin", password "admin". */
+ * Offline fallback only: used when the API can't be reached, so the
+ * dashboard is still reachable with no backend running. While the API
+ * is up it must not apply — the API knows nothing of this session, so
+ * every data loader would 401 and bounce back to /login in a loop.
+ * Username "admin", password "admin". */
 const LOCAL_USERNAME = "admin";
 const LOCAL_PASSWORD = "admin";
 const SESSION_KEY = "cb-auth-session";
@@ -60,6 +66,8 @@ export interface AuthUser {
   id: string;
   email: string;
   fullName?: string | null;
+  /** The language the Live Camera analysis shows in (Settings > Account). */
+  analysisLanguage?: "en" | "tl" | "ceb";
   roles: string[];
   permissions: string[];
 }
@@ -85,6 +93,8 @@ interface AuthState {
   verifyMfaBackupCode: (code: string) => Promise<number>;
   logout: () => Promise<void>;
   refresh: () => Promise<boolean>;
+  /** Change the signed-in person's name and/or analysis language. */
+  updateProfile: (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -99,24 +109,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // A sign-in response carries the roles but not the name or language, so ask for them.
+  const loadProfile = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+      if (!res.ok) return;
+      const data = await res.json();
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              fullName: data.user.full_name ?? prev.fullName ?? null,
+              analysisLanguage: data.user.analysis_language ?? prev.analysisLanguage,
+            }
+          : prev,
+      );
+    } catch {
+      /* the name appears after the next page load */
+    }
+  }, []);
+
   // Hydrate from the session cookie on first mount, falling back to the
   // persisted local admin session when the API is unreachable.
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+        let res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+        if (res.status === 401) {
+          // The 15 minute access token may have lapsed while the 30 day refresh
+          // token is still good: renew it rather than sending the person to /login.
+          const renewed = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" }).catch(() => null);
+          if (renewed?.ok) res = await fetch(`${API_BASE}/auth/me`, fetchOpts);
+        }
         if (res.ok) {
           const data = await res.json();
           setUser({
             id: data.user.id,
             email: data.user.email,
             fullName: data.user.full_name ?? data.user.fullName ?? null,
+            analysisLanguage: data.user.analysis_language ?? undefined,
             roles: data.roles,
             permissions: data.permissions,
           });
           setIsLoading(false);
           return;
         }
+        // API is up but has no session for us — any local session is stale.
+        writeLocalSession(null);
+        setIsLoading(false);
+        return;
       } catch {
         // Network down — fall through to the local session.
       }
@@ -127,25 +168,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    // Local admin account: works with or without a running backend.
-    const username = email.trim().toLowerCase();
-    if (username === LOCAL_USERNAME) {
-      if (password !== LOCAL_PASSWORD) {
-        const err: LoginError = new Error("invalid_credentials");
-        throw err;
-      }
-      const adminUser: AuthUser = {
-        id: "admin",
-        email: "admin",
-        fullName: "Farm Administrator",
-        roles: ["ADMIN"],
-        permissions: [],
-      };
-      writeLocalSession(adminUser);
-      setUser(adminUser);
-      return;
-    }
-
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/auth/login`, {
@@ -155,6 +177,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
     } catch {
+      // API unreachable — allow the local admin account instead.
+      const username = email.trim().toLowerCase();
+      if (username === LOCAL_USERNAME && password === LOCAL_PASSWORD) {
+        const adminUser: AuthUser = {
+          id: "admin",
+          email: "admin",
+          fullName: "Farm Administrator",
+          roles: ["ADMIN"],
+          permissions: [],
+        };
+        writeLocalSession(adminUser);
+        setUser(adminUser);
+        return;
+      }
       throw new Error("login_failed");
     }
 
@@ -177,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: data.user.roles,
       permissions: data.user.permissions,
     });
+    void loadProfile();
   }, []);
 
   const verifyMfa = useCallback(async (token: string) => {
@@ -197,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: data.user.roles,
       permissions: data.user.permissions,
     });
+    void loadProfile();
   }, []);
 
   const verifyMfaBackupCode = useCallback(async (code: string): Promise<number> => {
@@ -217,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: data.user.roles,
       permissions: data.user.permissions,
     });
+    void loadProfile();
     return data.backupCodesRemaining ?? 0;
   }, []);
 
@@ -249,6 +288,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateProfile = useCallback(async (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => {
+    const send = () =>
+      fetch(`${API_BASE}/auth/me`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+    let res = await send();
+    if (res.status === 401) {
+      // The 15 minute access cookie may have lapsed; renew it once and retry.
+      const renewed = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" }).catch(() => null);
+      if (renewed?.ok) res = await send();
+    }
+    if (!res.ok) throw new Error("profile_not_saved");
+    const data = await res.json();
+    setUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            fullName: data.user.full_name ?? prev.fullName ?? null,
+            analysisLanguage: data.user.analysis_language ?? prev.analysisLanguage,
+          }
+        : prev,
+    );
+  }, []);
+
   const value = useMemo<AuthState>(
     () => ({
       user,
@@ -259,8 +325,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyMfaBackupCode,
       logout,
       refresh,
+      updateProfile,
     }),
-    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh],
+    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

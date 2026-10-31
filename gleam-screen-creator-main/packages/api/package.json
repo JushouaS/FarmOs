@@ -13,10 +13,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/migrate.ts --up-to 0009_seed_from_dataset"
+    "db:seed": "tsx scripts/migrate.ts --up-to 0009_seed_from_dataset",
+    "db:local:init": "tsx scripts/local-db.ts init",
+    "db:local:start": "tsx scripts/local-db.ts start",
+    "db:local:stop": "tsx scripts/local-db.ts stop",
+    "db:local:status": "tsx scripts/local-db.ts status"
   },
   "dependencies": {
-    "@farm-os/types": "*",
+    "@farm-os/types": "0.1.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.1",
     "@fastify/helmet": "^13.1.0",

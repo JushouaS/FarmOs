@@ -8,6 +8,7 @@ import {
   minutesSinceLastAnomaly,
   readingByCode,
 } from "./dataset";
+import type { FarmDataset } from "./types";
 import {
   formatDeltaVsBaseline,
   formatDuration,
@@ -24,8 +25,8 @@ import {
  * the UI reads. Keeping the prompt generated (rather than hand-written) means
  * the model can never be briefed on figures that differ from the screen.
  */
-export function buildFarmSnapshot(): string {
-  const { facility, cycle, platform, weight, activity, feed, water, behavior } = farm;
+export function buildFarmSnapshot(data: FarmDataset = farm): string {
+  const { facility, cycle, platform, weight, activity, feed, water, behavior } = data;
   const incident = activeIncident();
   const camera = liveCamera();
   const cameraHouse = houseLabel(camera.houseId);
@@ -45,7 +46,7 @@ export function buildFarmSnapshot(): string {
     `- Open incident (${incident.id}, ${incident.status}): ${houseLabel(incident.houseId)} activity dropped ${formatPercent(incident.activityDropPercent)} between ${formatWindow(incident.startedAt, incident.endedAt)}. Sensor ${incident.peak.sensorId} peaked at ${formatMeasurement(incident.peak.value, incident.peak.unit.toLowerCase())} (${formatDeltaVsBaseline(incident.peak.value, incident.peak.baseline)} vs ${incident.peak.baseline} ppm baseline), above the ${incident.peak.threshold} ppm threshold for ${formatDuration(incident.exceedanceMinutes)}. Cause: ${incident.cause}. ${incident.resolution}; current reading ${formatMeasurement(nh3Current.value, nh3Current.unit.toLowerCase())}.`,
     `- Camera AI (${incident.evidence.cameraId}): ${incident.evidence.detectionLabel} warning flagged (${incident.evidence.detectionConfidence} confidence) in the ${houseLabel(incident.houseId)} replay.`,
     `- Behavior on ${camera.id}: movement index ${behavior.movementIndex} (${behavior.movementLabel}), huddling risk ${formatPercent(behavior.huddlingRisk * 100, 0)}, ${behavior.aggressionEvents} aggression events.`,
-    `- Last logged anomaly: ${farm.timeline.events.at(-1)?.label ?? "none"}, ${formatDuration(minutesSinceLastAnomaly())} ago.`,
+    `- Last logged anomaly: ${data.timeline.events.at(-1)?.label ?? "none"}, ${formatDuration(minutesSinceLastAnomaly())} ago.`,
     `- Platform: API_${platform.apiVersion}, ML_MODEL_${platform.mlModel}, inference latency ${platform.inferenceLatencyMs} ms, CPU ${platform.cpuPercent}%, RAM ${platform.ramGb} GB, status ${platform.status.toUpperCase()}.`,
   ].join("\n");
 }

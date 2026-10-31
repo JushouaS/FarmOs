@@ -1,198 +1,298 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
+import { AccountSection } from "@/components/farm/AccountSection";
+import { FlockSizeSection } from "@/components/farm/FlockSizeSection";
+import { LightingSection } from "@/components/farm/LightingSection";
+import { Block, Hint, MonoVal, Row, SaveRow, Section, Toggle, useSaver } from "@/components/farm/SettingsParts";
+import { ApiError, saveCycleStartDay, saveNotificationPreferences, type NotificationPreference } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
-import { farm, modelTelemetry } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING } from "@/lib/farm/dataset";
+import { getNotificationPreferences, getOperationsOverview } from "@/lib/farm/repository";
+import { T, localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({ meta: [{ title: "Settings — Cerebroil" }] }),
+  head: () => ({ meta: [{ title: tr("Settings — Cerebroil") }] }),
+  loader: async () => {
+    const [overview, prefs] = await Promise.all([
+      getOperationsOverview(),
+      // null (not an empty list) when they could not be loaded, so a save can never overwrite what is stored.
+      getNotificationPreferences().catch(() => null),
+    ]);
+    return { overview, prefs };
+  },
   component: SettingsPage,
 });
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+/* The day the flock is on. The start day is the one setting; today's day counts up
+ * from it, and every page that shows a day, a weight target or a growth chart
+ * reads it from the same place, so applying it here changes them all. */
+function CycleDaySection({ cycle }: { cycle: any }) {
+  const router = useRouter();
+  const minDay = Number(cycle?.minStartDay ?? 16);
+  const endDay = Number(cycle?.endDay ?? cycle?.lengthDays ?? 45);
+  const startDay = Number(cycle?.startDay ?? minDay);
+  const today = Number(cycle?.day ?? startDay);
+  const [draft, setDraft] = useState(String(startDay));
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Follow the saved value when it changes (after applying, or from another device).
+  useEffect(() => setDraft(String(startDay)), [startDay]);
+
+  const value = Number(draft);
+  const valid = draft.trim() !== "" && Number.isInteger(value) && value >= minDay && value <= endDay;
+  const step = (by: number) => {
+    const base = Number.isInteger(value) ? value : startDay;
+    setNote(null);
+    setDraft(String(Math.min(endDay, Math.max(minDay, base + by))));
+  };
+
+  const apply = async () => {
+    if (!valid || busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await saveCycleStartDay(value);
+      await router.invalidate();
+      setNote({ ok: true, text: tr("Done. The flock is on Day {value} today.", { value }) });
+    } catch (err) {
+      setNote({
+        ok: false,
+        text:
+          err instanceof ApiError && err.status === 403
+            ? tr("Only an administrator or farm manager can change the day.")
+            : tr("Could not save the day. Check the connection and try again."),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const harvest = cycle?.projectedYieldDate
+    ? new Date(`${cycle.projectedYieldDate}T00:00:00`).toLocaleDateString(localeTag(), { month: "short", day: "numeric", year: "numeric" })
+    : null;
+  const left = Math.max(0, endDay - today);
+
   return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="relative h-6 w-11 rounded-full transition-colors shrink-0"
-      style={{
-        background: checked ? "var(--brand)" : "var(--surface-raised)",
-        border: "1px solid var(--border-default)",
-      }}
-    >
-      <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
-    </button>
+    <Section title={tr("Grow-out Day")}>
+      <Block>
+        <label htmlFor="start-day" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          {tr("Start day")}
+        </label>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{tr("The day the flock is on today, from Day {minDay} to Day {endDay}. It counts up by one each day after that.", { minDay, endDay })}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center overflow-hidden rounded-xl" style={{ border: "1px solid var(--border-default)", background: "var(--surface-sunken)" }}>
+            <button type="button" onClick={() => step(-1)} disabled={valid && value <= minDay} aria-label={tr("One day earlier")}
+              className="tap h-11 w-11 text-lg font-semibold disabled:opacity-40" style={{ color: "var(--text-secondary)" }}>
+              −
+            </button>
+            <input
+              id="start-day"
+              type="number"
+              inputMode="numeric"
+              min={minDay}
+              max={endDay}
+              value={draft}
+              onChange={(e) => { setNote(null); setDraft(e.target.value); }}
+              onKeyDown={(e) => e.key === "Enter" && apply()}
+              aria-invalid={!valid}
+              aria-describedby="start-day-hint"
+              className="h-11 w-16 bg-transparent text-center font-mono text-lg font-bold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              style={{ color: "var(--text-primary)" }}
+            />
+            <button type="button" onClick={() => step(1)} disabled={valid && value >= endDay} aria-label={tr("One day later")}
+              className="tap h-11 w-11 text-lg font-semibold disabled:opacity-40" style={{ color: "var(--text-secondary)" }}>
+              +
+            </button>
+          </div>
+          <button type="button" onClick={apply} disabled={!valid || busy} className="btn-primary tap disabled:opacity-50">
+            {busy ? tr("Applying…") : valid ? tr("Set today as Day {value}", { value }) : tr("Set the day")}
+          </button>
+          {startDay !== minDay && (
+            <button type="button" onClick={() => { setNote(null); setDraft(String(minDay)); }}
+              className="tap text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>{tr("Use Day {minDay}", { minDay })}</button>
+          )}
+        </div>
+        <p id="start-day-hint" className="mt-2 text-xs" style={{ color: valid ? "var(--text-tertiary)" : "var(--status-red-text)" }}>
+          {valid ? tr("Changing it updates the Dashboard, Analytics, Flock Tracking, Live Camera and Insights.") : tr("Enter a whole number from {minDay} to {endDay}.", { minDay, endDay })}
+        </p>
+        {note && (
+          <p role="status" className="mt-2 text-sm font-semibold" style={{ color: note.ok ? "var(--status-green-text)" : "var(--status-red-text)" }}>
+            {note.text}
+          </p>
+        )}
+      </Block>
+      <Row label={tr("Today")} sub={harvest ? tr("Last day is {harvest}", { harvest }) : undefined}>
+        <MonoVal value={left === 1 ? tr("Day {today} of {endDay} · 1 day left", { today, endDay }) : tr("Day {today} of {endDay} · {left} days left", { today, endDay, left })} />
+      </Row>
+    </Section>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h2 className="label-section mb-3">{title}</h2>
-      <div className="cb-card overflow-hidden divide-y" style={{ borderColor: "var(--border-subtle)" }}>
-        {children}
-      </div>
-    </div>
-  );
-}
+/* Email and push preferences, stored per user (notification_preferences): which
+ * channels, from which severity up, and the quiet hours. These save the choice;
+ * sending email or push is not set up yet, and the card says so. */
+const CHANNELS = [
+  { channel: "email", label: T("Email Alerts"), sub: T("Alerts at your chosen level, by email") },
+  { channel: "push", label: T("Push Notifications"), sub: T("Browser push at your chosen level") },
+] as const;
 
-function Row({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{label}</p>
-        {sub && <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{sub}</p>}
-      </div>
-      <div className="shrink-0">{children}</div>
-    </div>
-  );
-}
+const LEVELS = [
+  { value: "critical", label: T("Critical only") },
+  { value: "warning", label: T("Warning and critical") },
+  { value: "deviation", label: T("Everything, including deviations") },
+] as const;
+type Level = (typeof LEVELS)[number]["value"];
 
-function OnlineDot({ ok, label }: { ok: boolean; label?: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="h-2 w-2 rounded-full shrink-0"
-        style={{
-          background: ok ? "var(--cv-accent)" : "var(--status-red)",
-          boxShadow: ok ? "0 0 4px var(--cv-accent)" : "none",
-        }} />
-      <span className="font-mono text-xs font-semibold"
-        style={{ color: ok ? "var(--cv-accent)" : "var(--status-red-text)" }}>
-        {label ?? (ok ? "Online" : "Offline")}
-      </span>
-    </div>
-  );
-}
+/** The stored severity as one of the three choices (anything milder than a warning is "everything"). */
+const levelOf = (severity: string | undefined): Level =>
+  severity === "critical" ? "critical" : severity === undefined || severity === "warning" ? "warning" : "deviation";
 
-function MonoVal({ value }: { value: string }) {
+const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : "");
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function NotificationsSection({ stored }: { stored: NotificationPreference[] | null }) {
+  const router = useRouter();
+  const saver = useSaver();
+  const savedOn = (channel: string, fallback: boolean) => stored?.find((p) => p.channel === channel)?.enabled ?? fallback;
+  // The level and quiet hours are shared by email and push, so they are read from whichever is stored.
+  const ref = stored?.find((p) => p.channel === "email") ?? stored?.find((p) => p.channel === "push");
+  const saved = {
+    email: savedOn("email", true),
+    push: savedOn("push", false),
+    level: levelOf(ref?.minSeverity),
+    quietOn: Boolean(ref?.quietHoursStart && ref?.quietHoursEnd),
+    quietStart: hhmm(ref?.quietHoursStart) || "22:00",
+    quietEnd: hhmm(ref?.quietHoursEnd) || "05:00",
+  };
+  const key = JSON.stringify(saved);
+  const [on, setOn] = useState(saved);
+
+  // Follow what is saved (after saving, or when the page loads).
+  useEffect(() => setOn(saved), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dirty = JSON.stringify(on) !== key;
+  const quietValid = !on.quietOn || (HHMM.test(on.quietStart) && HHMM.test(on.quietEnd) && on.quietStart !== on.quietEnd);
+  const unavailable = stored === null;
+  const change = (patch: Partial<typeof on>) => {
+    saver.setNote(null);
+    setOn((p) => ({ ...p, ...patch }));
+  };
+
+  const save = async () => {
+    if (!dirty || !quietValid || stored === null) return;
+    const ok = await saver.run(() => {
+      // The API replaces the whole list, so the other channels are sent back as they are.
+      const rows: NotificationPreference[] = [
+        ...stored.filter((p) => p.channel !== "email" && p.channel !== "push"),
+        ...CHANNELS.map(({ channel }) => ({
+          channel,
+          enabled: on[channel],
+          minSeverity: on.level,
+          quietHoursStart: on.quietOn ? on.quietStart : null,
+          quietHoursEnd: on.quietOn ? on.quietEnd : null,
+        })),
+      ];
+      return saveNotificationPreferences(rows);
+    }, tr("Saved."));
+    if (ok) await router.invalidate();
+  };
+
   return (
-    <span className="font-mono text-xs font-semibold" style={{ color: "var(--cv-accent)" }}>{value}</span>
+    <Section title={tr("Notifications")}>
+      {CHANNELS.map(({ channel, label, sub }) => (
+        <Row key={channel} label={tr(label)} sub={tr(sub)}>
+          <Toggle label={tr(label)} checked={on[channel]} disabled={unavailable} onChange={(v) => change({ [channel]: v })} />
+        </Row>
+      ))}
+      <Block>
+        <label htmlFor="alert-level" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          {tr("Send me")}
+        </label>
+        <select
+          id="alert-level"
+          value={on.level}
+          disabled={unavailable}
+          onChange={(e) => change({ level: e.target.value as Level })}
+          className="cb-input mt-1.5 block w-full text-sm disabled:opacity-60"
+        >
+          {LEVELS.map((l) => (
+            <option key={l.value} value={l.value}>{tr(l.label)}</option>
+          ))}
+        </select>
+      </Block>
+      <Row label={tr("Quiet hours")} sub={tr("Hold back alerts below critical during these hours")}>
+        <Toggle label={tr("Quiet hours")} checked={on.quietOn} disabled={unavailable} onChange={(v) => change({ quietOn: v })} />
+      </Row>
+      {on.quietOn && (
+        <Block>
+          <div className="flex flex-wrap gap-5">
+            {([["quiet-start", "From", "quietStart"], ["quiet-end", "Until", "quietEnd"]] as const).map(([id, label, field]) => (
+              <div key={id}>
+                <label htmlFor={id} className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{label}</label>
+                <input
+                  id={id}
+                  type="time"
+                  value={on[field]}
+                  disabled={unavailable}
+                  onChange={(e) => change({ [field]: e.target.value })}
+                  aria-invalid={!quietValid}
+                  className="cb-input mt-1.5 block w-36 font-mono text-sm disabled:opacity-60"
+                />
+              </div>
+            ))}
+          </div>
+          {!quietValid && <Hint tone="error">{tr("Give both times, and make them different.")}</Hint>}
+        </Block>
+      )}
+      <Block>
+        <Hint tone={unavailable ? "error" : undefined}>
+          {unavailable
+            ? tr("Could not load your saved preferences. Refresh the page to try again.")
+            : tr("Your choices are saved to your account. Sending email and push is not set up yet, so no messages go out.")}
+        </Hint>
+        <SaveRow onSave={save} busy={saver.busy} disabled={!dirty || !quietValid || unavailable} note={saver.note} />
+      </Block>
+    </Section>
   );
 }
 
 function SettingsPage() {
-  const { user } = useAuth();
-  const [notif,   setNotif]   = useState({ email: true, push: false, sms: false });
-  const [saved,   setSaved]   = useState(false);
-  const [apiUrl,  setApiUrl]  = useState(modelTelemetry.apiEndpoint);
-  const [rtspUrl, setRtspUrl] = useState("rtsp://[camera-ip]:554/stream1");
-
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const { overview, prefs } = Route.useLoaderData() as {
+    overview: any;
+    prefs: NotificationPreference[] | null;
   };
+  const { user } = useAuth();
+  const cycle = overview?.cycle ?? null;
+  // One pen: the house the live camera watches (the first house if none is named).
+  const houses: any[] = overview?.houses ?? [];
+  const house = houses.find((h) => h.id === overview?.cluster?.houseId) ?? houses[0] ?? null;
+  // Farm-wide settings are for administrators and farm managers; everyone can change their own account.
+  const canManage = Boolean(user?.roles?.some((r) => r === "ADMIN" || r === "FARM_MANAGER"));
 
   return (
     <AppShell>
       <div className="mb-6">
         <h1 className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-          Settings
+          {tr("Settings")}
         </h1>
         <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-          System configuration, Cerebroil CV Flock Monitor
+          {tr("System configuration, Cerebroil CV Flock Monitor")}
         </p>
       </div>
 
-      {/* Responsive grid: 1 col mobile, 2 col lg */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        {/* Left */}
+      {/* Responsive: one column on a phone, two on a wide screen */}
+      <div className="grid items-start gap-6 grid-cols-1 lg:grid-cols-2">
         <div className="space-y-6">
-          <Section title="Farm Information">
-            <Row label="Farm Name"><MonoVal value={farm.facility.name} /></Row>
-            <Row label="Pen"><MonoVal value={farm.facility.houseRange} /></Row>
-            <Row label="Breed"><MonoVal value={farm.facility.breed} /></Row>
-            <Row label="Manager">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {user?.fullName ?? user?.email ?? "Farm Manager"}
-              </span>
-            </Row>
-            <Row label="Grow-out Cycle">
-              <MonoVal value={`Day ${farm.cycle.day} / 42`} />
-            </Row>
-          </Section>
-
-          <Section title="Notifications">
-            <Row label="Email Alerts" sub="Critical and warning alerts via email">
-              <Toggle checked={notif.email} onChange={(v) => setNotif((p) => ({ ...p, email: v }))} />
-            </Row>
-            <Row label="Push Notifications" sub="Browser push for real-time alerts">
-              <Toggle checked={notif.push} onChange={(v) => setNotif((p) => ({ ...p, push: v }))} />
-            </Row>
-            <Row label="SMS Alerts" sub="Text message for critical severity only">
-              <Toggle checked={notif.sms} onChange={(v) => setNotif((p) => ({ ...p, sms: v }))} />
-            </Row>
-          </Section>
-
-          <Section title="Unit Preferences">
-            <Row label="Weight Unit"><MonoVal value="Grams (g) / Kilograms (kg)" /></Row>
-            <Row label="Temperature Unit"><MonoVal value="Celsius (°C)" /></Row>
-          </Section>
+          <CycleDaySection cycle={cycle} />
+          <FlockSizeSection house={house} canManage={canManage} />
+          <LightingSection lighting={overview?.lighting ?? DEFAULT_LIGHTING} canManage={canManage} />
         </div>
-
-        {/* Right */}
         <div className="space-y-6">
-          <Section title="Vision System Engine">
-            <Row label="Detection Model" sub="Real-time bird tracking">
-              <MonoVal value={modelTelemetry.detectionModel} />
-            </Row>
-            <Row label="Weight Model" sub="Automated weight calculation">
-              <MonoVal value={modelTelemetry.weightModel} />
-            </Row>
-            <Row label="Target FPS">
-              <MonoVal value={`${modelTelemetry.fps} fps`} />
-            </Row>
-            <Row label="Inference Latency">
-              <MonoVal value={`${modelTelemetry.inferenceMs} ms`} />
-            </Row>
-            <Row label="Pipeline Status">
-              <OnlineDot ok={modelTelemetry.pipelineStatus === "ACTIVE"} label={modelTelemetry.pipelineStatus} />
-            </Row>
-          </Section>
-
-          <Section title="API & Camera Endpoints">
-            <div className="px-4 py-4 sm:px-5 space-y-4">
-              <div>
-                <label className="label-section mb-1.5 block">FastAPI Backend URL</label>
-                <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)}
-                  className="cb-input font-mono text-xs"
-                  placeholder="http://localhost:4000" />
-                <p className="mt-1 font-mono text-[10px]" style={{ color: "var(--text-tertiary)" }}>
-                  Backend server address for telemetry sync
-                </p>
-              </div>
-              <div>
-                <label className="label-section mb-1.5 block">RTSP Camera Stream URL</label>
-                <input value={rtspUrl} onChange={(e) => setRtspUrl(e.target.value)}
-                  className="cb-input font-mono text-xs"
-                  placeholder="rtsp://192.168.x.x:554/stream1" />
-                <p className="mt-1 font-mono text-[10px]" style={{ color: "var(--text-tertiary)" }}>
-                  Network video stream address for pen camera
-                </p>
-              </div>
-            </div>
-          </Section>
-
-          <Section title="System Status">
-            <Row label="CAM-01" sub="Pen 1 overhead camera"><OnlineDot ok={true} /></Row>
-            <Row label="Temperature Sensor" sub="SN-241-H1"><OnlineDot ok={true} /></Row>
-            <Row label="Humidity Sensor"    sub="SN-242-H1"><OnlineDot ok={true} /></Row>
-            <Row label="Ammonia Sensor"     sub="SN-244-H1"><OnlineDot ok={true} /></Row>
-            <Row label="Last Sync">
-              <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>2 min ago</span>
-            </Row>
-          </Section>
+          <AccountSection />
+          <NotificationsSection stored={prefs} />
         </div>
-      </div>
-
-      {/* Save row */}
-      <div className="mt-6 flex items-center justify-end gap-3">
-        {saved && (
-          <span className="font-mono text-sm font-semibold" style={{ color: "var(--status-green)" }}>
-            ✓ Changes saved
-          </span>
-        )}
-        <button onClick={handleSave} className="btn-primary">Save Changes</button>
       </div>
     </AppShell>
   );
