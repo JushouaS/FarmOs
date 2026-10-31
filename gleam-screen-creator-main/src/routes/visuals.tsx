@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
+import { KinectDepthView } from "@/components/farm/KinectDepthView";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
@@ -262,6 +263,7 @@ export function VisualsDashboardPage() {
                   {/* Video Viewport Container — 16:9 box when the page scrolls,
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
+                    <KinectDepthView fallback={<>
                     {!kinectError ? (
                       feedOrigin && (
                         <img
@@ -316,6 +318,7 @@ export function VisualsDashboardPage() {
                         ))}
                       </div>
                     )}
+                    </>} />
                   </div>
                 </div>
               )}

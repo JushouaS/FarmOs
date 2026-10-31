@@ -323,10 +323,40 @@ What the pieces do:
 - The website shows the video straight from port 5000.
 - **Analyze data** goes browser, API (4000), camera service (5000). The API sends the shared token
   (`VISION_SERVICE_TOKEN`) so the camera service accepts the request.
-- The Kinect weighing station is **simulated** unless you change `KINECT_SOURCE`.
+- The Kinect weighing station shows a **simulated** picture unless the Kinect bridge below is running.
 
 The message **"Vision service not reachable. Nothing is answering at localhost:5000"** simply means
 Window 3 is not running, or it crashed. Start it again with `python app.py`.
+
+### Live 3D depth from the Kinect (optional, Window 5)
+
+A browser cannot talk to the Kinect, so a small Windows program streams its depth picture to the
+website. With it running, **Live Camera** shows the Kinect as a 3D point cloud you can drag to
+turn. Without it, the page falls back to the simulated picture and keeps retrying, so nothing breaks.
+
+This is for the **Kinect v2** (Xbox One sensor with the USB 3.0 adapter). One-time: install the
+[Kinect for Windows SDK 2.0](https://www.microsoft.com/en-us/download/details.aspx?id=44561) and
+plug the sensor into a USB 3.0 port.
+
+Build it once (and again after changing `kinect-bridge\Program.cs`):
+
+```
+cd /d "C:\Users\Jush\Downloads\drive-download-20260831T212213Z-1-001\gleam-screen-creator-main\gleam-screen-creator-main\kinect-bridge"
+build.cmd
+```
+
+Then each time you want the 3D view:
+
+```
+kinect-bridge\bin\KinectBridge.exe
+```
+
+You should see `Kinect is sending data.` and `Kinect bridge ready on ws://localhost:8181`. Open
+**Live Camera**, choose **Kinect**. A green `Live 3D depth` badge appears. Drag to turn the view,
+double-click (or **Reset view**) to go back. Press Ctrl+C in that window to stop it.
+
+It only accepts pages from this computer or your local network. To let a phone see the 3D view,
+start it with `KinectBridge.exe --lan` from an administrator window.
 
 ---
 
