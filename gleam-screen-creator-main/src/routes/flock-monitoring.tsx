@@ -52,7 +52,7 @@ function Difference({ actualG, estG }: { actualG: number | undefined; estG: numb
     <span className="font-mono text-xs font-semibold" style={{ color: diffColor(pct) }}>
       {sign(diff)}{(diff / 1000).toFixed(3)} kg ({sign(pct)}{pct.toFixed(1)}%)
       {Math.abs(pct) >= CHECK_PCT && (
-        <span className="block text-[10px] font-normal" style={{ color: "var(--status-amber-text)" }}>{tr("Far from the estimate. Check it.")}</span>
+        <span className="block text-xs font-normal" style={{ color: "var(--status-amber-text)" }}>{tr("Far from the estimate. Check it.")}</span>
       )}
     </span>
   );
@@ -65,7 +65,7 @@ function Gain({ actualG, previous }: { actualG: number | undefined; previous: { 
   return (
     <span className="font-mono text-xs font-semibold" style={{ color: gain >= 0 ? "var(--status-green)" : "var(--status-red)" }}>
       {gain > 0 ? "+" : ""}{(gain / 1000).toFixed(3)} kg
-      <span className="block text-[10px] font-normal" style={{ color: "var(--text-tertiary)" }}>{tr("since Day {day}", { day: previous.day })}</span>
+      <span className="block text-xs font-normal" style={{ color: "var(--text-tertiary)" }}>{tr("since Day {day}", { day: previous.day })}</span>
     </span>
   );
 }
@@ -121,9 +121,9 @@ function WeightInput({
         }}
         className="cb-input w-24 font-mono text-sm disabled:opacity-60"
       />
-      <span className="font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>kg</span>
+      <span className="font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>kg</span>
       {saved && (
-        <span role="status" className="inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold" style={{ color: "var(--status-green)" }}>
+        <span role="status" className="inline-flex items-center gap-0.5 font-mono text-xs font-semibold" style={{ color: "var(--status-green)" }}>
           <Check className="h-3 w-3" aria-hidden="true" />
           {tr("Saved")}
         </span>
@@ -171,7 +171,7 @@ function BirdCard({
           <p className="label-section">{tr("vs Day {day} Std", { day })}</p>
           <p className="font-mono font-semibold mt-0.5" style={{ color: isAbove ? "var(--status-green)" : "var(--status-red)" }}>
             {isAbove ? "+" : ""}{delta}%
-            <span className="ml-1 text-[10px] font-normal" style={{ color: "var(--text-tertiary)" }}>{actualG === undefined ? tr("est.") : tr("actual")}</span>
+            <span className="ml-1 text-xs font-normal" style={{ color: "var(--text-tertiary)" }}>{actualG === undefined ? tr("est.") : tr("actual")}</span>
           </p>
         </div>
         <div>
@@ -372,7 +372,7 @@ function FlockTrackingPage() {
             return (
               <button key={f} onClick={() => setFilter(f)}
                 aria-pressed={filter === f}
-                className="tap rounded-full px-3 py-1 font-mono text-[11px] font-semibold transition-all"
+                className="tap rounded-full px-3 py-1 font-mono text-xs font-semibold transition-all"
                 style={filter === f
                   ? { background: "var(--brand)", color: "var(--text-inverse)" }
                   : { background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
@@ -424,7 +424,7 @@ function FlockTrackingPage() {
                 <th key={label} className={`${w} px-4 py-3 text-left`}>
                   {k ? (
                     <button onClick={() => handleSort(k)}
-                      className="tap flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition-colors hover:text-[color:var(--text-primary)]"
+                      className="tap flex items-center gap-1 font-mono text-xs font-semibold uppercase tracking-wide transition-colors hover:text-[color:var(--text-primary)]"
                       style={{ color: "var(--text-tertiary)" }}>
                       {tr(label)}
                       <span style={{ color: sortKey === k ? "var(--brand)" : "var(--text-disabled)" }}>
@@ -432,7 +432,7 @@ function FlockTrackingPage() {
                       </span>
                     </button>
                   ) : (
-                    <span className="font-mono text-[10px] font-semibold uppercase tracking-wide"
+                    <span className="font-mono text-xs font-semibold uppercase tracking-wide"
                       style={{ color: "var(--text-tertiary)" }}>{tr(label)}</span>
                   )}
                 </th>
@@ -462,7 +462,7 @@ function FlockTrackingPage() {
                     <span className="font-mono text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       {(b.weightG / 1000).toFixed(3)}
                     </span>
-                    <span className="font-mono text-[11px] ml-1" style={{ color: "var(--text-tertiary)" }}>{tr("kg")}</span>
+                    <span className="font-mono text-xs ml-1" style={{ color: "var(--text-tertiary)" }}>{tr("kg")}</span>
                   </td>
                   {/* Actual weight, typed in */}
                   <td className="px-4 py-2.5">
@@ -482,7 +482,7 @@ function FlockTrackingPage() {
                       style={{ color: isAbove ? "var(--status-green)" : "var(--status-red)" }}>
                       {isAbove ? "+" : ""}{delta}%
                     </span>
-                    <span className="ml-1.5 text-[10px]" style={{ color: "var(--text-tertiary)" }}>{actuals[b.id] === undefined ? tr("est.") : tr("actual")}</span>
+                    <span className="ml-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>{actuals[b.id] === undefined ? tr("est.") : tr("actual")}</span>
                   </td>
                   {/* Flag */}
                   <td className="px-4 py-2.5">

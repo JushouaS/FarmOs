@@ -87,7 +87,7 @@ function InsightsPage() {
               ) : briefingQ.data ? (
                 <div>
                   <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>{briefingQ.data.briefing}</p>
-                  <p className="mt-3 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                  <p className="mt-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
                     {tr("Generated from current flock data")}
                   </p>
                 </div>

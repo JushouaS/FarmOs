@@ -302,7 +302,7 @@ function AxisLineChart({
               x={LEFT - 8}
               y={y + 3.5}
               textAnchor="end"
-              fontSize="10"
+              fontSize="12"
               fill="var(--text-tertiary)"
               fontFamily="JetBrains Mono, monospace"
               fontWeight="500"
@@ -317,7 +317,7 @@ function AxisLineChart({
           x={10}
           y={TOP + plotH / 2}
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="12"
           fill="var(--text-tertiary)"
           fontWeight="600"
           transform={`rotate(-90, 10, ${TOP + plotH / 2})`}
@@ -447,7 +447,7 @@ function AxisLineChart({
                 x={xS(lp.x)}
                 y={yS(lp.y) - 10}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="12"
                 fill={color}
                 fontFamily="JetBrains Mono, monospace"
                 fontWeight="700"
@@ -839,14 +839,14 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
     sub: string,
   ) => (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-      <p className="label-section text-[11px]">{label}</p>
+      <p className="label-section text-xs">{label}</p>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="font-mono text-2xl font-bold" style={{ color }}>{value}</span>
-        <span className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold" style={{ background: tint(tagColor, 15), color: tagColor }}>
+        <span className="rounded px-1.5 py-0.5 font-mono text-xs font-semibold" style={{ background: tint(tagColor, 15), color: tagColor }}>
           {tag}
         </span>
       </div>
-      <p className="mt-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>{sub}</p>
+      <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>{sub}</p>
     </div>
   );
 
@@ -884,7 +884,7 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
                       {bin.label}
                     </span>
                     <span
-                      className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                      className="rounded-full px-2 py-0.5 text-xs font-medium"
                       style={{ background: tint(bin.color, 14), color: bin.color, border: `1px solid ${tint(bin.color, 35)}` }}
                     >
                       {tr(bin.statusText)}
@@ -916,7 +916,7 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
                     aria-hidden={!isHovered}
                   >
                     <div className="min-h-0 overflow-hidden">
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 font-mono text-[11px]">
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 font-mono text-xs">
                         <span style={{ color: "var(--text-tertiary)" }}>{tr("Bird IDs:")}</span>
                         {bin.birds.map((id) => (
                           <span key={id} className="rounded px-1.5 py-0.5 font-bold" style={{ color: bin.color, background: tint(bin.color, 12) }}>
@@ -956,7 +956,7 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
               {/* the 85% line a processing line asks for */}
               <div className="absolute inset-y-0 w-px" style={{ left: "85%", background: "var(--text-secondary)" }} />
             </div>
-            <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+            <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
               {tr("Ross 308 threshold: >85% (marked) for uniform processing line yield.")}
             </p>
           </div>
@@ -988,7 +988,7 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
               />
               <div className="absolute -bottom-1 -top-1 w-px" style={{ left: `${pos(stdG)}%`, background: "var(--status-amber)" }} />
               <span
-                className="absolute -top-6 -translate-x-1/2 whitespace-nowrap font-mono text-[11px]"
+                className="absolute -top-6 -translate-x-1/2 whitespace-nowrap font-mono text-xs"
                 style={{ left: `${pos(stdG)}%`, color: "var(--status-amber)" }}
               >{tr("Std {stdG} g", { stdG: stdG.toLocaleString() })}</span>
               {markers.map((m) => (
@@ -1006,12 +1006,12 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
                   className="absolute -translate-x-1/2 text-center font-mono leading-tight"
                   style={{ left: `${pos(m.g)}%` }}
                 >
-                  <p className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>{m.label}</p>
+                  <p className="text-xs uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>{m.label}</p>
                   <p className="text-xs font-bold" style={{ color: m.color }}>{m.g} g</p>
                 </div>
               ))}
             </div>
-            <p className="mt-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("Shaded band: ±10% of the median, {Math}–{Math2} g.", { Math: Math.round(u.lower), Math2: Math.round(u.upper) })}</p>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("Shaded band: ±10% of the median, {Math}–{Math2} g.", { Math: Math.round(u.lower), Math2: Math.round(u.upper) })}</p>
           </div>
 
           <p className="mt-auto border-t pt-4 text-xs leading-relaxed" style={{ borderColor: "var(--border-subtle)", color: "var(--text-tertiary)" }}>{tr("High flock uniformity correlates with balanced feeder access and consistent meat harvest margins at Day {endDay}.", { endDay: sample.endDay })}</p>
@@ -1092,34 +1092,34 @@ function ConditionsAnalysisSection({
       {/* Scorecards: one per area */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">{tr("Feed Efficiency")}</p>
+          <p className="label-section text-xs">{tr("Feed Efficiency")}</p>
           <p className="font-mono text-base font-bold mt-0.5" style={{ color: fcr <= fcrTarget ? "var(--status-green)" : "var(--status-red)" }}>{tr("FCR {fcr}", { fcr })}</p>
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Math} {value} the {fcrTarget} target", { Math: Math.abs(fcrDelta).toFixed(2), value: fcrDelta >= 0 ? tr("below") : tr("above"), fcrTarget })}</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Math} {value} the {fcrTarget} target", { Math: Math.abs(fcrDelta).toFixed(2), value: fcrDelta >= 0 ? tr("below") : tr("above"), fcrTarget })}</p>
         </div>
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">{tr("Activity")}</p>
+          <p className="label-section text-xs">{tr("Activity")}</p>
           <p className="font-mono text-base font-bold mt-0.5"
             style={{ color: inactPct > 30 ? "var(--status-red)" : inactPct > 20 ? "var(--status-amber)" : "var(--status-green)" }}>
             {(movementIndex * 100).toFixed(1)}%
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Movement index · {inactive} of {total} birds inactive", { inactive, total })}</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Movement index · {inactive} of {total} birds inactive", { inactive, total })}</p>
         </div>
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">{tr("Huddling")}</p>
+          <p className="label-section text-xs">{tr("Huddling")}</p>
           <p className="font-mono text-base font-bold mt-0.5" style={{ color: huddling > 0 ? "var(--status-amber)" : "var(--status-green)" }}>
             {huddling} {huddling === 1 ? tr("Bird") : tr("Birds")}
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Cluster risk {value}%", { value: (huddlingRisk * 100).toFixed(0) })}</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Cluster risk {value}%", { value: (huddlingRisk * 100).toFixed(0) })}</p>
         </div>
 
         <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-[10px]">{tr("Environment")}</p>
+          <p className="label-section text-xs">{tr("Environment")}</p>
           <p className="font-mono text-base font-bold mt-0.5" style={{ color: outOfRange.length === 0 ? "var(--status-green)" : "var(--status-amber)" }}>
             {inRange.length} / {sensors.length}
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
             {outOfRange.length === 0 ? tr("Sensors in their target band") : tr("{value} out of range", { value: outOfRange.map((e) => e.title).join(", ") })}
           </p>
         </div>
@@ -1128,7 +1128,7 @@ function ConditionsAnalysisSection({
       {/* Findings, grouped by area */}
       <div className="space-y-4">
         <div className="space-y-3">
-          <p className="label-section text-[11px] tracking-widest font-bold">{tr("Feed")}</p>
+          <p className="label-section text-xs tracking-widest font-bold">{tr("Feed")}</p>
           <InsightCard level={fcr <= fcrTarget ? "positive" : "warning"}
             title={tr("FCR {fcr} is {value} {value2} target", { fcr, value: Math.abs(fcrDelta).toFixed(2), value2: fcrDelta >= 0 ? tr("below") : tr("above") })}
             body={tr("FCR trending downward across 8 consecutive measurements (1.72 to {fcr}), indicating {value} feed efficiency as the flock matures.", { fcr, value: fcrDelta >= 0 ? tr("improving") : tr("slipping") })} />
@@ -1141,7 +1141,7 @@ function ConditionsAnalysisSection({
         </div>
 
         <div className="space-y-3">
-          <p className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior")}</p>
+          <p className="label-section text-xs tracking-widest font-bold">{tr("Behavior")}</p>
           <InsightCard level={inactPct > 30 ? "critical" : "warning"}
             title={tr("{inactPct}% of birds show reduced daytime activity", { inactPct })}
             body={tr("{inactive} birds classified as inactive in the current scan. B-019 has been inactive for over 30 minutes and is flagged for manual inspection.", { inactive })} />
@@ -1158,7 +1158,7 @@ function ConditionsAnalysisSection({
         </div>
 
         <div className="space-y-3">
-          <p className="label-section text-[11px] tracking-widest font-bold">{tr("Environment")}</p>
+          <p className="label-section text-xs tracking-widest font-bold">{tr("Environment")}</p>
           {sensors.map((e) => (
             <InsightCard key={e.title} level={e.insight.level} title={e.insight.title} body={e.insight.body} />
           ))}
@@ -1191,7 +1191,7 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
     <div className="cb-card px-4 py-4 flex flex-col gap-1">
       <p className="label-section">{label}</p>
       <p className="font-mono text-lg font-bold leading-none mt-1" style={{ color: accent ?? "var(--cv-accent)" }}>{value}</p>
-      {sub && <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{sub}</p>}
+      {sub && <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{sub}</p>}
     </div>
   );
 }
@@ -1209,7 +1209,7 @@ function FigureGrid({ figures }: { figures: { label: string; value: string; sub?
           <dt className="label-section">{f.label}</dt>
           <dd className="mt-1">
             <span className="block font-mono text-lg font-bold leading-none" style={{ color: f.accent ?? "var(--cv-accent)" }}>{f.value}</span>
-            {f.sub && <span className="mt-1.5 block text-[11px]" style={{ color: "var(--text-tertiary)" }}>{f.sub}</span>}
+            {f.sub && <span className="mt-1.5 block text-xs" style={{ color: "var(--text-tertiary)" }}>{f.sub}</span>}
           </dd>
         </div>
       ))}
@@ -1264,7 +1264,7 @@ function MiniTrend({ values, min, max, color, unit, lastDay }: { values: number[
   return (
     <div>
       <div className="flex gap-1.5">
-        <div className="relative w-7 shrink-0 font-mono text-[9px] tabular-nums text-right" style={{ color: "var(--text-tertiary)" }} aria-hidden="true">
+        <div className="relative w-7 shrink-0 font-mono text-xs tabular-nums text-right" style={{ color: "var(--text-tertiary)" }} aria-hidden="true">
           <span className="absolute right-0 -translate-y-1/2" style={{ top: `${py(max)}%` }}>{max}</span>
           <span className="absolute right-0 -translate-y-1/2" style={{ top: `${py(min)}%` }}>{min}</span>
         </div>
@@ -1304,7 +1304,7 @@ function MiniTrend({ values, min, max, color, unit, lastDay }: { values: number[
           />
           {hover !== null && (
             <span
-              className="pointer-events-none absolute z-10 -translate-y-full whitespace-nowrap rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold shadow-md"
+              className="pointer-events-none absolute z-10 -translate-y-full whitespace-nowrap rounded-md border px-1.5 py-0.5 font-mono text-xs font-bold shadow-md"
               style={{
                 left: `${Math.min(80, Math.max(20, px(hover)))}%`,
                 top: `${Math.max(0, py(values[hover]!) - 12)}%`,
@@ -1319,7 +1319,7 @@ function MiniTrend({ values, min, max, color, unit, lastDay }: { values: number[
           )}
         </div>
       </div>
-      <div className="mt-1 flex justify-between pl-[34px] font-mono text-[9px]" style={{ color: "var(--text-tertiary)" }} aria-hidden="true">
+      <div className="mt-1 flex justify-between pl-[34px] font-mono text-xs" style={{ color: "var(--text-tertiary)" }} aria-hidden="true">
         <span>{tr("Day {day}", { day: dayOf(0) })}</span>
         <span>{tr("Day {day}", { day: dayOf(n - 1) })}</span>
       </div>
@@ -1342,7 +1342,7 @@ function fitRange(values: number[], step: number): { domain: [number, number]; t
 /* ── Chart Legend ────────────────────────────────────────────── */
 function ChartLegend({ items }: { items: { color: string; label: string; dashed?: boolean }[] }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>
       {items.map((item) => (
         <span key={item.label} className="flex items-center gap-1.5">
           {item.dashed
@@ -1466,54 +1466,54 @@ function AnalyticsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">{tr("Avg Weight")}</p>
+                <p className="label-section text-xs">{tr("Avg Weight")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--cv-accent)" }}>{tr("{value} kg", { value: (avgW / 1000).toFixed(3) })}</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(163, 230, 53, 0.15)", color: "var(--cv-accent)" }}>{tr("Day {day}", { day: farm.cycle.day })}</span>
+                  <span className="text-xs font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(163, 230, 53, 0.15)", color: "var(--cv-accent)" }}>{tr("Day {day}", { day: farm.cycle.day })}</span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{avgW} g · Day {day}", { avgW, day: farm.cycle.day })}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{avgW} g · Day {day}", { avgW, day: farm.cycle.day })}</p>
               </div>
 
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">{tr("vs Ross 308")}</p>
+                <p className="label-section text-xs">{tr("vs Ross 308")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: varianceColor }}>
                     {wDelta >= 0 ? "+" : ""}{wDelta} g
                   </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: tint(varianceColor, 15), color: varianceColor }}>
+                  <span className="text-xs font-mono px-1.5 py-0.2 rounded" style={{ background: tint(varianceColor, 15), color: varianceColor }}>
                     {signedVariance}
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Math}% {value} standard", { Math: Math.abs(farm.weight.variancePercent), value: farm.weight.variancePercent >= 0 ? tr("above") : tr("below") })}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Math}% {value} standard", { Math: Math.abs(farm.weight.variancePercent), value: farm.weight.variancePercent >= 0 ? tr("above") : tr("below") })}</p>
               </div>
 
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">{tr("Est. Confidence")}</p>
+                <p className="label-section text-xs">{tr("Est. Confidence")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--brand)" }}>
                     {farm.weight.estimationConfidencePercent}%
                   </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(52, 211, 153, 0.15)", color: "var(--brand)" }}>
+                  <span className="text-xs font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(52, 211, 153, 0.15)", color: "var(--brand)" }}>
                     {tr("Depth Scan")}
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Depth-scan precision")}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Depth-scan precision")}</p>
               </div>
 
               <div className="rounded-xl p-3 border transition-all duration-150"
                 style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-                <p className="label-section text-[10px]">{tr("Sample Size")}</p>
+                <p className="label-section text-xs">{tr("Sample Size")}</p>
                 <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-0.5">
                   <span className="font-mono text-lg font-bold" style={{ color: "var(--status-blue)" }}>
                     {farm.weight.sampleSize} / {total}
                   </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(59, 130, 246, 0.15)", color: "var(--status-blue)" }}>
+                  <span className="text-xs font-mono px-1.5 py-0.2 rounded" style={{ background: "rgba(59, 130, 246, 0.15)", color: "var(--status-blue)" }}>
                     {tr("93% Scanned")}
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Birds weighed this scan")}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Birds weighed this scan")}</p>
               </div>
             </div>
 
@@ -1587,7 +1587,7 @@ function AnalyticsPage() {
                         : tr("{value} kg", { value: (avgW / 1000).toFixed(2) })}
                     </span>
                     {activeHoverPoint?.targetY !== undefined && (
-                      <span className="font-semibold text-[11px]" style={{
+                      <span className="font-semibold text-xs" style={{
                         color: activeHoverPoint.y >= activeHoverPoint.targetY ? "var(--status-green)" : "var(--status-amber)"
                       }}>{tr("({value}{value2}g vs Ross 308)", { value: activeHoverPoint.y >= activeHoverPoint.targetY ? "+" : "", value2: activeHoverPoint.y - activeHoverPoint.targetY })}</span>
                     )}
@@ -1632,7 +1632,7 @@ function AnalyticsPage() {
         <div className="space-y-6">
           {/* Feed & Water: the four figures as one block, and the FCR trend beside them */}
           <section aria-labelledby="cond-feed" className="space-y-3">
-            <h2 id="cond-feed" className="label-section text-[11px] tracking-widest font-bold">{tr("Feed & Water")}</h2>
+            <h2 id="cond-feed" className="label-section text-xs tracking-widest font-bold">{tr("Feed & Water")}</h2>
             <div className="cb-card overflow-hidden">
               <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                 <div className="border-b lg:border-b-0 lg:border-r" style={{ borderColor: "var(--border-subtle)" }}>
@@ -1672,7 +1672,7 @@ function AnalyticsPage() {
 
           {/* Behavior: the activity classification and the four figures in one card */}
           <section aria-labelledby="cond-behavior" className="space-y-3">
-            <h2 id="cond-behavior" className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior")}</h2>
+            <h2 id="cond-behavior" className="label-section text-xs tracking-widest font-bold">{tr("Behavior")}</h2>
             <div className="cb-card overflow-hidden">
               <div className="grid md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
                 <div className="flex flex-col items-center gap-3 border-b p-5 md:border-b-0 md:border-r" style={{ borderColor: "var(--border-subtle)" }}>
@@ -1684,7 +1684,7 @@ function AnalyticsPage() {
                     { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
                     { label: tr("Huddling"), value: bd.Huddling,   color: "var(--status-amber)" },
                   ]} />
-                  <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                  <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
                     {[
                       { label: tr("Active"),   value: bd.Active,     color: "var(--status-green)" },
                       { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
@@ -1696,7 +1696,7 @@ function AnalyticsPage() {
                       </li>
                     ))}
                   </ul>
-                  <p className="text-center text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                  <p className="text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
                     {tr("Point at a segment, or tap it, for the breakdown.")}
                   </p>
                 </div>
@@ -1713,7 +1713,7 @@ function AnalyticsPage() {
                         </Basis>
                       </div>
                       <p className="mt-1 font-mono text-lg font-bold leading-none" style={{ color: "var(--status-green)" }}>{(farm.behavior.movementIndex * 100).toFixed(1)}%</p>
-                      <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("Above 88% baseline")}</p>
+                      <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("Above 88% baseline")}</p>
                     </div>
                     <div className="border-t pt-3" style={{ borderColor: "var(--border-subtle)" }}>
                       <div className="flex items-start justify-between gap-2">
@@ -1725,7 +1725,7 @@ function AnalyticsPage() {
                         </Basis>
                       </div>
                       <p className="mt-1 font-mono text-lg font-bold leading-none" style={{ color: "var(--status-green)" }}>{(farm.behavior.huddlingRisk * 100).toFixed(0)}%</p>
-                      <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("Low cluster density")}</p>
+                      <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("Low cluster density")}</p>
                     </div>
                   </div>
 
@@ -1748,7 +1748,7 @@ function AnalyticsPage() {
                         </div>
                         <p className="font-mono text-lg font-bold leading-none" style={{ color: env.color }}>{env.value}{env.unit}</p>
                         <MiniTrend values={env.series.map((pt) => pt.y)} min={env.min} max={env.max} color={env.color} unit={env.unit} lastDay={farm.cycle.day} />
-                        <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                        <p className="flex flex-wrap items-center gap-x-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
                           <span className="inline-flex items-center gap-1 font-semibold" style={{ color: tone }}>
                             <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden="true" />
                             {ok ? tr("Within range") : tr("Out of range")}

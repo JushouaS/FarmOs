@@ -279,7 +279,7 @@ function LoginPage() {
                   >
                     <p className="font-medium" style={{ color: "var(--status-red-text)" }}>{error}</p>
                     {hint && (
-                      <p className="mt-0.5 font-mono text-[11px] tabular-nums" style={{ color: "var(--status-red)" }}>
+                      <p className="mt-0.5 font-mono text-xs tabular-nums" style={{ color: "var(--status-red)" }}>
                         {hint}
                       </p>
                     )}

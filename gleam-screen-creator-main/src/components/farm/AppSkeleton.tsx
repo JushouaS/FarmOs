@@ -40,7 +40,7 @@ function SidebarSkeleton() {
           <div className="font-display text-sm font-bold leading-none tracking-tight" style={{ color: "var(--sidebar-heading)" }}>
             {tr("Cerebroil")}
           </div>
-          <div className="mt-1 text-[11px] font-medium leading-none" style={{ color: "var(--sidebar-muted)" }}>
+          <div className="mt-1 text-xs font-medium leading-none" style={{ color: "var(--sidebar-muted)" }}>
             {tr("Flock Monitor")}
           </div>
         </div>

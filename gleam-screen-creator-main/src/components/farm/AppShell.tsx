@@ -108,7 +108,7 @@ function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
           <Bell className="h-4 w-4" />
           {alertCount > 0 && (
             <span
-              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-xs"
+              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-xs"
               style={{ background: "var(--status-red)" }}
             >
               {alertCount}
@@ -145,7 +145,7 @@ function BottomNav() {
           key={r.to}
           to={r.to}
           activeOptions={{ exact: r.to === "/" }}
-          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors"
+          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-xs font-medium transition-colors"
           style={{ color: "var(--text-tertiary)" }}
           activeProps={{ style: { color: "var(--brand)" } }}
         >
@@ -153,7 +153,7 @@ function BottomNav() {
             <r.icon className="h-4.5 w-4.5 stroke-[1.8px]" />
             {r.label === "Alerts" && alertCount > 0 && (
               <span
-                className="absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[8px] font-bold text-white"
+                className="absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-xs font-bold text-white"
                 style={{ background: "var(--status-red)" }}
               >
                 {alertCount}

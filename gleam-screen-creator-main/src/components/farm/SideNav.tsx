@@ -123,7 +123,7 @@ export function SideNav({
                   {tr("Cerebroil")}
                 </div>
                 <div
-                  className="text-[11px] font-medium leading-none mt-1"
+                  className="text-xs font-medium leading-none mt-1"
                   style={{ color: "var(--sidebar-muted)" }}
                 >
                   {tr("Flock Monitor")}
@@ -161,7 +161,7 @@ export function SideNav({
       <nav className="flex-1 overflow-y-auto py-3 space-y-1">
         {!collapsed && (
           <p
-            className="px-4 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider"
+            className="px-4 pb-1.5 pt-1 text-xs font-semibold uppercase tracking-wider"
             style={{ color: "var(--sidebar-muted)" }}
           >
             {tr("Navigation")}
@@ -182,7 +182,7 @@ export function SideNav({
               <item.icon className="h-4.5 w-4.5 shrink-0 stroke-[1.8px] transition-transform duration-150 group-hover:scale-105" />
               {collapsed && "badge" in item && item.badge && alertCount > 0 && (
                 <span
-                  className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-xs"
+                  className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-xs"
                   style={{ background: "var(--status-red)" }}
                 >
                   {alertCount}
@@ -196,7 +196,7 @@ export function SideNav({
                 <span className="truncate">{tr(item.label)}</span>
                 {"badge" in item && item.badge && alertCount > 0 && (
                   <span
-                    className="ml-auto rounded-full px-2 py-0.5 font-mono text-[10px] font-bold shrink-0"
+                    className="ml-auto rounded-full px-2 py-0.5 font-mono text-xs font-bold shrink-0"
                     style={{
                       background: "rgba(239,68,68,0.18)",
                       color: "#fca5a5",
@@ -234,7 +234,7 @@ export function SideNav({
               <p className="text-xs font-semibold leading-tight text-[var(--sidebar-heading)]">
                 {tr("System Online")}
               </p>
-              <p className="text-[10px] leading-tight text-[var(--sidebar-muted)]">
+              <p className="text-xs leading-tight text-[var(--sidebar-muted)]">
                 {tr("Pen 1 Connected")}
               </p>
             </div>
@@ -266,7 +266,7 @@ export function SideNav({
                 <p className="text-xs font-semibold leading-tight truncate text-[var(--sidebar-heading)]">
                   {user?.fullName ?? user?.email ?? tr("Farm Manager")}
                 </p>
-                <p className="text-[10px] truncate text-[var(--sidebar-muted)]">
+                <p className="text-xs truncate text-[var(--sidebar-muted)]">
                   {user?.roles?.[0] ?? tr("Manager")}
                 </p>
               </div>

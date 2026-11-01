@@ -144,7 +144,7 @@ export function DiagnosticsCard({
             <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               {description}
             </p>
-            <div className="flex items-center gap-2 pt-1 flex-wrap font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+            <div className="flex items-center gap-2 pt-1 flex-wrap font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>
               {chips.map((chip, i) => (
                 <Fragment key={chip}>
                   {i > 0 && <span>·</span>}
@@ -201,7 +201,7 @@ export function DiagnosticsCard({
                 }}
               />
             </div>
-            <div className="flex justify-between font-mono text-[10px]" style={{ color: "var(--text-tertiary)" }}>
+            <div className="flex justify-between font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>
               <span>{tr("Step {value} of {length}", { value: stepIdx + 1, length: steps.length })}</span>
               <span>{progress}%</span>
             </div>
@@ -224,7 +224,7 @@ export function DiagnosticsCard({
                 <h2 className="text-base font-bold leading-none" style={{ color: "var(--text-primary)" }}>
                   {reportTitle}
                 </h2>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Generated at {value} · {evaluated}", { value: processedAt ?? tr("just now"), evaluated })}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Generated at {value} · {evaluated}", { value: processedAt ?? tr("just now"), evaluated })}</p>
               </div>
             </div>
 
@@ -288,33 +288,33 @@ export function GrowthAnalysisSection({ sample, autoRun }: { sample: SampleFlock
           {/* Diagnostic Key Takeaway Scorecards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">{tr("Growth Trajectory")}</p>
+              <p className="label-section text-xs">{tr("Growth Trajectory")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: above ? "var(--status-green)" : variancePercent > -5 ? "var(--status-amber)" : "var(--status-red)" }}>{signedVar}</p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{value} Ross 308 standard", { value: above ? tr("Above") : tr("Below") })}</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{value} Ross 308 standard", { value: above ? tr("Above") : tr("Below") })}</p>
             </div>
 
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">{tr("Optimal Band")}</p>
+              <p className="label-section text-xs">{tr("Optimal Band")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: "var(--brand)" }}>{optPct}%</p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Optimal} / {total} birds on target", { Optimal: wd.Optimal, total })}</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Optimal} / {total} birds on target", { Optimal: wd.Optimal, total })}</p>
             </div>
 
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">{tr("At-Risk Cohort")}</p>
+              <p className="label-section text-xs">{tr("At-Risk Cohort")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: wd.Underweight > 0 ? "var(--status-amber)" : "var(--status-green)" }}>
                 {wd.Underweight} {wd.Underweight === 1 ? tr("Bird") : tr("Birds")}
               </p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
                 {wd.Underweight > 0 ? tr("{id} ({value} g) flagged", { id: lightest.id, value: lightest.weightG.toLocaleString() }) : tr("No underweight birds")}
               </p>
             </div>
 
             <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-              <p className="label-section text-[10px]">{tr("Projected Harvest")}</p>
+              <p className="label-section text-xs">{tr("Projected Harvest")}</p>
               <p className="font-mono text-base font-bold mt-0.5" style={{ color: "var(--cv-accent)" }}>
                 {harvestG ? tr("{value} kg", { value: (harvestG / 1000).toFixed(2) }) : "—"}
               </p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Estimated Day {endDay} harvest", { endDay })}</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Estimated Day {endDay} harvest", { endDay })}</p>
             </div>
           </div>
 

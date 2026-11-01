@@ -225,7 +225,7 @@ export function SusDialog({ open, onOpenChange, returnFocusRef, initialResponden
                     </div>
                     <div
                       aria-hidden="true"
-                      className="mt-1.5 flex justify-between text-[11px]"
+                      className="mt-1.5 flex justify-between text-xs"
                       style={{ color: "var(--text-tertiary)" }}
                     >
                       <span>{tr("Strongly disagree")}</span>

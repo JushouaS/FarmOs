@@ -270,18 +270,18 @@ export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
         onDoubleClick={reset}
         onKeyDown={onKeyDown}
       />
-      <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 rounded bg-black/75 px-2 py-1 font-mono text-[10px] text-[var(--brand)]">
+      <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 rounded bg-black/75 px-2 py-1 font-mono text-xs text-[var(--brand)]">
         <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand)]" />
         {tr("Live 3D depth")} · {fps} fps
       </div>
-      <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-[10px] text-white/60">
+      <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs text-white/60">
         {tr("Drag to turn the view")}
       </p>
       {turned && (
         <button
           type="button"
           onClick={reset}
-          className="tap absolute bottom-2 right-2 rounded bg-black/75 px-2 py-1 text-[10px] font-medium text-white/80 hover:text-white"
+          className="tap absolute bottom-2 right-2 rounded bg-black/75 px-2 py-1 text-xs font-medium text-white/80 hover:text-white"
         >
           {tr("Reset view")}
         </button>

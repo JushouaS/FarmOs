@@ -15,7 +15,7 @@ export function SampleBadge({ className = "" }: { className?: string }) {
   return (
     <span
       title={tr(SAMPLE_HINT)}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--status-blue-border)] bg-[var(--status-blue-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--status-blue-text)] ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--status-blue-border)] bg-[var(--status-blue-bg)] px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-[var(--status-blue-text)] ${className}`}
     >
       <FlaskConical className="h-3 w-3" aria-hidden="true" />
       {tr("Sample data")}

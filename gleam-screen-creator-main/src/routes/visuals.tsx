@@ -317,7 +317,7 @@ export function VisualsDashboardPage() {
                             }}
                             className="absolute rounded border border-dashed border-[var(--brand)] bg-[rgba(52,211,153,0.06)]"
                           >
-                            <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-[9px] font-mono text-[var(--brand)]">
+                            <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-xs font-mono text-[var(--brand)]">
                               <span>{kd.id}</span>
                               <span className="text-[var(--text-primary)] tabular-nums">{kd.weightG}g</span>
                             </div>
@@ -341,13 +341,13 @@ export function VisualsDashboardPage() {
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
                 <span className="flex items-center gap-2">
-                  <span className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
+                  <span className="label-section text-xs tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
                   <SampleBadge />
                 </span>
                 <time
                   dateTime={now?.toISOString()}
                   title={tr("Local time. Day runs from {value} until {value2}, night is the rest. It is {value3} now.", { value: clock12(lighting.dayStart), value2: clock12(lighting.nightStart), value3: nightModeActive ? tr("night") : tr("day") })}
-                  className="-my-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[var(--text-secondary)]"
+                  className="-my-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-xs tabular-nums text-[var(--text-secondary)]"
                 >
                   {now
                     ? `${now.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit", second: "2-digit" })} · ${nightModeActive ? tr("Night") : tr("Day")}`
@@ -430,40 +430,40 @@ export function VisualsDashboardPage() {
 
             {/* Weight Category Distribution */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
-              <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
+              <span className="label-section text-xs tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
                 {tr("Weight Classification")} <SampleBadge />
               </span>
 
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
+                  <div className="text-xs font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Underweight}
                   </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(sample.standardG * UNDERWEIGHT_RATIO)}</div>
+                  <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(sample.standardG * UNDERWEIGHT_RATIO)}</div>
                 </div>
 
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
+                  <div className="text-xs font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Optimal}
                   </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{rangeLabel(sample.standardG * UNDERWEIGHT_RATIO, sample.standardG * HEAVY_RATIO)}</div>
+                  <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{rangeLabel(sample.standardG * UNDERWEIGHT_RATIO, sample.standardG * HEAVY_RATIO)}</div>
                 </div>
 
                 <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
+                  <div className="text-xs font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
                   <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
                     {wBreakdown.Overweight}
                   </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(sample.standardG * HEAVY_RATIO)}</div>
+                  <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(sample.standardG * HEAVY_RATIO)}</div>
                 </div>
               </div>
             </div>
 
             {/* Quick Environment Telemetry */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
-              <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
+              <span className="label-section text-xs tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
                 {tr("Pen Sensor Telemetry")} <SampleBadge />
               </span>
 
@@ -471,19 +471,19 @@ export function VisualsDashboardPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-[var(--text-secondary)] text-xs">{tr("Temperature:")}</span>
                   <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    29.1°C <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
+                    29.1°C <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[var(--text-secondary)] text-xs">{tr("Humidity:")}</span>
                   <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    63% <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
+                    63% <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[var(--text-secondary)] text-xs">{tr("Ammonia (NH3):")}</span>
                   <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    {tr("9 ppm")} <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Clean)")}</span>
+                    {tr("9 ppm")} <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Clean)")}</span>
                   </span>
                 </div>
               </div>

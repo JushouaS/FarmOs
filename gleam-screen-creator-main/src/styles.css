@@ -26,7 +26,15 @@
    * copy, JetBrains Mono for telemetry values (design system intent). */
   --font-sans:                 "Inter", system-ui, sans-serif;
   --font-display:              "Space Grotesk", "Inter", system-ui, sans-serif;
-  --font-mono:                 "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  /* Numbers and codes use Inter with figures of equal width: a plain 0 that cannot be
+   * mistaken for an 8, easier to read than a code font at small sizes. */
+  --font-mono:                 "Inter", system-ui, sans-serif;
+
+  /* One step larger than the Tailwind defaults for the two smallest sizes */
+  --text-xs:                   0.8125rem;
+  --text-xs--line-height:      1.25rem;
+  --text-sm:                   0.9375rem;
+  --text-sm--line-height:      1.4rem;
 
   --color-surface-page:        var(--surface-page);
   --color-surface-card:        var(--surface-card);
@@ -276,8 +284,11 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* JetBrains Mono — telemetry only (FPS, ms, %, g values) */
-  .font-mono { font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace; }
+  /* Telemetry figures (FPS, ms, %, g values): Inter, with figures of equal width so columns line up */
+  .font-mono {
+    font-family: "Inter", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -364,10 +375,10 @@
 }
 
 /* Status badges */
-@utility badge-green  { background-color: var(--status-green-bg);  color: var(--status-green-text);  border: 1px solid var(--status-green-border);  border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.7rem; font-weight: 600; display: inline-block; }
-@utility badge-amber  { background-color: var(--status-amber-bg);  color: var(--status-amber-text);  border: 1px solid var(--status-amber-border);  border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.7rem; font-weight: 600; display: inline-block; }
-@utility badge-red    { background-color: var(--status-red-bg);    color: var(--status-red-text);    border: 1px solid var(--status-red-border);    border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.7rem; font-weight: 600; display: inline-block; }
-@utility badge-blue   { background-color: var(--status-blue-bg);   color: var(--status-blue-text);   border: 1px solid var(--status-blue-border);   border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.7rem; font-weight: 600; display: inline-block; }
+@utility badge-green  { background-color: var(--status-green-bg);  color: var(--status-green-text);  border: 1px solid var(--status-green-border);  border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+@utility badge-amber  { background-color: var(--status-amber-bg);  color: var(--status-amber-text);  border: 1px solid var(--status-amber-border);  border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+@utility badge-red    { background-color: var(--status-red-bg);    color: var(--status-red-text);    border: 1px solid var(--status-red-border);    border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+@utility badge-blue   { background-color: var(--status-blue-bg);   color: var(--status-blue-text);   border: 1px solid var(--status-blue-border);   border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.75rem; font-weight: 600; display: inline-block; }
 
 /* CV accent badge — LIVE, model active, bounding box labels only */
 @utility badge-cv {
@@ -376,10 +387,11 @@
   border: 1px solid rgba(163,230,53,0.30);
   border-radius: 9999px;
   padding: 0.1rem 0.6rem;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  font-family: "JetBrains Mono", monospace;
+  font-family: "Inter", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
   display: inline-block;
 }
 
@@ -399,7 +411,7 @@
 
 /* Section label */
 @utility label-section {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -408,8 +420,9 @@
 
 /* Telemetry mono value */
 @utility telemetry-value {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.8rem;
+  font-family: "Inter", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--cv-accent-text);
   letter-spacing: 0.02em;
