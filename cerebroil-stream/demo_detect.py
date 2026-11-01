@@ -140,6 +140,17 @@ def convert_to_mp4(src: str, dst: str) -> None:
         raise UnreadableVideo()
 
 
+def detect_frame(frame: np.ndarray) -> list[list[float]] | None:
+    """Boxes [x, y, w, h, confidence, class] in one frame, or None when the detector is busy with an uploaded video."""
+    if not _lock.acquire(blocking=False):
+        return None
+    try:
+        _load()
+        return _infer(frame)
+    finally:
+        _lock.release()
+
+
 def detect_video(path: str, night: bool = False) -> dict[str, Any]:
     with _lock:
         _load()

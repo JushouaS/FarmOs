@@ -7,6 +7,7 @@ import {
   fetchNotifications,
   markNotificationRead,
 } from "@/lib/api-client";
+import { alertMessage } from "@/lib/farm/alert-text";
 import { STATUS_TONE, formatDateTimeUtc, formatTime } from "@/lib/farm/format";
 import type { StatusLevel } from "@/lib/farm/types";
 import { T, tr } from "@/lib/i18n";
@@ -253,7 +254,7 @@ function NotificationFeed({
                 </span>
               </div>
               <p className="mt-0.5 text-sm leading-relaxed text-on-surface-variant">
-                {tr(notif.body)}
+                {alertMessage(notif.body)}
               </p>
               <span className="mt-1.5 block text-[11px] text-on-surface-variant/70">
                 {formatDateTimeUtc(notif.createdAt)}

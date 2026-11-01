@@ -10,7 +10,7 @@ import {
   useUnacknowledgedAlerts,
 } from "@/lib/alert-store";
 import { T, localeTag, tr } from "@/lib/i18n";
-import { alertKindTitle } from "@/lib/farm/alert-text";
+import { alertKindTitle, alertMessage } from "@/lib/farm/alert-text";
 
 /* Alert pop-ups: a small card that slides in at the corner of the screen,
  * desktop-notification style, when something abnormal comes in.
@@ -190,7 +190,7 @@ export function AlertPopups() {
                   {tr(label)}
                 </p>
                 <p className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">{alertKindTitle(alert.kind)}</p>
-                <p className="mt-0.5 line-clamp-2 text-sm leading-snug sm:line-clamp-3 text-[var(--text-secondary)]">{tr(alert.message)}</p>
+                <p className="mt-0.5 line-clamp-2 text-sm leading-snug sm:line-clamp-3 text-[var(--text-secondary)]">{alertMessage(alert.message)}</p>
                 <p className="mt-1 font-mono text-xs text-[var(--text-tertiary)]">{whenOf(alert.raisedAt)}</p>
 
                 {failed === alert.id && (

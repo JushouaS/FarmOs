@@ -429,6 +429,55 @@ Big and odd files:
   start. An MP4 with the index at the end (many camera and phone recordings) cannot be cut this way,
   and the dialog says so. Use an MKV or a smaller clip for those.
 
+### Alerts and notifications
+
+Every alert (a mortality spike, a bird the camera finds inactive, a huddle) is sent to each person the
+way **Settings > Notifications** says: always on the Notifications page, and by **email** and
+**browser push** when they are switched on, at or above the level chosen, and outside quiet hours
+(critical alerts ignore quiet hours). The card shows which channels this server can actually send
+on, and **Send a test** sends the signed-in person a test notice.
+
+- **Email** needs mail settings in `packages\api\.env` (`SMTP_HOST`, `SMTP_FROM`, and `SMTP_USER` /
+  `SMTP_PASS` if the mail server asks for a login; see `.env.example`). Without them the card says
+  email is not set up and nothing is sent. A failed send is written to the `notifications` table with
+  its reason.
+- **Push** needs a key pair: run `npm run vapid` in `packages\api` and paste the two keys into `.env`.
+  Each person then turns Push on in Settings and allows notifications in the browser when it asks.
+  It works on `localhost` and on https, and the browser must not have blocked notifications for the site.
+- Restart the API after changing `.env`. Run `npm run db:migrate` once (it adds the table for push).
+
+**Alerts from the camera.** With the trained model installed on the camera computer (see "Test video"),
+set `LIVE_BEHAVIOR=1` in `cerebroil-stream\.env` and restart it. It then follows the birds on the live
+camera and the API (checking every 30 seconds) raises:
+
+- **Inactive Bird**: birds that have not moved for 30 minutes while the rest of the flock moves (by day).
+- **Flock Inactivity**: most of the flock still for 30 minutes during the day.
+- **Huddling Detected**: 35% or more of the birds huddled together for 10 minutes.
+
+At night (the lights-off hours in Settings) still birds are sleeping, so no inactivity alert is raised.
+The same kind of alert is not raised again for an hour. The times are `LIVE_INACTIVE_SECONDS` and
+`LIVE_HUDDLE_SECONDS`. Like the Test video check, these are flags to go and look, not a diagnosis, and
+the numbers should be checked on your own flock.
+
+### Actual weights in Flock Tracking
+
+On **Flock Tracking**, type a bird's real weight in kilograms, with up to 3 decimals (like `0.946`),
+into its **Actual Weight** box and press Enter. It is saved (per bird, per grow-out day, with the estimate
+shown at that moment) and the page shows the
+difference from the estimate: green within 5%, amber within 10%, red beyond. The summary shows how many
+birds were weighed today and the average difference, so you can see how good the weight estimate is.
+There is no submit button: the weight saves when you press Enter or click away, and a "Saved" note appears.
+Once a bird has a weight, the "vs Standard" figure uses it instead of the estimate. Clear the box to remove a weight. Run `npm run db:migrate` once (it adds the table).
+
+**Every day is new data.** The boxes belong to the grow-out day (it counts up at midnight), so a new day
+starts with empty boxes and the earlier days stay saved. **Gain** on each bird shows how much it gained
+since the last day it was weighed. (The Dashboard's Growth card shows the pen's average weight by day
+against the standard.)
+
+A weight is kept per bird and per grow-out day, so if someone changes the day in Settings to a day that
+already has weights, those weights show again. Typing a new value for the same bird and day replaces the
+old one, so the table never holds more than one row per bird per day.
+
 ### Live 3D depth from the Kinect (optional, Window 5)
 
 A browser cannot talk to the Kinect, so a small Windows program streams its depth picture to the

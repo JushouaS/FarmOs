@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
+import { raiseAlert } from "../notify.js";
 
 /**
  * GET  /growth/analytics  — growth curve, cohorts, volumetric sample, mortality.
+ * GET/PUT/DELETE /growth/actual-weights — the weight a person measured for a bird on a
+ *                            grow-out day, to compare with the estimate (Flock Tracking).
  * POST /growth/mortality  — log an observed daily death count for a house
  *                            (OPERATOR/FARM_MANAGER/ADMIN). Raises a
  *                            mortality_spike alert when the daily count
@@ -16,7 +19,89 @@ const mortalityBody = z.object({
   dailyCount: z.coerce.number().int().min(0),
 });
 
+const birdId = z.string().regex(/^B-\d{1,4}$/, "bird ids look like B-001");
+
+const actualWeightBody = z.object({
+  birdId,
+  day: z.coerce.number().int().min(1).max(100),
+  // Grams, as read off the scale.
+  actualG: z.coerce.number().min(20).max(8000),
+  // What the page estimated for this bird when the weight was entered, kept for later comparison.
+  estimatedG: z.coerce.number().min(0).max(20000).optional(),
+});
+
+const actualWeightQuery = z.object({ day: z.coerce.number().int().min(1).max(100) });
+const actualWeightDelete = z.object({ birdId, day: z.coerce.number().int().min(1).max(100) });
+
+async function activeCycleId(app: FastifyInstance): Promise<string | null> {
+  const rows = await app.sqlRead`SELECT id FROM flock_cycles WHERE status = 'active' LIMIT 1`;
+  return rows.count === 0 ? null : (rows[0]!.id as string);
+}
+
 export async function registerGrowthRoutes(app: FastifyInstance) {
+  // The weights entered for one grow-out day, for every bird.
+  app.get("/actual-weights", { preHandler: [requireAuth] }, async (request, reply) => {
+    const q = actualWeightQuery.safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: "invalid_query" });
+    const cycleId = await activeCycleId(app);
+    if (!cycleId) return reply.send([]);
+    const rows = await app.sqlRead`
+      SELECT bird_id AS "birdId", day, actual_g::float AS "actualG", estimated_g::float AS "estimatedG",
+             recorded_at::text AS "recordedAt"
+      FROM actual_weights WHERE cycle_id = ${cycleId} AND day = ${q.data.day}
+      ORDER BY bird_id`;
+    return reply.send(rows);
+  });
+
+  // For each bird, its most recent weight before a given day, so today's gain can be worked out.
+  app.get("/actual-weights/previous", { preHandler: [requireAuth] }, async (request, reply) => {
+    const q = actualWeightQuery.safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: "invalid_query" });
+    const cycleId = await activeCycleId(app);
+    if (!cycleId) return reply.send([]);
+    const rows = await app.sqlRead`
+      SELECT DISTINCT ON (bird_id) bird_id AS "birdId", day, actual_g::float AS "actualG"
+      FROM actual_weights WHERE cycle_id = ${cycleId} AND day < ${q.data.day}
+      ORDER BY bird_id, day DESC`;
+    return reply.send(rows);
+  });
+
+  // Enter (or correct) a bird's weight for a day.
+  app.put(
+    "/actual-weights",
+    { preHandler: [requireAuth, requireRole("OPERATOR", "FARM_MANAGER", "ADMIN")] },
+    async (request, reply) => {
+      const parsed = actualWeightBody.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_body", issues: parsed.error.issues });
+      const cycleId = await activeCycleId(app);
+      if (!cycleId) return reply.code(404).send({ error: "no_active_cycle" });
+      const { birdId: id, day, actualG, estimatedG } = parsed.data;
+      await app.sqlWrite`
+        INSERT INTO actual_weights (cycle_id, bird_id, day, actual_g, estimated_g, recorded_by)
+        VALUES (${cycleId}, ${id}, ${day}, ${actualG}, ${estimatedG ?? null}, ${request.authUser!.sub})
+        ON CONFLICT (cycle_id, bird_id, day) DO UPDATE SET
+          actual_g = EXCLUDED.actual_g, estimated_g = EXCLUDED.estimated_g,
+          recorded_by = EXCLUDED.recorded_by, recorded_at = now()`;
+      return reply.send({ saved: true, birdId: id, day, actualG });
+    },
+  );
+
+  // Remove a weight that was entered by mistake.
+  app.delete(
+    "/actual-weights",
+    { preHandler: [requireAuth, requireRole("OPERATOR", "FARM_MANAGER", "ADMIN")] },
+    async (request, reply) => {
+      const q = actualWeightDelete.safeParse(request.query);
+      if (!q.success) return reply.code(400).send({ error: "invalid_query" });
+      const cycleId = await activeCycleId(app);
+      if (!cycleId) return reply.send({ removed: false });
+      const gone = await app.sqlWrite`
+        DELETE FROM actual_weights WHERE cycle_id = ${cycleId} AND bird_id = ${q.data.birdId} AND day = ${q.data.day}
+        RETURNING bird_id`;
+      return reply.send({ removed: gone.count > 0 });
+    },
+  );
+
   app.get("/analytics", { preHandler: [requireAuth] }, async (request, reply) => {
     const cycle = await app.sqlRead`
       SELECT id, label, start_date::text AS "startDate",
@@ -114,11 +199,13 @@ export async function registerGrowthRoutes(app: FastifyInstance) {
 
     let alertRaised = false;
     if (prev && dailyCount - prev.dailyCount >= 3) {
-      const alertId = `ALT-MORT-${Date.now()}`;
-      await app.sqlWrite`
-        INSERT INTO alerts (id, facility_id, kind, severity, message, raised_at)
-        VALUES (${alertId}, ${cycle.facilityId}, ${"Mortality Spike"}, ${"critical"},
-                ${`Mortality spike in ${houseId}: ${dailyCount} deaths today (previous: ${prev.dailyCount}).`}, now())`;
+      // raiseAlert saves the alert and notifies people by their Settings.
+      await raiseAlert(app, {
+        facilityId: cycle.facilityId,
+        kind: "Mortality Spike",
+        severity: "critical",
+        message: `Mortality spike in ${houseId}: ${dailyCount} deaths today (previous: ${prev.dailyCount}).`,
+      });
       alertRaised = true;
     }
 

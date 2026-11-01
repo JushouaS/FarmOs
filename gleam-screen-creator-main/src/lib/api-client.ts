@@ -222,6 +222,40 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
   return apiFetch<NotificationPreference[]>("/notifications/preferences");
 }
 
+/** Which delivery channels this server can send on (email needs mail settings, push needs keys). */
+export interface NotificationChannels {
+  email: { configured: boolean };
+  push: { configured: boolean };
+}
+
+export async function fetchNotificationChannels(): Promise<NotificationChannels> {
+  return apiFetch<NotificationChannels>("/notifications/channels");
+}
+
+/** What happened to a test notice, per channel. */
+export interface TestNotificationResult {
+  in_app: { status: "sent" | "skipped" | "failed"; reason?: string };
+  email: { status: "sent" | "skipped" | "failed"; reason?: string };
+  push: { status: "sent" | "skipped" | "failed"; reason?: string };
+}
+
+/** Sends the signed-in person a test notice by the channels they turned on. */
+export async function sendTestNotification(): Promise<TestNotificationResult> {
+  return apiFetch<TestNotificationResult>("/notifications/test", { method: "POST", body: "{}" });
+}
+
+export async function fetchPushKey(): Promise<{ publicKey: string | null }> {
+  return apiFetch<{ publicKey: string | null }>("/notifications/push/key");
+}
+
+export async function subscribePush(subscription: PushSubscriptionJSON): Promise<{ subscribed: boolean }> {
+  return apiFetch("/notifications/push/subscribe", { method: "POST", body: JSON.stringify(subscription) });
+}
+
+export async function unsubscribePush(endpoint: string): Promise<{ subscribed: boolean }> {
+  return apiFetch("/notifications/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) });
+}
+
 export async function saveNotificationPreferences(
   prefs: NotificationPreference[],
 ): Promise<{ updated: boolean; count: number }> {
@@ -409,6 +443,34 @@ export async function detectVideo(file: File, night = false): Promise<VideoDetec
     body: file,
     headers: { "Content-Type": file.type.startsWith("video/") ? file.type : "application/octet-stream" },
   });
+}
+
+/** A weight a person measured for one bird on one grow-out day (Flock Tracking). */
+export interface ActualWeight {
+  birdId: string;
+  day: number;
+  actualG: number;
+  /** What the page estimated for the bird when the weight was entered. */
+  estimatedG: number | null;
+  recordedAt: string;
+}
+
+export async function fetchActualWeights(day: number): Promise<ActualWeight[]> {
+  return apiFetch<ActualWeight[]>(`/growth/actual-weights?day=${encodeURIComponent(day)}`);
+}
+
+/** Each bird's latest weight from before a day (for the gain since then). */
+export async function fetchPreviousWeights(day: number): Promise<{ birdId: string; day: number; actualG: number }[]> {
+  return apiFetch(`/growth/actual-weights/previous?day=${encodeURIComponent(day)}`);
+}
+
+export async function saveActualWeight(input: { birdId: string; day: number; actualG: number; estimatedG: number }): Promise<unknown> {
+  return apiFetch("/growth/actual-weights", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export async function deleteActualWeight(birdId: string, day: number): Promise<unknown> {
+  // The API rejects an empty JSON body, so one is sent.
+  return apiFetch(`/growth/actual-weights?birdId=${encodeURIComponent(birdId)}&day=${encodeURIComponent(day)}`, { method: "DELETE", body: "{}" });
 }
 
 /** Re-encodes a video the browser cannot play as it is (MKV, AVI, a clip cut short) as a small MP4. */

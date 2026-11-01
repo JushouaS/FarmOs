@@ -56,6 +56,26 @@ const schema = z.object({
   SUS_GOOGLE_SCRIPT_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   SUS_GOOGLE_SCRIPT_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),
 
+  // Email alerts (notify.ts). Without SMTP_HOST and SMTP_FROM email is "not set up":
+  // nothing is sent and the Settings card says so. Empty values count as "not set".
+  SMTP_HOST: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SMTP_PORT: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().positive().default(587)),
+  SMTP_SECURE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["true", "false"]).default("false")),
+  SMTP_USER: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SMTP_PASS: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SMTP_FROM: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // Browser push (notify.ts). Make a key pair with `npm run vapid` and paste it here.
+  VAPID_PUBLIC_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  VAPID_PRIVATE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  VAPID_SUBJECT: z.preprocess((v) => (v === "" ? undefined : v), z.string().default("mailto:admin@cerebroiler.dev")),
+  // Where people open the app, for the link in an email.
+  APP_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("http://localhost:8080")),
+
+  // Live behavior monitor (behavior-monitor.ts): every BEHAVIOR_POLL_SECONDS the API asks the
+  // camera service which birds are inactive or huddling and raises alerts. "off" disables it.
+  BEHAVIOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
+  BEHAVIOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(30)),
+
   // Groq AI (Intelligence engine) — https://console.groq.com/keys
   // Optional at startup; required only when intelligence routes are hit.
   GROQ_API_KEY: z.string().optional(),

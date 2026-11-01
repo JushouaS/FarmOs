@@ -628,6 +628,22 @@ def demo_detect_route() -> tuple[Response, int] | Response:
             pass
 
 
+# Live behavior monitoring (live_behavior.py): started below when LIVE_BEHAVIOR=1.
+LIVE = None
+
+
+@app.get("/behavior/status")
+def behavior_status_route() -> tuple[Response, int] | Response:
+    """Which birds on the live camera are inactive or huddling right now. The API
+    polls this and raises alerts (packages/api/src/behavior-monitor.ts)."""
+    err = _require_vision_token()
+    if err:
+        return err
+    if LIVE is None:
+        return jsonify({"running": False, "reason": "disabled"})
+    return jsonify(LIVE.status(request.args.get("night") == "1"))
+
+
 @app.post("/demo/convert")
 def demo_convert_route() -> tuple[Response, int] | Response:
     """Re-encodes an uploaded video (MKV, AVI, a clip cut short, ...) as a small
@@ -673,5 +689,11 @@ if __name__ == "__main__":
 
     t_kinect = threading.Thread(target=kinect_capture_loop, daemon=True)
     t_kinect.start()
+
+    if os.getenv("LIVE_BEHAVIOR", "0") == "1":
+        import live_behavior
+
+        LIVE = live_behavior.LiveBehavior(lambda: _latest_frame_bytes("dahua"))
+        LIVE.start()
 
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)
