@@ -18,7 +18,7 @@ export const part5: Messages = {
   "Target Cohort ({value})": ["Target na Pangkat ({value})", "Target nga Grupo ({value})"],
   "Tell us what went wrong so it can be fixed.": ["Sabihin sa amin kung ano ang nagkamali para maayos ito.", "Isulti kanamo kung unsa ang sayop aron maayo kini."],
   Temperature: ["Temperatura", "Temperatura"],
-  "Temperature within optimal range (26–32°C)": ["Nasa pinakamainam na saklaw ang temperatura (26–32°C)", "Naa sa labing maayo nga sakup ang temperatura (26–32°C)"],
+  "Temperature within optimal range (26–35°C)": ["Nasa pinakamainam na saklaw ang temperatura (26–35°C)", "Naa sa labing maayo nga sakup ang temperatura (26–35°C)"],
   "Temperature:": ["Temperatura:", "Temperatura:"],
   "Thank you for your feedback": ["Salamat sa iyong feedback", "Salamat sa imong feedback"],
   "The % under each day is how far above (+) or below (−) target the birds were": [

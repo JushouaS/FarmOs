@@ -322,7 +322,7 @@ FarmDataset {
 | Population | 28 birds |
 | Grow-out day | 14 of 42 |
 | Avg weight | 1,320g (target: 1,300g, +1.5%) |
-| Temperature | 29.1°C (range: 26–32°C) ✓ |
+| Temperature | 29.1°C (range: 26–35°C) ✓ |
 | Humidity | 63% (range: 50–70%) ✓ |
 | Ammonia | 9 ppm (max: 25 ppm) ✓ |
 | Active birds | 26 |

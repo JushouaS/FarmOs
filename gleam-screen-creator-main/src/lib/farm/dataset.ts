@@ -255,7 +255,7 @@ const environment: SensorReading[] = [
   {
     sensorId: "SN-241-H1", houseId: "H01", parameter: "temperature",
     code: "TEMP_H01", label: "Temperature", value: 29.1, unit: "°C",
-    bounds: { min: 26, max: 32, label: "26–32°C" }, status: "nominal", recordedAt: AS_OF,
+    bounds: { min: 26, max: 35, label: "26–35°C" }, status: "nominal", recordedAt: AS_OF,
   },
   {
     sensorId: "SN-242-H1", houseId: "H01", parameter: "humidity",

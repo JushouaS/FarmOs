@@ -173,6 +173,11 @@
   --status-blue-text:    #93c5fd;   /* blue-300 */
   --status-blue-border:  rgba(96,165,250,0.28);
 
+  /* One colour per house sensor, so a line is recognised without reading its label */
+  --sensor-temp:         #fb923c;   /* orange-400 */
+  --sensor-humidity:     #38bdf8;   /* sky-400 */
+  --sensor-nh3:          #a78bfa;   /* violet-400 */
+
   /* Sidebar — exact same slate-900 surface so pages feel continuous */
   --sidebar-bg:          #0f172a;   /* slate-900 */
   --sidebar-border:      rgba(148,163,184,0.12);
@@ -233,6 +238,10 @@
   --status-blue-bg:      #dbeafe;
   --status-blue-text:    #1e3a8a;
   --status-blue-border:  #bfdbfe;
+
+  --sensor-temp:         #ea580c;   /* orange-600 */
+  --sensor-humidity:     #0284c7;   /* sky-600 */
+  --sensor-nh3:          #7c3aed;   /* violet-600 */
 
   --sidebar-bg:          #0f172a;
   --sidebar-border:      rgba(255,255,255,0.08);

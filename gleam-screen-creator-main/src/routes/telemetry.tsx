@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Fragment, useEffect, useMemo, useState, useRef, useLayoutEffect, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useState, useRef, useLayoutEffect, type ReactNode } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { getGrowthAnalytics } from "@/lib/farm/repository";
@@ -25,6 +25,7 @@ import {
   OctagonAlert,
 } from "lucide-react";
 import { T, localeTag, tr } from "@/lib/i18n";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/telemetry")({
   head: () => ({ meta: [{ title: tr("Analytics - Cerebroil") }] }),
@@ -791,6 +792,13 @@ const WEIGHT_BINS = [
 
 function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
   const [hoveredBinId, setHoveredBinId] = useState<string | null>(null);
+  // A short pause before a row reacts, so sweeping the pointer down the list does not make the rows flash one after another.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hoverBin = (id: string | null) => {
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setHoveredBinId(id), id === null ? 160 : 110);
+  };
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
   const { broilers } = sample;
   const totalBirds = broilers.length;
@@ -871,12 +879,12 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
             return (
               <div
                 key={bin.id}
-                onMouseEnter={() => setHoveredBinId(bin.id)}
-                onMouseLeave={() => setHoveredBinId(null)}
-                className="cursor-default rounded-lg border px-3 py-2 transition-all duration-150"
+                onMouseEnter={() => hoverBin(bin.id)}
+                onMouseLeave={() => hoverBin(null)}
+                className="cursor-default rounded-lg border px-3 py-2 transition-[background-color,border-color] duration-500 ease-out motion-reduce:transition-none"
                 style={{
-                  background: isHovered ? "var(--surface-sunken)" : "transparent",
-                  borderColor: isHovered ? bin.color : "transparent",
+                  background: isHovered ? tint(bin.color, 8) : "transparent",
+                  borderColor: isHovered ? tint(bin.color, 40) : "transparent",
                 }}
               >
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -901,23 +909,31 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
 
                 <div className="relative h-5 overflow-hidden rounded-md" style={{ background: "var(--surface-raised)" }}>
                   <div
-                    className="absolute inset-y-0 left-0 rounded-md transition-all duration-500"
+                    className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: `${fillWidth}%`,
                       background: `linear-gradient(90deg, ${tint(bin.color, 35)} 0%, ${bin.color} 100%)`,
-                      boxShadow: isHovered ? `0 0 12px ${tint(bin.color, 40)}` : "none",
                     }}
                   />
                 </div>
 
-                {isHovered && bin.birds.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
-                    <span style={{ color: "var(--text-tertiary)" }}>{tr("Bird IDs:")}</span>
-                    {bin.birds.map((id) => (
-                      <span key={id} className="rounded px-1.5 py-0.5 font-bold" style={{ color: bin.color, background: tint(bin.color, 12) }}>
-                        {id}
-                      </span>
-                    ))}
+                {/* The bird IDs open and close gently instead of popping in and pushing the rows around */}
+                {bin.birds.length > 0 && (
+                  <div
+                    className="grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none"
+                    style={{ gridTemplateRows: isHovered ? "1fr" : "0fr", opacity: isHovered ? 1 : 0 }}
+                    aria-hidden={!isHovered}
+                  >
+                    <div className="min-h-0 overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 font-mono text-[11px]">
+                        <span style={{ color: "var(--text-tertiary)" }}>{tr("Bird IDs:")}</span>
+                        {bin.birds.map((id) => (
+                          <span key={id} className="rounded px-1.5 py-0.5 font-bold" style={{ color: bin.color, background: tint(bin.color, 12) }}>
+                            {id}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1510,28 +1526,6 @@ function InsightCard({ level, title, body }: { level: InsightLevel; title: strin
 }
 
 /* ── Range Bar ───────────────────────────────────────────────── */
-function RangeBar({ value, min = 0, max, unit, color }: {
-  value: number; min?: number; max: number; unit: string; color: string;
-}) {
-  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-  const ok = value >= min && value <= max;
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between font-mono text-xs">
-        <span style={{ color: "var(--text-tertiary)" }}>{min}{unit}</span>
-        <span className="font-bold text-sm" style={{ color: ok ? color : "var(--status-red)" }}>{value}{unit}</span>
-        <span style={{ color: "var(--text-tertiary)" }}>{max}{unit}</span>
-      </div>
-      <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "var(--surface-raised)" }}>
-        <div className="absolute inset-y-0 rounded-full opacity-15" style={{ left: 0, right: 0, background: color }} />
-        <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: ok ? color : "var(--status-red)" }} />
-      </div>
-      <p className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>{tr("Optimal: {min}-{max}{unit}", { min, max, unit })}</p>
-    </div>
-  );
-}
-
 /* ── Stat Card ───────────────────────────────────────────────── */
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
   return (
@@ -1541,6 +1535,149 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
       {sub && <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>{sub}</p>}
     </div>
   );
+}
+
+/** Several figures in one block, 2 by 2, separated by thin lines (instead of one box each). */
+function FigureGrid({ figures }: { figures: { label: string; value: string; sub?: string; accent?: string }[] }) {
+  return (
+    <dl className="grid h-full grid-cols-2 grid-rows-2">
+      {figures.map((f, i) => (
+        <div
+          key={f.label}
+          className={`flex min-w-0 flex-col justify-center px-5 py-4 ${i % 2 === 0 ? "border-r" : ""} ${i < 2 ? "border-b" : ""}`}
+          style={{ borderColor: "var(--border-subtle)" }}
+        >
+          <dt className="label-section">{f.label}</dt>
+          <dd className="mt-1">
+            <span className="block font-mono text-lg font-bold leading-none" style={{ color: f.accent ?? "var(--cv-accent)" }}>{f.value}</span>
+            {f.sub && <span className="mt-1.5 block text-[11px]" style={{ color: "var(--text-tertiary)" }}>{f.sub}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** A small "i" button on a figure. It opens a note saying what the figure measures, how, and where the number comes from. */
+function Basis({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="tap -m-1 shrink-0 rounded-full p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
+          aria-label={tr("How {title} is worked out", { title })}
+        >
+          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-2 border-[var(--border-default)] bg-[var(--surface-card)] p-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+        <p className="font-semibold text-[var(--text-primary)]">{tr("How {title} is worked out", { title })}</p>
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * The last readings of one sensor: a filled line in the sensor's own colour, the optimal range as a
+ * dashed band with its limits on the left, the first and last day underneath, and a readout when a
+ * point is hovered or touched.
+ */
+function MiniTrend({ values, min, max, color, unit, lastDay }: { values: number[]; min: number; max: number; color: string; unit: string; lastDay: number }) {
+  const gid = useId().replace(/:/g, "");
+  const [hover, setHover] = useState<number | null>(null);
+  const n = values.length;
+  const pad = (Math.max(max, ...values) - Math.min(min, ...values)) * 0.12 || 1;
+  const lo = Math.min(min, ...values) - pad;
+  const hi = Math.max(max, ...values) + pad;
+  const px = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
+  const py = (v: number) => (1 - (v - lo) / (hi - lo)) * 100;
+  const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join(" ");
+  const area = `${line} L${px(n - 1).toFixed(2)},100 L${px(0).toFixed(2)},100 Z`;
+  const shown = hover ?? n - 1;
+  const dayOf = (i: number) => lastDay - (n - 1 - i);
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const t = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    setHover(Math.round(t * (n - 1)));
+  };
+  return (
+    <div>
+      <div className="flex gap-1.5">
+        <div className="relative w-7 shrink-0 font-mono text-[9px] tabular-nums text-right" style={{ color: "var(--text-tertiary)" }} aria-hidden="true">
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: `${py(max)}%` }}>{max}</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: `${py(min)}%` }}>{min}</span>
+        </div>
+        <div
+          className="relative h-20 min-w-0 flex-1 touch-none cursor-crosshair"
+          onPointerMove={move}
+          onPointerDown={move}
+          onPointerLeave={() => setHover(null)}
+          role="img"
+          aria-label={`${values.map((v) => v + unit).join(", ")}`}
+        >
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
+            <defs>
+              <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity="0.38" />
+                <stop offset="100%" stopColor={color} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <rect x="0" y={py(max)} width="100" height={Math.max(1, py(min) - py(max))} fill={color} opacity="0.1" />
+            {[max, min].map((edge) => (
+              <line key={edge} x1="0" x2="100" y1={py(edge)} y2={py(edge)} stroke={color} strokeOpacity="0.45" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+            ))}
+            <path d={area} fill={`url(#${gid})`} />
+            <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            {hover !== null && <line x1={px(hover)} x2={px(hover)} y1="0" y2="100" stroke={color} strokeOpacity="0.5" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+          </svg>
+          {values.map((v, i) => (
+            <span
+              key={i}
+              className="pointer-events-none absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{ left: `${px(i)}%`, top: `${py(v)}%`, background: color, opacity: i === shown ? 1 : 0.55 }}
+            />
+          ))}
+          <span
+            className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+            style={{ left: `${px(shown)}%`, top: `${py(values[shown]!)}%`, borderColor: color, background: tint(color, 25) }}
+          />
+          {hover !== null && (
+            <span
+              className="pointer-events-none absolute z-10 -translate-y-full whitespace-nowrap rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold shadow-md"
+              style={{
+                left: `${Math.min(80, Math.max(20, px(hover)))}%`,
+                top: `${Math.max(0, py(values[hover]!) - 12)}%`,
+                transform: "translate(-50%, -100%)",
+                background: "var(--surface-card)",
+                borderColor: "var(--border-default)",
+                color,
+              }}
+            >
+              {tr("Day {day}", { day: dayOf(hover) })} · {values[hover]}{unit}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="mt-1 flex justify-between pl-[34px] font-mono text-[9px]" style={{ color: "var(--text-tertiary)" }} aria-hidden="true">
+        <span>{tr("Day {day}", { day: dayOf(0) })}</span>
+        <span>{tr("Day {day}", { day: dayOf(n - 1) })}</span>
+      </div>
+    </div>
+  );
+}
+
+/** A value range that hugs the data (so a small change shows), in whole steps. Returns the range and how many ticks fit. */
+function fitRange(values: number[], step: number): { domain: [number, number]; ticks: number } {
+  let st = step;
+  for (;;) {
+    const lo = Math.round((Math.floor(Math.min(...values) / st) - 1) * st * 1000) / 1000;
+    const hi = Math.round((Math.ceil(Math.max(...values) / st) + 1) * st * 1000) / 1000;
+    const ticks = Math.round((hi - lo) / st) + 1;
+    if (ticks <= 7) return { domain: [lo, hi], ticks };
+    st *= 2;
+  }
 }
 
 /* ── Chart Legend ────────────────────────────────────────────── */
@@ -1580,20 +1717,20 @@ function AnalyticsPage() {
   const nh3History   = [8, 9, 9, 10, 9, 9, 9].map((v, i) => ({ x: i + 1, y: v }));
   const envSensors = [
     {
-      title: tr("Temperature"), series: tempHistory, value: 29.1, min: 26, max: 32, unit: "°C",
-      color: "var(--brand)",
-      insight: { level: "positive" as InsightLevel, title: tr("Temperature within optimal range (26–32°C)"),
+      title: tr("Temperature"), series: tempHistory, value: 29.1, min: 26, max: 35, unit: "°C",
+      color: "var(--sensor-temp)",
+      insight: { level: "positive" as InsightLevel, title: tr("Temperature within optimal range (26–35°C)"),
         body: tr("Stable over 7 days with a minor peak of 29.5°C on Day 4. No corrective action required. Continue monitoring as ambient temperatures rise mid-afternoon.") },
     },
     {
       title: tr("Humidity"), series: humidHistory, value: 63, min: 50, max: 70, unit: "%",
-      color: "var(--status-blue)",
+      color: "var(--sensor-humidity)",
       insight: { level: "positive" as InsightLevel, title: tr("Humidity steady at 63%, nominal"),
         body: tr("Remained within the 50–70% target band. Slight upward creep from 61% to 63% is acceptable and correlates with increased bird respiration as body mass grows.") },
     },
     {
       title: tr("Ammonia (NH3)"), series: nh3History, value: 9, min: 0, max: 25, unit: " ppm",
-      color: "var(--status-amber)",
+      color: "var(--sensor-nh3)",
       insight: { level: "info" as InsightLevel, title: tr("NH3 at 9 ppm, well below the 25 ppm alert threshold"),
         body: tr("Levels are low and stable. A one-day spike to 10 ppm self-resolved, likely due to litter disturbance. Litter moisture and ventilation management are effective.") },
     },
@@ -1619,6 +1756,9 @@ function AnalyticsPage() {
   const stdW     = farm.weight.standardG;
   const wDelta   = avgW - stdW;
   const fcrDelta = farm.feed.fcrTarget - farm.feed.fcr;
+  // The FCR trend is drawn between the values it really takes, so the change is visible.
+  const fcrFit = fitRange([...farm.feed.series, farm.feed.fcrTarget], 0.05);
+  const fcrFirst = farm.feed.series[0];
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "growth",     label: tr("Weight Growth")   },
@@ -1841,88 +1981,136 @@ function AnalyticsPage() {
       {/* ── FLOCK CONDITIONS: feed, behavior and environment together ── */}
       {tab === "conditions" && (
         <div className="space-y-6">
-          {/* Feed */}
+          {/* Feed & Water: the four figures as one block, and the FCR trend beside them */}
           <section aria-labelledby="cond-feed" className="space-y-3">
             <h2 id="cond-feed" className="label-section text-[11px] tracking-widest font-bold">{tr("Feed & Water")}</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label={tr("Current FCR")}   value={String(farm.feed.fcr)} sub={tr("Target: {fcrTarget}", { fcrTarget: farm.feed.fcrTarget })}
-                accent={farm.feed.fcr <= farm.feed.fcrTarget ? "var(--status-green)" : "var(--status-red)"} />
-              <StatCard label={tr("vs Target")}     value={`${fcrDelta >= 0 ? "-" : "+"}${Math.abs(fcrDelta).toFixed(2)}`}
-                sub={fcrDelta >= 0 ? tr("Below FCR target") : tr("Above FCR target")}
-                accent={fcrDelta >= 0 ? "var(--status-green)" : "var(--status-red)"} />
-              <StatCard label={tr("Daily Gain")}    value={tr("{adgG} g/day", { adgG: farm.feed.adgG })} sub={tr("Avg daily weight gain")} />
-              <StatCard label={tr("Feed Consumed")} value={`${farm.feed.cycleConsumedKg} kg`} sub={tr("Cycle total to date")} />
-            </div>
-            <div className="cb-card p-5">
-              <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
-                <div>
-                  <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{tr("FCR Trend, Last 8 Measurements")}</h3>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr("Lower = better efficiency · Target {fcrTarget} shown as dashed line", { fcrTarget: farm.feed.fcrTarget })}</p>
+            <div className="cb-card overflow-hidden">
+              <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+                <div className="border-b lg:border-b-0 lg:border-r" style={{ borderColor: "var(--border-subtle)" }}>
+                  <FigureGrid figures={[
+                    { label: tr("Current FCR"), value: String(farm.feed.fcr), sub: tr("Target: {fcrTarget}", { fcrTarget: farm.feed.fcrTarget }),
+                      accent: farm.feed.fcr <= farm.feed.fcrTarget ? "var(--status-green)" : "var(--status-red)" },
+                    { label: tr("vs Target"), value: `${fcrDelta >= 0 ? "-" : "+"}${Math.abs(fcrDelta).toFixed(2)}`,
+                      sub: fcrDelta >= 0 ? tr("Below FCR target") : tr("Above FCR target"),
+                      accent: fcrDelta >= 0 ? "var(--status-green)" : "var(--status-red)" },
+                    { label: tr("Daily Gain"), value: tr("{adgG} g/day", { adgG: farm.feed.adgG }), sub: tr("Avg daily weight gain") },
+                    { label: tr("Feed Consumed"), value: `${farm.feed.cycleConsumedKg} kg`, sub: tr("Cycle total to date") },
+                  ]} />
                 </div>
-                <ChartLegend items={[
-                  { color: "var(--brand)", label: tr("FCR") },
-                  { color: "var(--status-amber)", label: tr("Target"), dashed: true },
-                ]} />
+                <div className="p-5">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{tr("FCR Trend, Last 8 Measurements")}</h3>
+                      <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+                        {fcrFirst !== undefined
+                          ? tr("{from} → {to} over the last {n} measurements. Lower is better.", { from: fcrFirst.toFixed(2), to: farm.feed.fcr.toFixed(2), n: farm.feed.series.length })
+                          : tr("Lower is better.")}
+                      </p>
+                    </div>
+                    <ChartLegend items={[
+                      { color: "var(--brand)", label: tr("FCR") },
+                      { color: "var(--status-amber)", label: tr("Target {fcrTarget}", { fcrTarget: farm.feed.fcrTarget }), dashed: true },
+                    ]} />
+                  </div>
+                  <AxisLineChart series={fcrSeries}
+                    targets={fcrSeries.map((_, i) => ({ x: i + 1, y: farm.feed.fcrTarget }))}
+                    color="var(--brand)" targetColor="var(--status-amber)"
+                    xLabel="Scan" yLabel="FCR" yTickCount={fcrFit.ticks} domainY={fcrFit.domain} height={170} targetLabel="Target" />
+                </div>
               </div>
-              <AxisLineChart series={fcrSeries}
-                targets={fcrSeries.map((_, i) => ({ x: i + 1, y: farm.feed.fcrTarget }))}
-                color="var(--brand)" targetColor="var(--status-amber)"
-                xLabel="Scan" yLabel="FCR" yTickCount={5} height={180} targetLabel="Target" />
             </div>
           </section>
 
-          {/* Behavior */}
+          {/* Behavior: the activity classification and the four figures in one card */}
           <section aria-labelledby="cond-behavior" className="space-y-3">
             <h2 id="cond-behavior" className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior")}</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label={tr("Movement Index")} value={`${(farm.behavior.movementIndex * 100).toFixed(1)}%`} sub={tr("Above 88% baseline")} accent="var(--status-green)" />
-              <StatCard label={tr("Huddling Risk")}  value={`${(farm.behavior.huddlingRisk * 100).toFixed(0)}%`} sub={tr("Low cluster density")} accent="var(--status-green)" />
-              <StatCard label={tr("Inactive Birds")} value={`${bd.Inactivity} / ${total}`} sub={tr("{inactPct}% of flock", { inactPct })}
-                accent={inactPct > 20 ? "var(--status-red)" : "var(--status-amber)"} />
-              <StatCard label={tr("Huddling")}       value={tr("{n} birds", { n: bd.Huddling })} sub={tr("Cluster detected")} accent="var(--status-amber)" />
-            </div>
-            <div className="cb-card p-5">
-              <h3 className="mb-4 text-base font-bold" style={{ color: "var(--text-primary)" }}>
-                {tr("Activity Classification, Current Scan")}
-              </h3>
-              <DonutChart segments={[
-                { label: tr("Active"),   value: bd.Active,     color: "var(--status-green)" },
-                { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
-                { label: tr("Huddling"), value: bd.Huddling,   color: "var(--status-amber)" },
-              ]} />
-              <p className="mt-3 text-center text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-                {tr("Point at a segment, or tap it, for the breakdown.")}
-              </p>
-            </div>
-          </section>
-
-          {/* Environment */}
-          <section aria-labelledby="cond-env" className="space-y-3">
-            <h2 id="cond-env" className="label-section text-[11px] tracking-widest font-bold">{tr("Environment")}</h2>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              {envSensors.map((env) => (
-                <div key={env.title} className="cb-card p-5">
-                  <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
-                    <div>
-                      <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{env.title}</h3>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{tr("7-day history · Optimal: {min}–{max}{unit}", { min: env.min, max: env.max, unit: env.unit })}</p>
-                    </div>
-                    <span className="font-mono text-sm font-bold px-3 py-1 rounded-full"
-                      style={{
-                        color: env.color,
-                        background: `${env.color}18`,
-                        border: `1px solid ${env.color}40`,
-                      }}>{tr("Current: {value}{unit}", { value: env.value, unit: env.unit })}</span>
-                  </div>
-                  <div className="mt-4">
-                    <AxisLineChart series={env.series} color={env.color} xLabel="Day"
-                      yLabel={env.unit.trim()} yTickCount={4} height={150} />
-                  </div>
-                  <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-                    <RangeBar value={env.value} min={env.min} max={env.max} unit={env.unit} color={env.color} />
-                  </div>
+            <div className="cb-card overflow-hidden">
+              <div className="grid md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+                <div className="flex flex-col items-center gap-3 border-b p-5 md:border-b-0 md:border-r" style={{ borderColor: "var(--border-subtle)" }}>
+                  <h3 className="self-start text-base font-bold" style={{ color: "var(--text-primary)" }}>
+                    {tr("Activity Classification, Current Scan")}
+                  </h3>
+                  <DonutChart segments={[
+                    { label: tr("Active"),   value: bd.Active,     color: "var(--status-green)" },
+                    { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
+                    { label: tr("Huddling"), value: bd.Huddling,   color: "var(--status-amber)" },
+                  ]} />
+                  <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                    {[
+                      { label: tr("Active"),   value: bd.Active,     color: "var(--status-green)" },
+                      { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
+                      { label: tr("Huddling"), value: bd.Huddling,   color: "var(--status-amber)" },
+                    ].map((row) => (
+                      <li key={row.label} className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} aria-hidden="true" />
+                        {row.label} {row.value}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-center text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                    {tr("Point at a segment, or tap it, for the breakdown.")}
+                  </p>
                 </div>
-              ))}
+                <div className="grid h-full grid-cols-1 sm:grid-cols-2 sm:grid-rows-2">
+                  {/* Movement and huddling: the two behavior figures together */}
+                  <div className="flex min-w-0 flex-col justify-center gap-3 border-b px-5 py-4 sm:border-r" style={{ borderColor: "var(--border-subtle)" }}>
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="label-section">{tr("Movement Index")}</p>
+                        <Basis title={tr("Movement Index")}>
+                          <p>{tr("The share of the birds that moved during the scan. Each bird is followed from picture to picture, and it counts as moving when it strays more than about a third of its own body length.")}</p>
+                          <p>{tr("91 of every 100 birds moved means an index of 91%. The 88% baseline is a reference level set in the sample data; it should become this flock's own usual level once real readings are collected.")}</p>
+                          <p className="text-[var(--text-tertiary)]">{tr("The number on this page is built-in sample data. It is not connected to the live camera yet.")}</p>
+                        </Basis>
+                      </div>
+                      <p className="mt-1 font-mono text-lg font-bold leading-none" style={{ color: "var(--status-green)" }}>{(farm.behavior.movementIndex * 100).toFixed(1)}%</p>
+                      <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("Above 88% baseline")}</p>
+                    </div>
+                    <div className="border-t pt-3" style={{ borderColor: "var(--border-subtle)" }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="label-section">{tr("Huddling Risk")}</p>
+                        <Basis title={tr("Huddling Risk")}>
+                          <p>{tr("The share of the birds packed into a huddle: a group of 5 or more touching birds that stays together. A bird in a clump that forms and breaks up again does not count.")}</p>
+                          <p>{tr("8 of every 100 birds in a huddle means a risk of 8%. From 35% it raises a Huddling alert.")}</p>
+                          <p className="text-[var(--text-tertiary)]">{tr("The number on this page is built-in sample data. It is not connected to the live camera yet.")}</p>
+                        </Basis>
+                      </div>
+                      <p className="mt-1 font-mono text-lg font-bold leading-none" style={{ color: "var(--status-green)" }}>{(farm.behavior.huddlingRisk * 100).toFixed(0)}%</p>
+                      <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>{tr("Low cluster density")}</p>
+                    </div>
+                  </div>
+
+                  {/* The house environment: one box for each of the three sensors */}
+                  {envSensors.map((env, i) => {
+                    const ok = env.value >= env.min && env.value <= env.max;
+                    const tone = ok ? "var(--status-green)" : "var(--status-red)";                    return (
+                      <div
+                        key={env.title}
+                        className={`flex min-w-0 flex-col justify-center gap-2 px-5 py-4 ${["border-b", "border-b sm:border-b-0 sm:border-r", ""][i]}`}
+                        style={{ borderColor: "var(--border-subtle)" }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="label-section">{env.title}</p>
+                          <Basis title={env.title}>
+                            <p>{tr("The latest reading from the house sensor. The shaded band on the line is the acceptable range ({min}–{max}{unit}); the line shows the last 7 days.", { min: env.min, max: env.max, unit: env.unit })}</p>
+                            <p>{ok ? tr("The reading is inside the range.") : tr("The reading is outside the range.")}</p>
+                            <p className="text-[var(--text-tertiary)]">{tr("The readings on this page are built-in sample data until the house sensors are connected.")}</p>
+                          </Basis>
+                        </div>
+                        <p className="font-mono text-lg font-bold leading-none" style={{ color: env.color }}>{env.value}{env.unit}</p>
+                        <MiniTrend values={env.series.map((pt) => pt.y)} min={env.min} max={env.max} color={env.color} unit={env.unit} lastDay={farm.cycle.day} />
+                        <p className="flex flex-wrap items-center gap-x-1.5 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                          <span className="inline-flex items-center gap-1 font-semibold" style={{ color: tone }}>
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden="true" />
+                            {ok ? tr("Within range") : tr("Out of range")}
+                          </span>
+                          <span>· {tr("Optimal: {min}-{max}{unit}", { min: env.min, max: env.max, unit: env.unit })}</span>
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </section>
 
