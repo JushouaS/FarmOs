@@ -495,6 +495,26 @@
   animation: springFadeSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* A grey placeholder block with a slow light sweep, for the page outline shown while loading. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--skeleton-bg, var(--surface-raised));
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-primary) 7%, transparent), transparent);
+  animation: skeletonSweep 1.8s ease-in-out infinite;
+}
+@keyframes skeletonSweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
 /* Alert pop-ups slide in from the right edge, like a desktop notification. */
 @keyframes alertSlideIn {
   from {
@@ -629,6 +649,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    display: none;
+  }
   .animate-alert-in,
   .animate-spring-in,
   .animate-drift-slow,
