@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useAuth, MfaRequiredError, type LoginError } from "@/lib/auth-context";
 import { CerebroilLogo } from "@/components/farm/SideNav";
@@ -448,6 +448,13 @@ function LoginPage() {
               </a>
             </p>
           )}
+
+          {/* Anyone can read the policy before signing in; the agreement itself comes after sign-in. */}
+          <p className="mt-3 text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
+            <Link to="/privacy" className="font-medium hover:underline" style={{ color: "var(--text-secondary)" }}>
+              {tr("Privacy Policy")}
+            </Link>
+          </p>
         </div>
       </main>
     </div>

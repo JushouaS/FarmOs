@@ -17,6 +17,13 @@ import {
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import type { AccessTokenPayload } from "../auth/auth.js";
 
+/**
+ * The version of the Privacy Policy people agree to. Change it whenever the policy
+ * changes in a way that matters (src/routes/privacy.tsx): everyone is then asked to
+ * agree again the next time they sign in.
+ */
+export const PRIVACY_VERSION = "2026-11-02";
+
 const LOCKOUT_AFTER_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 30;
 
@@ -314,13 +321,37 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   app.get("/me", { preHandler: [requireAuth] }, async (request) => {
     const user = request.authUser!;
     const row = await app.sqlRead`
-      SELECT id, email, full_name, avatar_url, analysis_language, last_login_at, created_at
+      SELECT id, email, full_name, avatar_url, analysis_language, last_login_at, created_at,
+             EXISTS (
+               SELECT 1 FROM privacy_consents c
+               WHERE c.user_id = users.id AND c.version = ${PRIVACY_VERSION}
+             ) AS privacy_accepted
       FROM users WHERE id = ${user.sub}`;
     return {
       user: row[0],
       roles: user.roles,
       permissions: user.permissions,
     };
+  });
+
+  /**
+   * POST /auth/privacy
+   * The signed-in person agrees to the current Privacy Policy. Saved once per person and
+   * version (agreeing again changes nothing), with the time, and noted in the sign-in log.
+   */
+  app.post("/privacy", { preHandler: [requireAuth] }, async (request, reply) => {
+    const userId = request.authUser!.sub;
+    const saved = await app.sqlWrite`
+      INSERT INTO privacy_consents (user_id, version, ip_address)
+      VALUES (${userId}, ${PRIVACY_VERSION}, ${request.ip}::inet)
+      ON CONFLICT (user_id, version) DO NOTHING
+      RETURNING version`;
+    if (saved.count > 0) {
+      await app.sqlWrite`
+        INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+        VALUES (${userId}, ${"privacy_accepted"}, ${request.ip}::inet, ${app.sqlWrite.json({ version: PRIVACY_VERSION })})`;
+    }
+    return reply.send({ accepted: true, version: PRIVACY_VERSION });
   });
 
   /**

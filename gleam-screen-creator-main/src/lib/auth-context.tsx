@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { POLICY_UPDATED } from "./privacy-version";
 
 /**
  * The API base URL is read from the Vite env variable `VITE_API_URL`.
@@ -62,10 +63,24 @@ function writeLocalSession(user: AuthUser | null) {
   }
 }
 
+/* The offline admin account has no server to record its agreement to the Privacy Policy, so
+ * it keeps it in this browser, for the version of the policy it was given. */
+const LOCAL_PRIVACY_KEY = "cb-privacy-accepted";
+
+function readLocalPrivacy(): boolean {
+  try {
+    return localStorage.getItem(LOCAL_PRIVACY_KEY) === POLICY_UPDATED;
+  } catch {
+    return false;
+  }
+}
+
 export interface AuthUser {
   id: string;
   email: string;
   fullName?: string | null;
+  /** Whether this person has agreed to the current Privacy Policy. Unknown (undefined) until the server says. */
+  privacyAccepted?: boolean;
   /** The language the Live Camera analysis shows in (Settings > Account). */
   analysisLanguage?: "en" | "tl" | "ceb";
   roles: string[];
@@ -93,6 +108,8 @@ interface AuthState {
   verifyMfaBackupCode: (code: string) => Promise<number>;
   logout: () => Promise<void>;
   refresh: () => Promise<boolean>;
+  /** Record that the signed-in person agrees to the current Privacy Policy. */
+  acceptPrivacy: () => Promise<void>;
   /** Change the signed-in person's name and/or analysis language. */
   updateProfile: (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => Promise<void>;
 }
@@ -121,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ...prev,
               fullName: data.user.full_name ?? prev.fullName ?? null,
               analysisLanguage: data.user.analysis_language ?? prev.analysisLanguage,
+              privacyAccepted: data.user.privacy_accepted ?? prev.privacyAccepted,
             }
           : prev,
       );
@@ -148,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: data.user.email,
             fullName: data.user.full_name ?? data.user.fullName ?? null,
             analysisLanguage: data.user.analysis_language ?? undefined,
+            privacyAccepted: data.user.privacy_accepted ?? undefined,
             roles: data.roles,
             permissions: data.permissions,
           });
@@ -162,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Network down — fall through to the local session.
       }
       const local = readLocalSession();
-      if (local) setUser(local);
+      if (local) setUser({ ...local, privacyAccepted: readLocalPrivacy() });
       setIsLoading(false);
     })();
   }, []);
@@ -184,6 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: "admin",
           email: "admin",
           fullName: "Farm Administrator",
+          privacyAccepted: readLocalPrivacy(),
           roles: ["ADMIN"],
           permissions: [],
         };
@@ -288,6 +308,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const acceptPrivacy = useCallback(async () => {
+    // The offline admin has no server: its agreement is kept in this browser.
+    if (user?.id === "admin") {
+      try { localStorage.setItem(LOCAL_PRIVACY_KEY, POLICY_UPDATED); } catch { /* it will ask again next time */ }
+      setUser((prev) => (prev ? { ...prev, privacyAccepted: true } : prev));
+      return;
+    }
+    const send = () => fetch(`${API_BASE}/auth/privacy`, { method: "POST", credentials: "include" });
+    let res = await send();
+    if (res.status === 401) {
+      const renewed = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" }).catch(() => null);
+      if (renewed?.ok) res = await send();
+    }
+    if (!res.ok) throw new Error("privacy_not_saved");
+    setUser((prev) => (prev ? { ...prev, privacyAccepted: true } : prev));
+  }, [user?.id]);
+
   const updateProfile = useCallback(async (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => {
     const send = () =>
       fetch(`${API_BASE}/auth/me`, {
@@ -325,9 +362,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyMfaBackupCode,
       logout,
       refresh,
+      acceptPrivacy,
       updateProfile,
     }),
-    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh, updateProfile],
+    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh, acceptPrivacy, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

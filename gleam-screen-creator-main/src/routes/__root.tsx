@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider, useAuth } from "../lib/auth-context";
 import { AppSkeleton } from "@/components/farm/AppSkeleton";
+import { PrivacyGate } from "@/components/farm/PrivacyGate";
 import { LanguageProvider, tr } from "@/lib/i18n";
 
 function NotFoundComponent() {
@@ -165,13 +166,17 @@ function RootComponent() {
 
 /* ── Auth guard: every page except /login requires a signed-in user ── */
 function AuthGuard({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
   if (location.pathname.startsWith("/login")) return <>{children}</>;
+  // The Privacy Policy is for anyone to read, signed in or not.
+  if (location.pathname.startsWith("/privacy")) return <>{children}</>;
   // Hold the page outline during session hydration so a signed-in refresh
   // doesn't bounce to /login before /auth/me resolves.
   if (isLoading) return <AppSkeleton />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Until the person has agreed to the current Privacy Policy, nothing else opens (the Contact page stays reachable from it).
+  if (user?.privacyAccepted === false && !location.pathname.startsWith("/contact")) return <PrivacyGate />;
   return <>{children}</>;
 }

@@ -582,3 +582,10 @@ What is real and what is a stand-in (important when you write about it):
   database, and the Insights AI (when a Groq key is set).
 - **Stand-in:** there is no trained detector (YOLO) and no weight model. The Kinect is simulated,
   and the per-bird weights on Analytics and Flock Tracking are sample data scaled to the chosen day.
+
+
+## Privacy Policy
+
+The policy is at `/privacy` (anyone can read it, signed in or not) and is linked from the sign-in page and the account menu. After signing in, a person has to read a short summary and tick "I have read and understood" before the app opens; declining signs them out. The agreement is saved per person and per version in the `privacy_consents` table (with the time and IP address) and noted in `auth_audit`. Run `npm run db:migrate` once to add the table.
+
+When the policy changes in a way that matters, edit the text in `src/lib/privacy-policy.ts`, set `POLICY_UPDATED` in `src/lib/privacy-version.ts`, and set `PRIVACY_VERSION` in `packages/api/src/routes/auth.ts` to a new value. Everyone is then asked to agree again at their next sign-in. The offline admin account (no API running) keeps its agreement in the browser instead.

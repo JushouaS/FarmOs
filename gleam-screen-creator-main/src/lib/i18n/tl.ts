@@ -13,8 +13,9 @@ import { part12 } from "./messages/part12";
 import { part13 } from "./messages/part13";
 import { part14 } from "./messages/part14";
 import { part15 } from "./messages/part15";
+import { part16 } from "./messages/part16";
 
 /** Tagalog (Filipino). English sentence -> Tagalog. Anything missing shows in English. */
 export const tl: Record<string, string> = Object.fromEntries(
-  Object.entries({ ...part1, ...part2, ...part3, ...part4, ...part5, ...part6, ...part7, ...part8, ...part9, ...part10, ...part11, ...part12, ...part13, ...part14, ...part15 }).map(([english, pair]) => [english, pair[0]]),
+  Object.entries({ ...part1, ...part2, ...part3, ...part4, ...part5, ...part6, ...part7, ...part8, ...part9, ...part10, ...part11, ...part12, ...part13, ...part14, ...part15, ...part16 }).map(([english, pair]) => [english, pair[0]]),
 );
