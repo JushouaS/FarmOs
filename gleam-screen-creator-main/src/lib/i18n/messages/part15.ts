@@ -37,6 +37,11 @@ export const part15: Messages = {
     "Built-in na sample data ang mga sukat sa pahinang ito hanggang makonekta ang mga sensor ng bahay.",
     "Built-in nga sample data ang mga sukod niini nga panid hangtod makonekta ang mga sensor sa balay.",
   ],
+  "Analyze Growth": ["Suriin ang Paglaki", "Susiha ang Pagdako"],
+  "The weight spread, bird counts and feed figures in this report are built-in sample data, as on the Analytics page.": [
+    "Built-in na sample data ang pagkakalat ng timbang, bilang ng manok at mga sukat ng pakain sa ulat na ito, tulad sa pahina ng Analytics.",
+    "Built-in nga sample data ang pagkaylap sa gibug-aton, ihap sa manok ug mga sukod sa pagkaon niini nga report, sama sa panid sa Analytics.",
+  ],
   "Lower is better.": ["Mas mababa ay mas mabuti.", "Mas ubos mas maayo."],
   "Target {fcrTarget}": ["Target {fcrTarget}", "Target {fcrTarget}"],
 };

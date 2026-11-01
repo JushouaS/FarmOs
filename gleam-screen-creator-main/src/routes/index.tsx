@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { GrowthCard } from "@/components/farm/GrowthCard";
+import { GrowthAnalysisSection } from "@/components/farm/GrowthDiagnostics";
+import { SampleNotice } from "@/components/farm/SampleBadge";
+import { sampleForDay } from "@/lib/farm/sample";
 import { buildGrowthCardData } from "@/lib/farm/growth";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { tr } from "@/lib/i18n";
@@ -46,6 +50,9 @@ const KPI_ICON_PATHS = {
 function Dashboard() {
   const data = Route.useLoaderData() as any;
   const growth = buildGrowthCardData(data);
+  // The analysis opens under the Growth card. Each press starts it again (a new key), and it scrolls into view.
+  const [analysisRun, setAnalysisRun] = useState(0);
+  const sample = useMemo(() => sampleForDay(data), [data]);
 
   return (
     <AppShell>
@@ -73,7 +80,14 @@ function Dashboard() {
       </header>
 
       {/* ── Growth: the weight story first, house readings kept small ── */}
-      <GrowthCard data={growth} />
+      <GrowthCard data={growth} onAnalyze={() => setAnalysisRun((n) => n + 1)} />
+
+      {analysisRun > 0 && (
+        <div className="mb-6">
+          <SampleNotice>{tr("The weight spread, bird counts and feed figures in this report are built-in sample data, as on the Analytics page.")}</SampleNotice>
+          <GrowthAnalysisSection key={analysisRun} sample={sample} autoRun />
+        </div>
+      )}
     </AppShell>
   );
 }
