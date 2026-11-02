@@ -34,7 +34,7 @@ export const POLICY_SECTIONS: PolicySection[] = [
     title: T("What we collect"),
     items: [
       T("Your account: your name, your email or username, your role, and your password. The password is stored only as a one-way scramble (a hash), never as plain text."),
-      T("Your photo, if you add one to your account."),
+      T("Your photo, if you add one. It stays in your own browser on that device and is not sent to the server."),
       T("Sign-in records: when you sign in or out, the device and browser you used, and the network address (IP address)."),
       T("Your settings: your language, and how you want to hear about alerts (email address, quiet hours, browser notifications)."),
       T("Browser notifications: if you turn them on, an address your browser gives the system so it can send you alerts."),
@@ -70,6 +70,7 @@ export const POLICY_SECTIONS: PolicySection[] = [
       T("People who have an account on this farm's system, depending on their role. An administrator can see the list of accounts."),
       T("Outside services, only to do what you asked: an email service to send alert emails, and your browser's push service to deliver browser notifications."),
       T("Feedback you send may also be copied to the owner's Google Drive."),
+      T("An outside AI service (Groq), when someone asks for an Intelligence briefing. It receives farm figures such as sensor readings and bird counts, not personal information."),
     ],
   },
   {

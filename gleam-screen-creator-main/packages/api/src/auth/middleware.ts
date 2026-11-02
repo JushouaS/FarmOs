@@ -1,5 +1,5 @@
 import type { FastifyInstance, preHandlerHookHandler } from "fastify";
-import { verifyAccessToken } from "./auth.js";
+import { hashAccessToken, verifyAccessToken } from "./auth.js";
 
 const ACCESS_COOKIE = "farm_access_token";
 
@@ -35,10 +35,14 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
       throw new Error("malformed_payload");
     }
 
-    // Server-side session validation: ensure the token was issued by us and
-    // has not been revoked (logout clears the sessions row).
+    // Server-side session validation: ensure the token was issued by us, has not
+    // been revoked (logout clears the sessions row) and its account is still active.
+    // The table keeps a hash of the token; a session saved before that is matched by the token itself.
     const session = await request.server.sqlRead`
-      SELECT id FROM sessions WHERE access_token = ${token} LIMIT 1`;
+      SELECT s.id FROM sessions s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.access_token = ANY(${[hashAccessToken(token), token]}) AND u.is_active
+      LIMIT 1`;
     if (session.count === 0) {
       return reply.code(401).send({ error: "session_revoked" });
     }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { fetchKinectTicket } from "@/lib/api-client";
 import { tr } from "@/lib/i18n";
 
 /* Live 3D view of the Kinect depth camera.
@@ -66,8 +67,16 @@ export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
     let closed = false;
     let count = 0;
 
-    const connect = () => {
-      ws = new WebSocket(`ws://${window.location.hostname}:${BRIDGE_PORT}`);
+    const connect = async () => {
+      // The bridge may want a ticket, which the API gives to signed-in viewers.
+      let ticket: string | null = null;
+      try {
+        ticket = await fetchKinectTicket();
+      } catch {
+        /* not reachable right now: try without, and the retry below tries again */
+      }
+      if (closed) return;
+      ws = new WebSocket(`ws://${window.location.hostname}:${BRIDGE_PORT}/${ticket ? `?t=${encodeURIComponent(ticket)}` : ""}`);
       ws.binaryType = "arraybuffer";
       ws.onmessage = (e) => {
         if (typeof e.data === "string") {

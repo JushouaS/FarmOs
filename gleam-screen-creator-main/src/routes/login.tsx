@@ -181,7 +181,9 @@ function LoginPage() {
           ? tr("Incorrect code. Try again.")
           : code === "invalid_backup_code"
             ? tr("Incorrect backup code.")
-            : tr("Verification failed. Try again."),
+            : code === "too_many_attempts"
+              ? tr("Account temporarily locked due to too many failed attempts.")
+              : tr("Verification failed. Try again."),
       );
       setShaking(true);
     } finally {

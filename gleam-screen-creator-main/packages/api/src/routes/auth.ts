@@ -13,7 +13,13 @@ import {
   verifyMfaToken,
   generateBackupCodes,
   hashBackupCode,
+  findBackupCode,
+  hashAccessToken,
+  sealSecret,
+  openSecret,
+  isSealed,
 } from "../auth/auth.js";
+import { randomBytes } from "node:crypto";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import type { AccessTokenPayload } from "../auth/auth.js";
 
@@ -30,7 +36,7 @@ const LOCKOUT_DURATION_MINUTES = 30;
 /**
  * Session + identity routes.
  *
- * POST /auth/register
+ * POST /auth/register       (ADMIN only: creates an account, does not sign it in)
  * POST /auth/login
  * POST /auth/refresh
  * POST /auth/logout
@@ -42,12 +48,28 @@ const LOCKOUT_DURATION_MINUTES = 30;
 const emailSchema = z.string().email().max(320);
 const passwordSchema = z.string().min(12).max(128);
 
+/** The roles an administrator can give a new account (the catalogue seeded in migration 0001). */
+const ROLE_CODES = ["ADMIN", "FARM_MANAGER", "OPERATOR", "VIEWER"] as const;
+
 const registerBody = z.object({
   email: emailSchema,
   password: passwordSchema,
   fullName: z.string().max(160).optional(),
-  roles: z.array(z.string()).default(["VIEWER"]),
+  roles: z.array(z.enum(ROLE_CODES)).min(1).max(ROLE_CODES.length).default(["VIEWER"]),
 });
+
+/**
+ * Whether a request comes from the computer the API runs on (it reaches the API through localhost, or through
+ * this computer's own network address). It looks at the socket, not at request.ip: with trustProxy on, request.ip
+ * follows an X-Forwarded-For header that anyone can write.
+ */
+function fromThisComputer(request: { raw: { socket: { remoteAddress?: string; localAddress?: string } } }): boolean {
+  const { remoteAddress, localAddress } = request.raw.socket;
+  if (!remoteAddress) return false;
+  const strip = (a: string) => a.replace(/^::ffff:/, "");
+  const remote = strip(remoteAddress);
+  return remote === "127.0.0.1" || remote === "::1" || (!!localAddress && remote === strip(localAddress));
+}
 
 /** Account the development-only "admin" / "admin" login maps to (see /login). */
 const DEV_ADMIN_EMAIL = "admin@cerebroiler.dev";
@@ -75,7 +97,7 @@ const REFRESH_COOKIE = "farm_refresh_token";
 
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
+  secure: env.cookieSecure,
   sameSite: "strict" as const,
   path: "/",
   maxAge: env.JWT_ACCESS_TTL_SECONDS,
@@ -83,7 +105,7 @@ const COOKIE_OPTS = {
 
 const REFRESH_COOKIE_OPTS = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
+  secure: env.cookieSecure,
   sameSite: "strict" as const,
   path: "/",
   maxAge: Number(process.env.JWT_REFRESH_TTL_SECONDS ?? 30 * 24 * 60 * 60),
@@ -92,7 +114,7 @@ const REFRESH_COOKIE_OPTS = {
 const MFA_PENDING_COOKIE = "farm_mfa_pending";
 const MFA_COOKIE_OPTS = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
+  secure: env.cookieSecure,
   sameSite: "strict" as const,
   path: "/auth/mfa",
   maxAge: 5 * 60, // 5 minutes
@@ -131,7 +153,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     await app.sqlWrite`
       INSERT INTO sessions (user_id, access_token, refresh_token, refresh_expires_at, ip_address, user_agent)
-      VALUES (${row.id}, ${accessToken}, ${refreshHash}, ${expiresAt.toISOString()}, ${ip}::inet, ${ua})
+      VALUES (${row.id}, ${hashAccessToken(accessToken)}, ${refreshHash}, ${expiresAt.toISOString()}, ${ip}::inet, ${ua})
     `;
 
     await app.sqlWrite`
@@ -163,7 +185,44 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
   const loginRateLimit = { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } };
 
-  app.post("/register", { ...loginRateLimit }, async (request, reply) => {
+  /* ---- too many wrong tries ------------------------------------------------------------
+   * Five wrong tries in 30 minutes lock the sign-in for that email from that network address
+   * (the second step: for that account, from anywhere). It is kept per address so someone
+   * guessing cannot lock the real person out from their own place, and it counts emails
+   * with no account the same way, so the answers give nothing away about who has one. */
+  const FAIL_LIMIT = 5;
+  const FAIL_WINDOW_MS = 30 * 60 * 1000;
+
+  async function failureState(subject: string, ip: string | null) {
+    const rows = ip
+      ? await app.sqlRead`
+          SELECT failed_at FROM login_failures
+          WHERE subject = ${subject} AND ip_address = ${ip}::inet AND failed_at > now() - interval '30 minutes'
+          ORDER BY failed_at DESC LIMIT ${FAIL_LIMIT}`
+      : await app.sqlRead`
+          SELECT failed_at FROM login_failures
+          WHERE subject = ${subject} AND failed_at > now() - interval '30 minutes'
+          ORDER BY failed_at DESC LIMIT ${FAIL_LIMIT}`;
+    const locked = rows.length >= FAIL_LIMIT;
+    const lockedUntil = locked ? new Date(new Date(rows[FAIL_LIMIT - 1]!.failed_at as string).getTime() + FAIL_WINDOW_MS).toISOString() : null;
+    return { count: rows.length, locked, lockedUntil };
+  }
+
+  async function recordFailure(subject: string, ip: string | null) {
+    await app.sqlWrite`INSERT INTO login_failures (subject, ip_address) VALUES (${subject}, ${ip}::inet)`;
+  }
+
+  async function clearFailures(subject: string, ip: string | null) {
+    if (ip) await app.sqlWrite`DELETE FROM login_failures WHERE subject = ${subject} AND ip_address = ${ip}::inet`;
+    else await app.sqlWrite`DELETE FROM login_failures WHERE subject = ${subject}`;
+  }
+
+  // Checked against when an email has no account, so a wrong email takes as long to refuse as a wrong password.
+  const decoyHash = hashPassword(randomBytes(16).toString("hex"));
+
+  // Only an administrator creates accounts. It used to be open to anyone, with the roles taken from the
+  // request, so anyone could make themselves an ADMIN. The new account is not signed in: the caller keeps their own session.
+  app.post("/register", { ...loginRateLimit, preHandler: [requireAuth, requireRole("ADMIN")] }, async (request, reply) => {
     const parsed = registerBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body", issues: parsed.error.issues });
     const { email, password, fullName, roles } = parsed.data;
@@ -188,17 +247,19 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       `;
     }
 
-    const session = await issueSession(userId, request.ip, request.headers["user-agent"] ?? null);
-    setSessionCookies(reply, session);
-    return reply.code(201).send({ user: session.user });
+    await app.sqlWrite`
+      INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+      VALUES (${request.authUser!.sub}, ${"user_created"}, ${request.ip}::inet, ${app.sqlWrite.json({ createdUserId: userId, roles })})`;
+    return reply.code(201).send({ user: { id: userId, email, roles } });
   });
 
   app.post("/login", { ...loginRateLimit }, async (request, reply) => {
     // Development-only shortcut matching the "admin / admin" demo hint on the
     // sign-in page: signs in as the seeded admin without touching its real
-    // password. Never active outside NODE_ENV=development.
+    // password. Never active outside NODE_ENV=development, and only for a request
+    // made from this computer: another device on the network cannot use it.
     const body = request.body as { email?: unknown; password?: unknown } | undefined;
-    if (env.NODE_ENV === "development" && body?.email === "admin" && body?.password === "admin") {
+    if (env.NODE_ENV === "development" && body?.email === "admin" && body?.password === "admin" && fromThisComputer(request)) {
       const admin = await app.sqlRead`
         SELECT id FROM users WHERE email = ${DEV_ADMIN_EMAIL} AND is_active`;
       if (admin.count === 0) return reply.code(401).send({ error: "invalid_credentials" });
@@ -213,55 +274,41 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const parsed = loginBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body", issues: parsed.error.issues });
     const { email, password } = parsed.data;
+    const subject = email.toLowerCase();
 
-    const user = await app.sqlRead`
-      SELECT id, password_hash, is_active, failed_login_attempts, locked_until, mfa_enabled, mfa_secret
-      FROM users WHERE email = ${email}`;
-    if (user.count === 0) {
+    const state = await failureState(subject, request.ip);
+    if (state.locked) {
       await app.sqlWrite`
         INSERT INTO auth_audit (action, ip_address, metadata)
-        VALUES (${"login_failed_unknown"}, ${request.ip}::inet, ${app.sqlWrite.json({ email })})
-      `;
-      return reply.code(401).send({ error: "invalid_credentials" });
-    }
-    const row = user[0]!;
-    if (!row.is_active) return reply.code(403).send({ error: "user_disabled" });
-
-    const lockedUntil = row.locked_until ? new Date(row.locked_until as string) : null;
-    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
-      await app.sqlWrite`
-        INSERT INTO auth_audit (user_id, action, ip_address, metadata)
-        VALUES (${row.id}, ${"login_failed_locked"}, ${request.ip}::inet, ${app.sqlWrite.json({ lockedUntil: row.locked_until })})`;
+        VALUES (${"login_refused_locked"}, ${request.ip}::inet, ${app.sqlWrite.json({ email: subject })})`;
       return reply.code(403).send({
         error: "account_locked",
-        lockedUntil: row.locked_until,
-        message: `Account is locked until ${lockedUntil.toISOString()}.`,
+        lockedUntil: state.lockedUntil,
+        message: `Too many failed attempts. Try again after ${state.lockedUntil}.`,
       });
     }
 
-    const ok = await verifyPassword(password, row.password_hash as string);
-    if (!ok) {
-      const attempts = (row.failed_login_attempts as number) + 1;
-      const locked = attempts >= LOCKOUT_AFTER_FAILED_ATTEMPTS
-        ? new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000).toISOString()
-        : null;
-      await app.sqlWrite`
-        UPDATE users
-        SET failed_login_attempts = ${attempts},
-            locked_until = ${locked}
-        WHERE id = ${row.id}`;
+    const found = await app.sqlRead`
+      SELECT id, password_hash, is_active, mfa_enabled, mfa_secret
+      FROM users WHERE email = ${email}`;
+    const row = found.count > 0 ? found[0]! : null;
+    // The password is always checked (against a decoy when there is no such account), and a missing account, a
+    // wrong password and a disabled account all get the same answer.
+    const ok = await verifyPassword(password, row ? (row.password_hash as string) : await decoyHash);
+    if (!row || !ok || !row.is_active) {
+      await recordFailure(subject, request.ip);
       await app.sqlWrite`
         INSERT INTO auth_audit (user_id, action, ip_address, metadata)
-        VALUES (${row.id}, ${"login_failed_password"}, ${request.ip}::inet, ${app.sqlWrite.json({ attempts, locked })})`;
+        VALUES (${row ? (row.id as string) : null}, ${!row ? "login_failed_unknown" : !row.is_active ? "login_failed_disabled" : "login_failed_password"},
+                ${request.ip}::inet, ${app.sqlWrite.json({ email: subject, attempts: state.count + 1 })})`;
       return reply.code(401).send({
         error: "invalid_credentials",
-        attemptsRemaining: Math.max(0, LOCKOUT_AFTER_FAILED_ATTEMPTS - attempts),
+        attemptsRemaining: Math.max(0, FAIL_LIMIT - (state.count + 1)),
       });
     }
 
-    // Reset failed attempts on correct password.
-    await app.sqlWrite`
-      UPDATE users SET failed_login_attempts = 0, locked_until = null WHERE id = ${row.id}`;
+    // Correct password: forget the wrong tries from this address.
+    await clearFailures(subject, request.ip);
 
     // If MFA is enabled, require a second factor before issuing a full session.
     if (row.mfa_enabled) {
@@ -307,7 +354,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const token = (request as any).cookies?.[ACCESS_COOKIE] ?? request.headers.authorization?.slice(7).trim();
     if (!token) return reply.code(400).send({ error: "missing_token" });
     const deleted = await app.sqlWrite`
-      DELETE FROM sessions WHERE access_token = ${token} RETURNING id`;
+      DELETE FROM sessions WHERE access_token IN (${hashAccessToken(token)}, ${token}) RETURNING id`;
     if (deleted.count === 0) return reply.code(404).send({ error: "session_not_found" });
     reply.clearCookie(ACCESS_COOKIE, { path: "/" });
     reply.clearCookie(REFRESH_COOKIE, { path: "/" });
@@ -404,12 +451,22 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       SELECT id, email, mfa_secret FROM users WHERE id = ${userId} AND mfa_enabled = true AND is_active = true`;
     if (row.count === 0) return reply.code(401).send({ error: "mfa_not_enabled" });
 
-    if (!verifyMfaToken(row[0]!.mfa_secret as string, parsed.data.token)) {
+    // Wrong codes are counted per account, from any address: six digits can be guessed otherwise.
+    const mfaSubject = `mfa:${userId}`;
+    const mfaState = await failureState(mfaSubject, null);
+    if (mfaState.locked) return reply.code(429).send({ error: "too_many_attempts", lockedUntil: mfaState.lockedUntil });
+
+    const secret = row[0]!.mfa_secret as string;
+    if (!verifyMfaToken(openSecret(secret), parsed.data.token)) {
+      await recordFailure(mfaSubject, request.ip);
       await app.sqlWrite`
         INSERT INTO auth_audit (user_id, action, ip_address, metadata)
         VALUES (${userId}, ${"mfa_failed"}, ${request.ip}::inet, ${app.sqlWrite.json({})})`;
       return reply.code(401).send({ error: "invalid_mfa_token" });
     }
+    await clearFailures(mfaSubject, null);
+    // A secret saved before secrets were encrypted is encrypted now.
+    if (!isSealed(secret)) await app.sqlWrite`UPDATE users SET mfa_secret = ${sealSecret(secret)} WHERE id = ${userId}`;
 
     // Clear pending cookie, issue full session.
     reply.clearCookie(MFA_PENDING_COOKIE, { path: "/auth/mfa" });
@@ -435,7 +492,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     // Store the secret tentatively (not yet verified). MFA remains disabled
     // until the user proves ownership via /mfa/verify-setup.
     await app.sqlWrite`
-      UPDATE users SET mfa_secret = ${secret} WHERE id = ${userId}`;
+      UPDATE users SET mfa_secret = ${sealSecret(secret)} WHERE id = ${userId}`;
 
     return reply.send({ secret, otpauthUrl, qrDataUrl });
   });
@@ -454,12 +511,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     if (row.count === 0 || !row[0]!.mfa_secret) return reply.code(400).send({ error: "mfa_setup_not_started" });
     if (row[0]!.mfa_enabled) return reply.code(409).send({ error: "mfa_already_enabled" });
 
-    if (!verifyMfaToken(row[0]!.mfa_secret as string, parsed.data.token)) {
+    if (!verifyMfaToken(openSecret(row[0]!.mfa_secret as string), parsed.data.token)) {
       return reply.code(401).send({ error: "invalid_mfa_token" });
     }
 
     const backupCodes = generateBackupCodes();
-    const hashedBackup = backupCodes.map(hashBackupCode);
+    const hashedBackup = backupCodes.map((code) => hashBackupCode(code, userId));
 
     await app.sqlWrite`
       UPDATE users
@@ -504,7 +561,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
    * POST /auth/mfa/backup-code
    * Use a backup code instead of a TOTP token for login-verify.
    */
-  app.post("/mfa/backup-code", async (request, reply) => {
+  app.post("/mfa/backup-code", { ...loginRateLimit }, async (request, reply) => {
     const pendingCookie = (request as any).cookies?.[MFA_PENDING_COOKIE];
     if (!pendingCookie) return reply.code(401).send({ error: "mfa_not_pending" });
     const parsed = z.object({ code: z.string().min(1) }).safeParse(request.body);
@@ -517,10 +574,18 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       SELECT id, mfa_enabled, mfa_backup_codes FROM users WHERE id = ${userId} AND mfa_enabled = true`;
     if (row.count === 0) return reply.code(401).send({ error: "mfa_not_enabled" });
 
-    const hashed = hashBackupCode(parsed.data.code);
+    // Backup codes share the wrong-code count of the second step.
+    const mfaSubject = `mfa:${userId}`;
+    const mfaState = await failureState(mfaSubject, null);
+    if (mfaState.locked) return reply.code(429).send({ error: "too_many_attempts", lockedUntil: mfaState.lockedUntil });
+
     const codes = (row[0]!.mfa_backup_codes as string[]) ?? [];
-    const idx = codes.indexOf(hashed);
-    if (idx === -1) return reply.code(401).send({ error: "invalid_backup_code" });
+    const idx = findBackupCode(codes, parsed.data.code, userId);
+    if (idx === -1) {
+      await recordFailure(mfaSubject, request.ip);
+      return reply.code(401).send({ error: "invalid_backup_code" });
+    }
+    await clearFailures(mfaSubject, null);
 
     // Remove used backup code.
     const remaining = codes.filter((_, i) => i !== idx);

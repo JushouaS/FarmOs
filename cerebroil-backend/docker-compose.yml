@@ -9,10 +9,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER:     cerebroil
-      POSTGRES_PASSWORD: cerebroil_secret
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB:       cerebroil
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"   # this computer only
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +29,7 @@ services:
     command: ["alembic", "upgrade", "head"]
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://cerebroil:cerebroil_secret@db:5432/cerebroil
+      DATABASE_URL: postgresql+asyncpg://cerebroil:${POSTGRES_PASSWORD}@db:5432/cerebroil
     depends_on:
       db:
         condition: service_healthy
@@ -43,7 +43,7 @@ services:
     command: ["python", "scripts/seed_demo.py"]
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://cerebroil:cerebroil_secret@db:5432/cerebroil
+      DATABASE_URL: postgresql+asyncpg://cerebroil:${POSTGRES_PASSWORD}@db:5432/cerebroil
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -57,9 +57,9 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://cerebroil:cerebroil_secret@db:5432/cerebroil
+      DATABASE_URL: postgresql+asyncpg://cerebroil:${POSTGRES_PASSWORD}@db:5432/cerebroil
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"   # this computer only
     depends_on:
       db:
         condition: service_healthy
@@ -76,9 +76,9 @@ services:
     image: bluenviron/mediamtx:latest
     restart: unless-stopped
     ports:
-      - "8554:8554"   # RTSP
-      - "8889:8889"   # WebRTC / WHEP
-      - "8888:8888"   # HLS
+      - "127.0.0.1:8554:8554"   # RTSP (this computer only)
+      - "127.0.0.1:8889:8889"   # WebRTC / WHEP
+      - "127.0.0.1:8888:8888"   # HLS
     environment:
       # Camera login comes from DAHUA_RTSP_URL in this folder's .env; never a default here.
       - MTX_PATHS_DAHUA_SOURCE=${DAHUA_RTSP_URL:-}
@@ -90,7 +90,7 @@ services:
       context: ../cerebroil-stream
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"   # this computer only
     environment:
       - DAHUA_RTSP_URL=${DAHUA_RTSP_URL:-}
       - KINECT_SOURCE=${KINECT_SOURCE:-simulated}

@@ -39,6 +39,10 @@ namespace CerebroilKinectBridge
         const int MinMm = 500;           // the v2 sensor is only reliable from 0.5 m ...
         const int MaxMm = 4500;          // ... to 4.5 m
 
+        // A viewer must show a short-lived ticket, which the website's API makes from this same key. Without a key
+        // (the default, on this PC only) nobody needs one. With --lan a key is required.
+        static readonly string BridgeKey = Environment.GetEnvironmentVariable("KINECT_BRIDGE_KEY") ?? "";
+
         static readonly object Lock = new object();
         static readonly List<Client> Clients = new List<Client>();
         static ushort[] _raw;
@@ -50,6 +54,11 @@ namespace CerebroilKinectBridge
         static void Main(string[] args)
         {
             bool lan = Array.IndexOf(args, "--lan") >= 0;
+            if (lan && BridgeKey.Length == 0)
+            {
+                Console.WriteLine("--lan needs KINECT_BRIDGE_KEY (the same value as in packages/api/.env), so other devices on the network cannot watch the depth stream without signing in to the website.");
+                return;
+            }
 
             KinectSensor sensor = KinectSensor.GetDefault();
             if (sensor == null)
@@ -135,6 +144,13 @@ namespace CerebroilKinectBridge
                 if (!IsAllowedOrigin(ctx.Request.Headers["Origin"]))
                 {
                     ctx.Response.StatusCode = 403;
+                    ctx.Response.Close();
+                    return;
+                }
+
+                if (!HasValidTicket(ctx.Request))
+                {
+                    ctx.Response.StatusCode = 401;
                     ctx.Response.Close();
                     return;
                 }
@@ -231,6 +247,37 @@ namespace CerebroilKinectBridge
 
             _framesSent++;
             if (_framesSent % 150 == 0) Console.WriteLine("Sent " + _framesSent + " frames.");
+        }
+
+        static string Sign(string payload)
+        {
+            using (System.Security.Cryptography.HMACSHA256 h = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(BridgeKey)))
+            {
+                byte[] mac = h.ComputeHash(Encoding.UTF8.GetBytes(payload));
+                StringBuilder sb = new StringBuilder();
+                foreach (byte b in mac) sb.Append(b.ToString("x2"));
+                return sb.ToString();
+            }
+        }
+
+        // A ticket is "<expiry in seconds since 1970>.<HMAC-SHA256 of the expiry, in hex>", good for a couple of minutes.
+        static bool HasValidTicket(HttpListenerRequest req)
+        {
+            if (BridgeKey.Length == 0) return true;
+            string t = req.QueryString["t"];
+            if (string.IsNullOrEmpty(t)) return false;
+            int dot = t.IndexOf('.');
+            if (dot <= 0) return false;
+            long expiry;
+            if (!long.TryParse(t.Substring(0, dot), out expiry)) return false;
+            long now = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+            if (expiry < now || expiry > now + 600) return false;
+            string expected = Sign(t.Substring(0, dot));
+            string given = t.Substring(dot + 1).ToLowerInvariant();
+            if (given.Length != expected.Length) return false;
+            int diff = 0;
+            for (int i = 0; i < expected.Length; i++) diff |= expected[i] ^ given[i];
+            return diff == 0;
         }
 
         // Pages served from this PC or from the local network are fine.

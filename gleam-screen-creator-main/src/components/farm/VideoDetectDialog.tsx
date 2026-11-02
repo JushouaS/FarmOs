@@ -61,6 +61,8 @@ function errorText(err: unknown, wasCut: boolean): string {
     if (err.message === "video_too_large" || err.status === 413) return tr("That video is over {mb} MB.", { mb: DEMO_VIDEO_MAX_MB });
     if (err.message === "vision_service_unavailable" || err.status === 503) return tr("The camera computer is not reachable.");
     if (err.status === 401) return tr("Your session ended. Sign in again.");
+    if (err.status === 403) return tr("Your account can watch the camera but cannot start checks. Ask an administrator for the Operator role.");
+    if (err.status === 429) return tr("Another video is being checked. Try again in a minute.");
   }
   return tr("Could not check the video. Try again.");
 }

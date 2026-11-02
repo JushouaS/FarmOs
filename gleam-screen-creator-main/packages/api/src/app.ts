@@ -28,6 +28,7 @@ import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
 import { startBehaviorMonitor } from "./behavior-monitor.js";
+import { startHousekeeping } from "./housekeeping.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 
 /** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
@@ -37,7 +38,7 @@ const PRIVATE_NETWORK_ORIGIN =
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: env.LOG_LEVEL },
-    trustProxy: true,
+    trustProxy: env.trustProxy,
   });
 
   await app.register(cors, {
@@ -101,6 +102,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerSettingsRoutes, { prefix: "/settings" });
 
   startBehaviorMonitor(app);
+  startHousekeeping(app);
 
   return app;
 }

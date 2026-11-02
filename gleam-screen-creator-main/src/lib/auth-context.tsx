@@ -38,6 +38,8 @@ const fetchOpts: RequestInit = { credentials: "include" };
  * Username "admin", password "admin". */
 const LOCAL_USERNAME = "admin";
 const LOCAL_PASSWORD = "admin";
+/** The offline sign-in is for development only: a build that is put in front of people has no built-in login. */
+const OFFLINE_ADMIN_ENABLED = Boolean((import.meta as any).env?.DEV);
 const SESSION_KEY = "cb-auth-session";
 
 function readLocalSession(): AuthUser | null {
@@ -180,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Network down — fall through to the local session.
       }
-      const local = readLocalSession();
+      const local = OFFLINE_ADMIN_ENABLED ? readLocalSession() : null;
       if (local) setUser({ ...local, privacyAccepted: readLocalPrivacy() });
       setIsLoading(false);
     })();
@@ -198,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // API unreachable — allow the local admin account instead.
       const username = email.trim().toLowerCase();
-      if (username === LOCAL_USERNAME && password === LOCAL_PASSWORD) {
+      if (OFFLINE_ADMIN_ENABLED && username === LOCAL_USERNAME && password === LOCAL_PASSWORD) {
         const adminUser: AuthUser = {
           id: "admin",
           email: "admin",

@@ -8,6 +8,7 @@ import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
+import { visionStreamUrl } from "@/lib/api-client";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay } from "@/lib/farm/sample";
 import { localeTag, tr } from "@/lib/i18n";
 
@@ -63,10 +64,9 @@ export function VisualsDashboardPage() {
   }, []);
   const nightModeActive = now ? isNightCycle(now, lighting) : false;
 
-  // Vision service (cerebroil-stream, port 5000) on the host that served this
-  // page, so a phone on the LAN gets this machine's feed instead of its own
-  // localhost. Set after mount: the server render can't know that host, and a
-  // guessed src would mismatch on hydration.
+  // The feeds come through the API (it signs in the viewer and holds the camera service's token), so the
+  // camera service itself is not opened to the page. Only its address is kept, for the "not answering"
+  // message below. Set after mount: the server render can't know the host.
   const [feedOrigin, setFeedOrigin] = useState<string | null>(null);
   useEffect(() => {
     // VITE_VISION_ORIGIN points the page at a camera service on another machine
@@ -217,7 +217,7 @@ export function VisualsDashboardPage() {
                     {!dahuaError ? (
                       feedOrigin && (
                         <img
-                          src={`${feedOrigin}/video_feed/dahua`}
+                          src={visionStreamUrl("CAM-01")}
                           alt={tr("Live camera feed of the broilers' behavior")}
                           className="h-full w-full object-contain"
                           onError={() => setDahuaError(true)}
@@ -274,7 +274,7 @@ export function VisualsDashboardPage() {
                     {!kinectError ? (
                       feedOrigin && (
                         <img
-                          src={`${feedOrigin}/video_feed/kinect`}
+                          src={visionStreamUrl("KINECT-01")}
                           alt={tr("Microsoft Kinect 3D depth sensor station feed")}
                           className="h-full w-full object-contain"
                           onError={() => setKinectError(true)}

@@ -51,7 +51,10 @@ export const part16: Messages = {
     "Ang iyong account: ang iyong pangalan, ang iyong email o username, ang iyong tungkulin, at ang iyong password. Ang password ay iniimbak lamang sa anyong hindi na maibabalik (hash), hindi kailanman bilang payak na teksto.",
     "Ang imong account: ang imong ngalan, ang imong email o username, ang imong papel, ug ang imong password. Ang password gitipig lang sa porma nga dili na mabalik (hash), dili gayod isip tin-aw nga teksto.",
   ],
-  "Your photo, if you add one to your account.": ["Ang iyong litrato, kung maglalagay ka sa iyong account.", "Ang imong litrato, kung mobutang ka sa imong account."],
+  "Your photo, if you add one. It stays in your own browser on that device and is not sent to the server.": [
+    "Ang iyong litrato, kung maglalagay ka. Nananatili ito sa iyong sariling browser sa device na iyon at hindi ipinapadala sa server.",
+    "Ang imong litrato, kung mobutang ka. Magpabilin kini sa imong kaugalingong browser niana nga device ug dili ipadala sa server.",
+  ],
   "Sign-in records: when you sign in or out, the device and browser you used, and the network address (IP address).": [
     "Mga talaan ng pag-sign in: kung kailan ka nag-sign in o nag-sign out, ang device at browser na ginamit mo, at ang address ng network (IP address).",
     "Mga rekord sa pag-sign in: kung kanus-a ka nag-sign in o nag-sign out, ang device ug browser nga imong gigamit, ug ang address sa network (IP address).",
@@ -113,6 +116,10 @@ export const part16: Messages = {
   "Outside services, only to do what you asked: an email service to send alert emails, and your browser's push service to deliver browser notifications.": [
     "Mga serbisyo sa labas, para lamang gawin ang hiniling mo: isang serbisyo ng email para magpadala ng mga email na alerto, at ang push service ng iyong browser para maghatid ng mga abiso sa browser.",
     "Mga serbisyo sa gawas, aron lang buhaton ang imong gihangyo: usa ka serbisyo sa email aron mopadala og mga email nga pasidaan, ug ang push service sa imong browser aron mohatud og mga pahibalo sa browser.",
+  ],
+  "An outside AI service (Groq), when someone asks for an Intelligence briefing. It receives farm figures such as sensor readings and bird counts, not personal information.": [
+    "Isang panlabas na serbisyo ng AI (Groq), kapag may humiling ng Intelligence briefing. Tumatanggap ito ng mga sukat ng bukid tulad ng mga sukat ng sensor at bilang ng manok, hindi personal na impormasyon.",
+    "Usa ka gawas nga serbisyo sa AI (Groq), kung adunay mohangyo og Intelligence briefing. Nakadawat kini og mga sukod sa uma sama sa mga sukod sa sensor ug ihap sa manok, dili personal nga impormasyon.",
   ],
   "Feedback you send may also be copied to the owner's Google Drive.": [
     "Ang feedback na ipinapadala mo ay maaari ring kopyahin sa Google Drive ng may-ari.",

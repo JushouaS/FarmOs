@@ -29,11 +29,12 @@ const SEVERITY_STYLE: Record<Severity, { color: string; bg: string; border: stri
   alert: { color: "var(--status-red-text)", bg: "var(--status-red-bg)", border: "var(--status-red-border)", Icon: OctagonAlert },
 };
 
-type ErrorKey = "err_unavailable" | "err_noFrame" | "err_session" | "err_generic";
+type ErrorKey = "err_unavailable" | "err_noFrame" | "err_session" | "err_forbidden" | "err_generic";
 
 function errorKeyFor(err: unknown): ErrorKey {
   if (err instanceof ApiError) {
     if (err.status === 401) return "err_session";
+    if (err.status === 403) return "err_forbidden";
     // The API answers "vision_service_unavailable" when it cannot reach the camera
     // service, and "analyze_error" with a 503 when the service has no frame.
     if (err.message === "vision_service_unavailable") return "err_unavailable";

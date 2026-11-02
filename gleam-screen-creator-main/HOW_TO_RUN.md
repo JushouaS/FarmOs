@@ -261,6 +261,11 @@ Username: admin
 Password: admin
 ```
 
+"Your own computer" means the computer the API runs on: a phone or another laptop on the network cannot
+use `admin` / `admin`, even in development. Accounts are not open to the public either: only a signed-in
+administrator can create one (`POST /auth/register`, with the role `ADMIN`, `FARM_MANAGER`, `OPERATOR` or
+`VIEWER`). There is no screen for it yet.
+
 ---
 
 ## 5. Check that each part is alive
@@ -284,8 +289,10 @@ cd /d "...\packages\api"
 npm run db:local:status
 ```
 
-Camera video, straight from the camera service (no login needed):
-open **http://localhost:5000/video_feed/dahua** in the browser. You should see live video.
+Camera video, straight from the camera service, on the computer that runs it:
+open **http://localhost:5000/video_feed/dahua** in the browser. You should see live video. Any other
+computer gets `unauthorized` from that address on purpose: everyone else watches through the website's
+**Live Camera** page, which signs you in first.
 
 ---
 
@@ -362,12 +369,12 @@ blocks that. A phone hotspot or a small router works.
    bash setup-pi.sh
    ```
 
-   It ends by printing the Pi's address. Open `http://PI-WIFI-ADDRESS:5000/video_feed/dahua` in the
-   laptop browser to check the video.
+   It ends by printing the Pi's address. The Pi answers only to the API (which sends the token) and to
+   the Pi itself, so check the video from the laptop with the website's **Live Camera** page.
 
 **On the laptop**, point the website and the API at the Pi, then restart both (Windows 2 and 4):
 
-- Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000`
+- Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000` (only used for the "not answering" message now; the video itself comes through the API)
 - `packages\api\.env`: `VISION_SERVICE_URL=http://PI-WIFI-ADDRESS:5000`
 - `VISION_SERVICE_TOKEN` must be the same in `packages\api\.env` and in the Pi's `cerebroil-stream/.env`.
 
@@ -505,8 +512,11 @@ You should see `Kinect is sending data.` and `Kinect bridge ready on ws://localh
 **Live Camera**, choose **Kinect**. A green `Live 3D depth` badge appears. Drag to turn the view,
 double-click (or **Reset view**) to go back. Press Ctrl+C in that window to stop it.
 
-It only accepts pages from this computer or your local network. To let a phone see the 3D view,
-start it with `KinectBridge.exe --lan` from an administrator window.
+It only accepts pages from this computer or your local network. To let a phone see the 3D view, first
+make a key (at least 16 characters), put it in `packages\api\.env` as `KINECT_BRIDGE_KEY=...`, restart the
+API, set the same value in the window that starts the bridge (`set KINECT_BRIDGE_KEY=...`), and start it with
+`KinectBridge.exe --lan` from an administrator window. With a key, the website gives each signed-in viewer a
+short-lived ticket and the bridge refuses anyone without one; `--lan` will not start without a key.
 
 ---
 
@@ -589,3 +599,30 @@ What is real and what is a stand-in (important when you write about it):
 The policy is at `/privacy` (anyone can read it, signed in or not) and is linked from the sign-in page and the account menu. After signing in, a person has to read a short summary and tick "I have read and understood" before the app opens; declining signs them out. The agreement is saved per person and per version in the `privacy_consents` table (with the time and IP address) and noted in `auth_audit`. Run `npm run db:migrate` once to add the table.
 
 When the policy changes in a way that matters, edit the text in `src/lib/privacy-policy.ts`, set `POLICY_UPDATED` in `src/lib/privacy-version.ts`, and set `PRIVACY_VERSION` in `packages/api/src/routes/auth.ts` to a new value. Everyone is then asked to agree again at their next sign-in. The offline admin account (no API running) keeps its agreement in the browser instead.
+
+
+## Security notes
+
+What was found and closed in the security review, and what you still decide:
+
+- **Accounts.** Only a signed-in administrator can create accounts (`POST /auth/register`). `admin` / `admin` works
+  only from the computer the API runs on, in development mode.
+- **Wrong passwords.** Five wrong tries in 30 minutes lock that email from that network address for the rest of the
+  30 minutes. The answers are the same whether or not the email has an account. The second-step code is limited
+  per account. Run `npm run db:migrate` once (it adds the `login_failures` table).
+- **Stored secrets.** Sessions keep a hash of the token, not the token. Two-step (MFA) secrets are encrypted with a
+  key made from `JWT_SECRET`, so changing `JWT_SECRET` also means turning two-step sign-in off and on again for
+  those accounts. Backup codes are stored as keyed hashes.
+- **Camera service.** Every route needs the token (the API sends it). Only the computer the service runs on may
+  open its own control page. The live picture reaches the website through the API. The API and the camera service
+  talk over plain http, so keep them on a network you trust, or put a TLS proxy in front.
+- **Camera actions.** Watching needs a sign-in; a scan, a capture or a test video needs the Operator, Farm Manager
+  or Administrator role. One test video runs at a time.
+- **Behind a proxy?** Set `TRUST_PROXY` to the proxy's address. Use HTTPS in production (`COOKIE_SECURE` stays on
+  `auto` and the cookies become Secure there).
+- **Older backend (`cerebroil-backend`).** Every route now needs an `X-API-Key` from `API_KEYS` (none set = closed),
+  its ports are open to this computer only, and it needs `POSTGRES_PASSWORD` in `.env`. The website does not use it.
+- **Known and accepted.** `zod` has an open advisory that needs a major upgrade (large oversized lists). `minimatch` and
+  `brace-expansion` come in through the linting tools only. A person's role is read from their token, so a role change
+  takes up to 15 minutes to reach a token that is already open; a disabled account is refused
+  at once, on its next request. There is no screen to create, disable or reset accounts yet.

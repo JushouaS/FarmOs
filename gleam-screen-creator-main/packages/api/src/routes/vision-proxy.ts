@@ -1,7 +1,8 @@
+import { createHmac } from "node:crypto";
 import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { env } from "../config.js";
-import { requireAuth } from "../auth/middleware.js";
+import { requireAuth, requireRole } from "../auth/middleware.js";
 
 /**
  * Vision proxy routes — forward camera requests to the Flask vision service.
@@ -16,6 +17,12 @@ import { requireAuth } from "../auth/middleware.js";
 
 const VISION_BASE = env.VISION_SERVICE_URL;
 const VISION_TOKEN = env.VISION_SERVICE_TOKEN;
+/** Who may start camera work (a scan, a capture, a test video). Everyone signed in may watch the feed. */
+const CAN_USE_CAMERA = requireRole("OPERATOR", "FARM_MANAGER", "ADMIN");
+
+// The test-video jobs keep the camera computer busy for minutes: one at a time.
+let demoJobRunning = false;
+
 /** Largest video the "Test video" button accepts. Also enforced by the vision service. */
 const DEMO_VIDEO_MAX_BYTES = 60 * 1024 * 1024;
 
@@ -142,18 +149,36 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   });
 
   // -----------------------------------------------------------------------
+  // GET /visual/kinect-ticket — lets a signed-in viewer open the Kinect depth
+  // stream. The bridge checks the ticket against the same key; without a key
+  // configured there is no ticket and the bridge asks for none.
+  // -----------------------------------------------------------------------
+  app.get("/kinect-ticket", { preHandler: [requireAuth] }, async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    const key = env.KINECT_BRIDGE_KEY;
+    if (!key) return reply.send({ ticket: null });
+    const expiry = String(Math.floor(Date.now() / 1000) + 120);
+    return reply.send({ ticket: `${expiry}.${createHmac("sha256", key).update(expiry).digest("hex")}` });
+  });
+
+  // -----------------------------------------------------------------------
   // GET /visual/stream/:cameraId — MJPEG multipart stream (proxied)
   // -----------------------------------------------------------------------
   app.get("/stream/:cameraId", { preHandler: [requireAuth] }, async (request, reply) => {
     const { cameraId } = request.params as { cameraId: string };
+    // C-4: 15s connect timeout prevents stalled cameras from holding a server
+    // connection open indefinitely. It must end once the camera has answered:
+    // AbortSignal.timeout would also cut the stream itself 15 seconds in.
+    const upstream = new AbortController();
+    const connectTimer = setTimeout(() => upstream.abort(), 15_000);
+    // The viewer leaving closes the camera connection too.
+    request.raw.on("close", () => upstream.abort());
     try {
-      // C-4: 15s connect timeout prevents stalled cameras from holding a
-      // server connection open indefinitely. The stream itself is piped
-      // directly so it does not time out after connect.
       const res = await fetch(`${VISION_BASE}/stream/${encodeURIComponent(cameraId)}`, {
         headers: visionHeaders(),
-        signal: AbortSignal.timeout(15_000),
+        signal: upstream.signal,
       });
+      clearTimeout(connectTimer);
       if (!res.ok) {
         const body = (await res.text().catch(() => "")).slice(0, 500);
         return reply.code(res.status).send({ error: "stream_error", detail: body });
@@ -173,6 +198,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
 
       return reply.code(502).send({ error: "empty_stream" });
     } catch (err) {
+      clearTimeout(connectTimer);
       return reply.code(503).send({
         error: "vision_service_unavailable",
         message: err instanceof Error ? err.message : "stream failed",
@@ -183,7 +209,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   // -----------------------------------------------------------------------
   // POST /visual/capture/:cameraId — single JPEG frame + metadata
   // -----------------------------------------------------------------------
-  app.post("/capture/:cameraId", { preHandler: [requireAuth] }, async (request, reply) => {
+  app.post("/capture/:cameraId", { preHandler: [requireAuth, CAN_USE_CAMERA] }, async (request, reply) => {
     const { cameraId } = request.params as { cameraId: string };
     try {
       const res = await fetch(`${VISION_BASE}/capture/${encodeURIComponent(cameraId)}`, {
@@ -215,7 +241,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   // and is tolerant of a camera with no matching house/sensor row rather
   // than failing the whole request.
   // -----------------------------------------------------------------------
-  app.post("/analyze/:cameraId", { preHandler: [requireAuth] }, async (request, reply) => {
+  app.post("/analyze/:cameraId", { preHandler: [requireAuth, CAN_USE_CAMERA] }, async (request, reply) => {
     const { cameraId } = request.params as { cameraId: string };
     let analysis: any;
     try {
@@ -242,7 +268,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   // -----------------------------------------------------------------------
   app.post(
     "/scan/:cameraId",
-    { preHandler: [requireAuth], config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    { preHandler: [requireAuth, CAN_USE_CAMERA], config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const { cameraId } = request.params as { cameraId: string };
       let pending = scansInFlight.get(cameraId);
@@ -274,7 +300,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   app.post(
     "/demo-detect",
     {
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, CAN_USE_CAMERA],
       bodyLimit: DEMO_VIDEO_MAX_BYTES,
       config: { rateLimit: { max: 6, timeWindow: "1 minute" } },
     },
@@ -283,6 +309,8 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
       if (!Buffer.isBuffer(video) || video.length === 0) {
         return reply.code(400).send({ error: "empty_video" });
       }
+      if (demoJobRunning) return reply.code(429).send({ error: "busy", message: "Another video is being checked. Try again in a minute." });
+      demoJobRunning = true;
       try {
         // ?night=1 tells the detector the clip was filmed with the lights off.
         const night = (request.query as { night?: string }).night === "1";
@@ -297,6 +325,8 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         return reply.code(res.status).send(body);
       } catch {
         return reply.code(503).send({ error: "vision_service_unavailable" });
+      } finally {
+        demoJobRunning = false;
       }
     },
   );
@@ -309,7 +339,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   app.post(
     "/demo-convert",
     {
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, CAN_USE_CAMERA],
       bodyLimit: DEMO_VIDEO_MAX_BYTES,
       config: { rateLimit: { max: 6, timeWindow: "1 minute" } },
     },
@@ -318,6 +348,8 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
       if (!Buffer.isBuffer(video) || video.length === 0) {
         return reply.code(400).send({ error: "empty_video" });
       }
+      if (demoJobRunning) return reply.code(429).send({ error: "busy", message: "Another video is being checked. Try again in a minute." });
+      demoJobRunning = true;
       try {
         const res = await fetch(`${VISION_BASE}/demo/convert`, {
           method: "POST",
@@ -332,6 +364,8 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         return reply.header("Content-Type", "video/mp4").send(Buffer.from(await res.arrayBuffer()));
       } catch {
         return reply.code(503).send({ error: "vision_service_unavailable" });
+      } finally {
+        demoJobRunning = false;
       }
     },
   );

@@ -122,6 +122,7 @@ export const CHROME = {
   err_unavailable: T("The camera service is not reachable. Start cerebroil-stream and try again."),
   err_noFrame: T("The camera has no picture right now. Check the camera connection and try again."),
   err_session: T("Your session ended. Sign in again."),
+  err_forbidden: T("Your account can watch the camera but cannot start checks. Ask an administrator for the Operator role."),
   err_generic: T("The analysis could not finish. Try again."),
 } as const;
 

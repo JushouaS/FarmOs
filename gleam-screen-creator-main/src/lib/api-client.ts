@@ -360,6 +360,12 @@ export async function analyzeFrame(cameraId: string): Promise<AnalysisResult> {
   });
 }
 
+/** A short-lived ticket for the Kinect depth stream, or null when the bridge asks for none. */
+export async function fetchKinectTicket(): Promise<string | null> {
+  const res = await apiFetch<{ ticket: string | null }>("/visual/kinect-ticket");
+  return res.ticket;
+}
+
 /** Build the MJPEG stream URL for a given camera (served via Fastify proxy). */
 export function visionStreamUrl(cameraId: string): string {
   return `${API_BASE}/visual/stream/${encodeURIComponent(cameraId)}`;

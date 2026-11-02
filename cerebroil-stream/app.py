@@ -11,6 +11,7 @@ Also provides /submit-sus for SUS questionnaire feedback.
 from __future__ import annotations
 
 import csv
+import hmac
 import math
 import os
 import re
@@ -390,15 +391,35 @@ def _interpret(score: float) -> str:
 # (/health, /cameras, /stream/<id>, /capture/<id>, /analyze/<id>) — these did
 # not previously exist, which made every "Live Camera" / analyze call fail.
 
+def _has_valid_token() -> bool:
+    """True when the request carries the shared secret. Compared in constant time."""
+    sent = request.headers.get("X-Vision-Token", "")
+    return bool(VISION_SERVICE_TOKEN) and hmac.compare_digest(sent.encode("utf-8"), VISION_SERVICE_TOKEN.encode("utf-8"))
+
+
 def _require_vision_token() -> tuple[Response, int] | None:
     """Returns an (error response, status) pair if the shared-secret header
     is missing/wrong, else None. No insecure default: an unset token refuses
     every protected route rather than silently allowing access."""
     if not VISION_SERVICE_TOKEN:
         return jsonify({"error": "vision_token_not_configured"}), 500
-    if request.headers.get("X-Vision-Token", "") != VISION_SERVICE_TOKEN:
+    if not _has_valid_token():
         return jsonify({"error": "unauthorized"}), 401
     return None
+
+
+_THIS_COMPUTER = {"127.0.0.1", "::1"}
+
+
+@app.before_request
+def _guard_every_route():
+    """Nothing here is open to the network. A request needs the shared token (the API sends it on
+    everything it asks for), except that someone at this computer itself may open its own control
+    page, its feeds and its status. The live feeds reach the web app through the API, which signs
+    the viewer in first."""
+    if _has_valid_token() or request.remote_addr in _THIS_COMPUTER:
+        return None
+    return jsonify({"error": "unauthorized"}), 401
 
 
 def _resolve_camera(camera_id: str) -> str | None:
@@ -593,6 +614,9 @@ def vision_analyze(camera_id: str) -> Response:
 
 
 MAX_DEMO_VIDEO_BYTES = 60 * 1024 * 1024
+# Flask refuses any request body bigger than this as it reads it, so an upload that sends no Content-Length
+# (chunked) cannot get past the size checks in the two routes below.
+app.config["MAX_CONTENT_LENGTH"] = MAX_DEMO_VIDEO_BYTES + 1024 * 1024
 
 
 @app.post("/demo/detect")

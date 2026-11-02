@@ -14,9 +14,10 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.dependencies import require_api_key
 from app.config import get_settings
 from app.api.v1 import telemetry, analytics, alerts
 from app.api import websockets as ws_router
@@ -54,12 +55,15 @@ def create_app() -> FastAPI:
     )
 
     # ── HTTP routers ──────────────────────────────────────────────────────────
+    # Every route needs an X-API-Key from API_KEYS. With none configured nothing is let in, so the
+    # service is closed until a key is set. (Before this only the telemetry upload asked for one.)
     from app.api.v1 import farms, batches
-    app.include_router(farms.router,    prefix="/api/v1", tags=["Farms & Houses"])
-    app.include_router(batches.router,  prefix="/api/v1", tags=["Batches & Growth"])
-    app.include_router(telemetry.router, prefix="/api/v1", tags=["Telemetry"])
-    app.include_router(analytics.router, prefix="/api/v1", tags=["Analytics"])
-    app.include_router(alerts.router,    prefix="/api/v1", tags=["Alerts"])
+    keyed = [Depends(require_api_key)]
+    app.include_router(farms.router,    prefix="/api/v1", tags=["Farms & Houses"], dependencies=keyed)
+    app.include_router(batches.router,  prefix="/api/v1", tags=["Batches & Growth"], dependencies=keyed)
+    app.include_router(telemetry.router, prefix="/api/v1", tags=["Telemetry"], dependencies=keyed)
+    app.include_router(analytics.router, prefix="/api/v1", tags=["Analytics"], dependencies=keyed)
+    app.include_router(alerts.router,    prefix="/api/v1", tags=["Alerts"], dependencies=keyed)
 
     # ── WebSocket router ──────────────────────────────────────────────────────
     app.include_router(ws_router.router, tags=["WebSockets"])

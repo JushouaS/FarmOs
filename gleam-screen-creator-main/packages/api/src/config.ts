@@ -21,6 +21,13 @@ const schema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
   API_HOST: z.string().default("127.0.0.1"),
+  // Which proxy in front of the API to believe about the client's address (X-Forwarded-For). "false" (the
+  // default) trusts nobody, so the address cannot be faked with a header. Behind a reverse proxy, give its
+  // address, for example "10.0.0.5" or "10.0.0.0/8"; "true" trusts every hop and is only for a closed network.
+  TRUST_PROXY: z.preprocess((v) => (v === "" ? undefined : v), z.string().default("false")),
+  // Whether the sign-in cookies are marked Secure (sent over HTTPS only). "auto" means yes in production.
+  // Over plain http on a local network a Secure cookie is never sent back, so leave it "auto" there.
+  COOKIE_SECURE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["auto", "true", "false"]).default("auto")),
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_CORS_ORIGINS: z
     .string()
@@ -45,6 +52,10 @@ const schema = z.object({
   VISION_SERVICE_URL: z.string().url().default("http://127.0.0.1:5000"),
   // H-4: no insecure default — server will refuse to start without a real token.
   VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
+
+  // Shared with the Kinect bridge (its KINECT_BRIDGE_KEY): the API hands signed-in viewers a short-lived ticket made
+  // from it, and the bridge only streams depth frames to a viewer with one. Unset = the bridge needs no ticket.
+  KINECT_BRIDGE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),
 
   // SUS questionnaire / "Report a problem" form (routes/feedback.ts).
   // Every response is written to a local CSV. When BOTH script settings are
@@ -91,5 +102,8 @@ if (!parsed.success) {
 
 export const env = Object.freeze({
   ...parsed.data,
+  cookieSecure: parsed.data.COOKIE_SECURE === "auto" ? parsed.data.NODE_ENV === "production" : parsed.data.COOKIE_SECURE === "true",
+  /** Fastify's trustProxy setting: false, true, or a list of addresses. */
+  trustProxy: ((v: string) => (v === "false" ? false : v === "true" ? true : v.split(",").map((x) => x.trim()).filter(Boolean)))(parsed.data.TRUST_PROXY),
   databaseWriteUrl: parsed.data.DATABASE_WRITE_URL ?? parsed.data.DATABASE_URL,
 } as const);
