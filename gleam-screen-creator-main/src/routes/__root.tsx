@@ -16,6 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider, useAuth } from "../lib/auth-context";
 import { AppSkeleton } from "@/components/farm/AppSkeleton";
 import { PrivacyGate } from "@/components/farm/PrivacyGate";
+import { ChangePasswordGate } from "@/components/farm/ChangePasswordGate";
 import { LanguageProvider, tr } from "@/lib/i18n";
 
 function NotFoundComponent() {
@@ -176,6 +177,8 @@ function AuthGuard({ children }: { children: ReactNode }) {
   // doesn't bounce to /login before /auth/me resolves.
   if (isLoading) return <AppSkeleton />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Signed in with a temporary password: choose their own first.
+  if (user?.mustChangePassword) return <ChangePasswordGate />;
   // Until the person has agreed to the current Privacy Policy, nothing else opens (the Contact page stays reachable from it).
   if (user?.privacyAccepted === false && !location.pathname.startsWith("/contact")) return <PrivacyGate />;
   return <>{children}</>;

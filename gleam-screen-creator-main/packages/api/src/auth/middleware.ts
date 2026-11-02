@@ -41,7 +41,7 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
     // The roles come from the database, not from the token, so a change of role (or of what a role
     // may do) applies on the very next request instead of when the token runs out.
     const session = await request.server.sqlRead`
-      SELECT s.id,
+      SELECT s.id, u.must_change_password,
              COALESCE(array_agg(DISTINCT r.code) FILTER (WHERE r.code IS NOT NULL), '{}') AS roles,
              COALESCE(array_agg(DISTINCT p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permissions
       FROM sessions s
@@ -51,10 +51,19 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
       LEFT JOIN role_permissions rp ON rp.role_id = r.id
       LEFT JOIN permissions p ON p.id = rp.permission_id
       WHERE s.access_token = ANY(${[hashAccessToken(token), token]}) AND u.is_active
-      GROUP BY s.id
+      GROUP BY s.id, u.must_change_password
       LIMIT 1`;
     if (session.count === 0) {
       return reply.code(401).send({ error: "session_revoked" });
+    }
+
+    // Someone on a temporary password may only see who they are, change the password, and sign out.
+    if (session[0]!.must_change_password) {
+      const path = request.url.split("?")[0];
+      const allowed =
+        (request.method === "GET" && path === "/auth/me") ||
+        (request.method === "POST" && (path === "/auth/password" || path === "/auth/logout"));
+      if (!allowed) return reply.code(403).send({ error: "password_change_required" });
     }
 
     request.authUser = {

@@ -20,6 +20,7 @@ import {
   isSealed,
 } from "../auth/auth.js";
 import { randomBytes } from "node:crypto";
+import { sendTemporaryPassword } from "../account-mail.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import type { AccessTokenPayload } from "../auth/auth.js";
 
@@ -126,7 +127,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   /** Issue a new access/refresh pair for a validated user. */
   async function issueSession(userId: string, ip: string | null, ua: string | null) {
     const user = await app.sqlRead`
-      SELECT u.id, u.email,
+      SELECT u.id, u.email, u.must_change_password,
              COALESCE(array_agg(DISTINCT r.code) FILTER (WHERE r.code IS NOT NULL), '{}') AS roles,
              COALESCE(array_agg(DISTINCT p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permissions
       FROM users u
@@ -135,7 +136,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       LEFT JOIN role_permissions rp ON rp.role_id = r.id
       LEFT JOIN permissions p ON p.id = rp.permission_id
       WHERE u.id = ${userId} AND u.is_active = true
-      GROUP BY u.id, u.email
+      GROUP BY u.id, u.email, u.must_change_password
       LIMIT 1`;
     if (user.count === 0) throw new Error("user_not_found");
     const row = user[0]!;
@@ -175,6 +176,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         email: row.email,
         roles: row.roles as string[],
         permissions: row.permissions as string[],
+        mustChangePassword: Boolean(row.must_change_password),
       },
     };
   }
@@ -234,10 +236,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const existing = await app.sqlRead`SELECT 1 FROM users WHERE email = ${email}`;
     if (existing.count > 0) return reply.code(409).send({ error: "email_taken" });
 
+    // The password an administrator types is temporary: it expires, and the person must replace it at the first sign-in.
     const passwordHash = await hashPassword(password);
+    const expiresAt = new Date(Date.now() + env.TEMP_PASSWORD_HOURS * 3600_000);
     const inserted = await app.sqlWrite`
-      INSERT INTO users (email, password_hash, full_name)
-      VALUES (${email}, ${passwordHash}, ${fullName ?? null})
+      INSERT INTO users (email, password_hash, full_name, must_change_password, password_expires_at)
+      VALUES (${email}, ${passwordHash}, ${fullName ?? null}, true, ${expiresAt.toISOString()})
       RETURNING id`;
     const userId = inserted[0]!.id as string;
 
@@ -251,7 +255,10 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     await app.sqlWrite`
       INSERT INTO auth_audit (user_id, action, ip_address, metadata)
       VALUES (${request.authUser!.sub}, ${"user_created"}, ${request.ip}::inet, ${app.sqlWrite.json({ createdUserId: userId, roles })})`;
-    return reply.code(201).send({ user: { id: userId, email, roles } });
+    // The email goes out after the account exists; if it cannot be sent the account is still there and the
+    // administrator is told, so they can give the password in person.
+    const mail = await sendTemporaryPassword({ email, password, expiresAt, reason: "new" });
+    return reply.code(201).send({ user: { id: userId, email, roles }, expiresAt: expiresAt.toISOString(), email_sent: mail.sent, email_problem: mail.reason ?? null });
   });
 
   app.post("/login", { ...loginRateLimit }, async (request, reply) => {
@@ -290,7 +297,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     }
 
     const found = await app.sqlRead`
-      SELECT id, password_hash, is_active, mfa_enabled, mfa_secret
+      SELECT id, password_hash, is_active, mfa_enabled, mfa_secret, must_change_password, password_expires_at
       FROM users WHERE email = ${email}`;
     const row = found.count > 0 ? found[0]! : null;
     // The password is always checked (against a decoy when there is no such account), and a missing account, a
@@ -310,6 +317,15 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     // Correct password: forget the wrong tries from this address.
     await clearFailures(subject, request.ip);
+
+    // A temporary password nobody used in time. Said only now, to someone who knows the password, so it does not
+    // tell a stranger anything.
+    if (row.must_change_password && row.password_expires_at && new Date(row.password_expires_at as string).getTime() < Date.now()) {
+      await app.sqlWrite`
+        INSERT INTO auth_audit (user_id, action, ip_address)
+        VALUES (${row.id as string}, ${"login_refused_password_expired"}, ${request.ip}::inet)`;
+      return reply.code(403).send({ error: "password_expired", message: "This temporary password has expired. Ask your administrator for a new one." });
+    }
 
     // If MFA is enabled, require a second factor before issuing a full session.
     if (row.mfa_enabled) {
@@ -370,6 +386,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const user = request.authUser!;
     const row = await app.sqlRead`
       SELECT id, email, full_name, avatar_url, analysis_language, last_login_at, created_at,
+             must_change_password,
              EXISTS (
                SELECT 1 FROM privacy_consents c
                WHERE c.user_id = users.id AND c.version = ${PRIVACY_VERSION}
@@ -617,10 +634,15 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     const policy = validatePassword(parsed.data.newPassword);
     if (!policy.ok) return reply.code(400).send({ error: "weak_password", message: policy.reason });
+    if (parsed.data.newPassword === parsed.data.currentPassword) {
+      return reply.code(400).send({ error: "same_password", message: "Choose a password different from the current one." });
+    }
 
     const newHash = await hashPassword(parsed.data.newPassword);
     await app.sqlWrite`
-      UPDATE users SET password_hash = ${newHash}, updated_at = now() WHERE id = ${userId}`;
+      UPDATE users SET password_hash = ${newHash}, updated_at = now(),
+                       must_change_password = false, password_expires_at = null
+      WHERE id = ${userId}`;
 
     // Revoke all sessions for this user.
     await app.sqlWrite`DELETE FROM sessions WHERE user_id = ${userId}`;
@@ -658,6 +680,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     const rows = await app.sqlRead`
       SELECT u.id, u.email, u.full_name AS "fullName", u.is_active AS "isActive", u.last_login_at AS "lastLoginAt",
+             u.must_change_password AS "mustChangePassword", u.password_expires_at AS "passwordExpiresAt",
              COALESCE(
                (SELECT r.code FROM roles r
                 INNER JOIN user_roles ur ON ur.role_id = r.id
@@ -749,8 +772,11 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const policy = validatePassword(body.data.newPassword);
     if (!policy.ok) return reply.code(400).send({ error: "weak_password", message: policy.reason });
 
+    // Like a new account: the password is temporary, must be replaced at the next sign-in, and expires.
+    const expiresAt = new Date(Date.now() + env.TEMP_PASSWORD_HOURS * 3600_000);
     const done = await app.sqlWrite`
-      UPDATE users SET password_hash = ${await hashPassword(body.data.newPassword)}, updated_at = now()
+      UPDATE users SET password_hash = ${await hashPassword(body.data.newPassword)}, updated_at = now(),
+                       must_change_password = true, password_expires_at = ${expiresAt.toISOString()}
       WHERE id = ${id}::uuid RETURNING email::text AS email`;
     if (done.count === 0) return reply.code(404).send({ error: "user_not_found" });
     await app.sqlWrite`DELETE FROM sessions WHERE user_id = ${id}::uuid`;
@@ -758,7 +784,8 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     await app.sqlWrite`
       INSERT INTO auth_audit (user_id, action, ip_address, metadata)
       VALUES (${request.authUser!.sub}, ${"password_reset_by_admin"}, ${request.ip}::inet, ${app.sqlWrite.json({ targetUserId: id })})`;
-    return reply.send({ changed: true, id });
+    const mail = await sendTemporaryPassword({ email: done[0]!.email as string, password: body.data.newPassword, expiresAt, reason: "reset" });
+    return reply.send({ changed: true, id, expiresAt: expiresAt.toISOString(), email_sent: mail.sent, email_problem: mail.reason ?? null });
   });
 
   /**

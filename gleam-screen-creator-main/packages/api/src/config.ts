@@ -53,6 +53,9 @@ const schema = z.object({
   // H-4: no insecure default — server will refuse to start without a real token.
   VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
 
+  // How long the temporary password an administrator hands out keeps working if the person has not signed in.
+  TEMP_PASSWORD_HOURS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(336).default(48)),
+
   // Shared with the Kinect bridge (its KINECT_BRIDGE_KEY): the API hands signed-in viewers a short-lived ticket made
   // from it, and the bridge only streams depth frames to a viewer with one. Unset = the bridge needs no ticket.
   KINECT_BRIDGE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),

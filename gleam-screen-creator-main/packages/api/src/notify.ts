@@ -130,6 +130,17 @@ async function sendEmail(user: User, notice: Notice): Promise<{ ok: boolean; rea
   }
 }
 
+/** One plain-text message to one address (the temporary-password email uses it). */
+export async function sendMessage(to: string, subject: string, text: string): Promise<{ ok: boolean; reason?: string }> {
+  if (!emailConfigured()) return { ok: false, reason: "email_not_configured" };
+  try {
+    await mailer().sendMail({ from: env.SMTP_FROM, to, subject, text });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message.slice(0, 200) : "send_failed" };
+  }
+}
+
 async function sendPush(app: FastifyInstance, user: User, notice: Notice): Promise<{ ok: boolean; reason?: string }> {
   if (!initPush()) return { ok: false, reason: "push_not_configured" };
   const subs = await app.sqlRead`

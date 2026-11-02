@@ -78,6 +78,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     keyGenerator: (request) =>
       (request.authUser?.sub ?? request.ip?.toString() ?? "anonymous"),
     errorResponseBuilder: (request, context) => ({
+      // Without a statusCode Fastify answered "too many requests" with a 500.
+      statusCode: 429,
       error: "rate_limit_exceeded",
       retryAfter: context.after,
     }),

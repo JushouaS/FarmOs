@@ -152,6 +152,7 @@ function LoginPage() {
       const msgs: Record<string, string> = {
         invalid_credentials: tr("Incorrect username or password."),
         user_disabled: tr("This account is disabled. Contact your administrator."),
+        password_expired: tr("This temporary password has expired. Ask your administrator for a new one."),
         account_locked: tr("Account temporarily locked due to too many failed attempts."),
         rate_limit_exceeded: tr("Too many attempts. Wait a minute and try again."),
         login_failed: tr("Could not reach the server. Check your connection."),

@@ -83,6 +83,8 @@ export interface AuthUser {
   fullName?: string | null;
   /** Whether this person has agreed to the current Privacy Policy. Unknown (undefined) until the server says. */
   privacyAccepted?: boolean;
+  /** Signed in with a temporary password: the next thing they must do is choose their own. */
+  mustChangePassword?: boolean;
   /** The language the Live Camera analysis shows in (Settings > Account). */
   analysisLanguage?: "en" | "tl" | "ceb";
   roles: string[];
@@ -141,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               fullName: data.user.full_name ?? prev.fullName ?? null,
               analysisLanguage: data.user.analysis_language ?? prev.analysisLanguage,
               privacyAccepted: data.user.privacy_accepted ?? prev.privacyAccepted,
+              mustChangePassword: data.user.must_change_password ?? prev.mustChangePassword,
             }
           : prev,
       );
@@ -169,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             fullName: data.user.full_name ?? data.user.fullName ?? null,
             analysisLanguage: data.user.analysis_language ?? undefined,
             privacyAccepted: data.user.privacy_accepted ?? undefined,
+            mustChangePassword: data.user.must_change_password ?? undefined,
             roles: data.roles,
             permissions: data.permissions,
           });
@@ -234,6 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.user.email,
       roles: data.user.roles,
       permissions: data.user.permissions,
+      mustChangePassword: Boolean(data.user.mustChangePassword),
     });
     void loadProfile();
   }, []);
@@ -255,6 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.user.email,
       roles: data.user.roles,
       permissions: data.user.permissions,
+      mustChangePassword: Boolean(data.user.mustChangePassword),
     });
     void loadProfile();
   }, []);
@@ -276,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.user.email,
       roles: data.user.roles,
       permissions: data.user.permissions,
+      mustChangePassword: Boolean(data.user.mustChangePassword),
     });
     void loadProfile();
     return data.backupCodesRemaining ?? 0;

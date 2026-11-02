@@ -14,7 +14,7 @@ import { LANGUAGES, tr, useLanguage } from "@/lib/i18n";
 const roleName = (role: string) => role.toLowerCase().split("_").map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" ");
 
 /** The same rules the server applies (auth.ts validatePassword), so a weak one is caught before it is sent. */
-function weaknesses(pw: string): string[] {
+export function weaknesses(pw: string): string[] {
   const out: string[] = [];
   if (pw.length < 12) out.push("at least 12 characters");
   if (!/[A-Z]/.test(pw)) out.push("an uppercase letter");

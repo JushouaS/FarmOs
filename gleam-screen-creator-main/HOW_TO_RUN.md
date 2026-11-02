@@ -622,10 +622,17 @@ What was found and closed in the security review, and what you still decide:
   `auto` and the cookies become Secure there).
 - **Older backend (`cerebroil-backend`).** Every route now needs an `X-API-Key` from `API_KEYS` (none set = closed),
   its ports are open to this computer only, and it needs `POSTGRES_PASSWORD` in `.env`. The website does not use it.
-- **Accounts.** An administrator can list accounts (`GET /auth/users`), switch one off or on and change its roles
-  (`PATCH /auth/users/:id`), and set a new password (`POST /auth/users/:id/password`). Each of these signs that
-  account out of every session at once. An administrator cannot change their own account this way. A person's roles are
-  read from the database on every request, so a change applies on the next click. There is no screen for this yet:
-  today it is done through the API.
+- **Accounts.** An administrator opens **Settings, Accounts** (only administrators see it) to add a person with an
+  email, a role and a temporary password, to switch an account off or on, and to set a new temporary password. The
+  person gets an email with the password; it works for `TEMP_PASSWORD_HOURS` (48 by default), and the first
+  sign-in makes them choose their own. If nobody signs in in time, the sign-in says the password expired and the
+  administrator sets a new one. Switching an account off or changing its password signs it out of every session at
+  once, and an administrator cannot change their own account from this list. A person's roles are read from the
+  database on every request, so a change applies on the next click. The same things are available on the API
+  (`GET /auth/users`, `POST /auth/register`, `PATCH /auth/users/:id`, `POST /auth/users/:id/password`).
+- **Email for new accounts.** It uses the same SMTP settings as the alert emails (`SMTP_*` in `packages\api\.env`).
+  For Gmail: turn on 2-Step Verification, make an app password at https://myaccount.google.com/apppasswords, and put
+  it (16 characters, no spaces) in `SMTP_PASS`. Restart the API afterwards. If the email cannot be sent, the account is
+  still made and the screen says so, so the password can be given in person.
 - **Known and accepted.** `minimatch` and `brace-expansion` have open advisories; they come in through the linting
   tools only, never in the running app. The API and the camera service talk over plain http (see above).

@@ -184,6 +184,46 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Accounts (administrator)                                                  */
+/* -------------------------------------------------------------------------- */
+
+export interface AccountRow {
+  id: string;
+  email: string;
+  fullName: string | null;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  mustChangePassword: boolean;
+  passwordExpiresAt: string | null;
+  role: string;
+  roles: string[];
+}
+
+/** What came back after an account was made or its password reset: when the password stops working and whether the email went out. */
+export interface AccountMail {
+  expiresAt: string;
+  email_sent: boolean;
+  email_problem: string | null;
+}
+
+export async function listAccounts(): Promise<AccountRow[]> {
+  const res = await apiFetch<{ users: AccountRow[] }>("/auth/users?limit=100");
+  return res.users;
+}
+
+export async function createAccount(email: string, password: string, role: string): Promise<AccountMail> {
+  return apiFetch<AccountMail>("/auth/register", { method: "POST", body: JSON.stringify({ email, password, roles: [role] }) });
+}
+
+export async function setAccountActive(id: string, isActive: boolean): Promise<void> {
+  await apiFetch(`/auth/users/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ isActive }) });
+}
+
+export async function resetAccountPassword(id: string, newPassword: string): Promise<AccountMail> {
+  return apiFetch<AccountMail>(`/auth/users/${encodeURIComponent(id)}/password`, { method: "POST", body: JSON.stringify({ newPassword }) });
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Notifications                                                             */
 /* -------------------------------------------------------------------------- */
 
