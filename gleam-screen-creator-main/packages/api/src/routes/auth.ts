@@ -43,6 +43,7 @@ const LOCKOUT_DURATION_MINUTES = 30;
  * POST /auth/password-reset/request
  * POST /auth/password-reset/confirm
  * GET  /auth/me             (auth required)
+ * GET  /auth/users, PATCH /auth/users/:id, POST /auth/users/:id/password   (ADMIN)
  */
 
 const emailSchema = z.string().email().max(320);
@@ -63,7 +64,7 @@ const registerBody = z.object({
  * this computer's own network address). It looks at the socket, not at request.ip: with trustProxy on, request.ip
  * follows an X-Forwarded-For header that anyone can write.
  */
-function fromThisComputer(request: { raw: { socket: { remoteAddress?: string; localAddress?: string } } }): boolean {
+export function fromThisComputer(request: { raw: { socket: { remoteAddress?: string; localAddress?: string } } }): boolean {
   const { remoteAddress, localAddress } = request.raw.socket;
   if (!remoteAddress) return false;
   const strip = (a: string) => a.replace(/^::ffff:/, "");
@@ -656,7 +657,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const { limit, offset } = parsed.data;
 
     const rows = await app.sqlRead`
-      SELECT u.id, u.email,
+      SELECT u.id, u.email, u.full_name AS "fullName", u.is_active AS "isActive", u.last_login_at AS "lastLoginAt",
              COALESCE(
                (SELECT r.code FROM roles r
                 INNER JOIN user_roles ur ON ur.role_id = r.id
@@ -664,13 +665,100 @@ export async function registerAuthRoutes(app: FastifyInstance) {
                 ORDER BY r.code
                 LIMIT 1),
                'VIEWER'
-             ) AS role
+             ) AS role,
+             COALESCE((SELECT array_agg(r.code ORDER BY r.code) FROM roles r
+                       INNER JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = u.id), '{}') AS roles
       FROM users u
       ORDER BY u.created_at DESC
       LIMIT ${limit} OFFSET ${offset}`;
 
     const total = await app.sqlRead`SELECT COUNT(*)::int AS count FROM users`;
     return { users: rows, total: total[0]!.count as number, limit, offset };
+  });
+
+  /**
+   * PATCH /auth/users/:id            (ADMIN) switch an account on or off, or change its roles
+   * POST  /auth/users/:id/password   (ADMIN) give an account a new password
+   *
+   * An administrator cannot change their own account here (so they cannot lock themselves out), and the last
+   * active administrator cannot be switched off or lose the role. Switching an account off, changing its
+   * password or its roles signs it out of every session at once.
+   */
+  const userIdParams = z.object({ id: z.string().uuid() });
+  const userPatchBody = z
+    .object({
+      isActive: z.boolean().optional(),
+      roles: z.array(z.enum(ROLE_CODES)).min(1).max(ROLE_CODES.length).optional(),
+    })
+    .refine((b) => b.isActive !== undefined || b.roles !== undefined, { message: "nothing_to_change" });
+  const adminOnly = { preHandler: [requireAuth, requireRole("ADMIN")] };
+
+  /** True when no other active administrator would be left if this account stopped being one. */
+  async function isLastActiveAdmin(userId: string): Promise<boolean> {
+    const others = await app.sqlRead`
+      SELECT 1 FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      JOIN roles r ON r.id = ur.role_id AND r.code = 'ADMIN'
+      WHERE u.is_active AND u.id <> ${userId}::uuid
+      LIMIT 1`;
+    return others.count === 0;
+  }
+
+  app.patch("/users/:id", adminOnly, async (request, reply) => {
+    const params = userIdParams.safeParse(request.params);
+    const body = userPatchBody.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: "invalid_body" });
+    const { id } = params.data;
+    const adminId = request.authUser!.sub;
+    if (id === adminId) return reply.code(409).send({ error: "cannot_change_own_account" });
+
+    const target = await app.sqlRead`
+      SELECT u.id, u.is_active,
+             COALESCE((SELECT array_agg(r.code) FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = u.id), '{}') AS roles
+      FROM users u WHERE u.id = ${id}::uuid`;
+    if (target.count === 0) return reply.code(404).send({ error: "user_not_found" });
+    const wasAdmin = (target[0]!.roles as string[]).includes("ADMIN");
+    const staysAdmin = (body.data.roles ? body.data.roles.includes("ADMIN") : wasAdmin) && (body.data.isActive ?? (target[0]!.is_active as boolean));
+    if (wasAdmin && !staysAdmin && (await isLastActiveAdmin(id))) {
+      return reply.code(409).send({ error: "last_admin", message: "This is the last active administrator." });
+    }
+
+    if (body.data.isActive !== undefined) {
+      await app.sqlWrite`UPDATE users SET is_active = ${body.data.isActive}, updated_at = now() WHERE id = ${id}::uuid`;
+    }
+    if (body.data.roles) {
+      await app.sqlWrite`DELETE FROM user_roles WHERE user_id = ${id}::uuid`;
+      await app.sqlWrite`
+        INSERT INTO user_roles (user_id, role_id)
+        SELECT ${id}::uuid, r.id FROM roles r WHERE r.code = ANY(${body.data.roles})`;
+    }
+    // Whatever changed, the account signs in again to get what it now has.
+    await app.sqlWrite`DELETE FROM sessions WHERE user_id = ${id}::uuid`;
+    await app.sqlWrite`
+      INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+      VALUES (${adminId}, ${"user_changed"}, ${request.ip}::inet, ${app.sqlWrite.json({ targetUserId: id, ...body.data })})`;
+    return reply.send({ updated: true, id });
+  });
+
+  app.post("/users/:id/password", { ...adminOnly, ...loginRateLimit }, async (request, reply) => {
+    const params = userIdParams.safeParse(request.params);
+    const body = z.object({ newPassword: passwordSchema }).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: "invalid_body" });
+    const { id } = params.data;
+    if (id === request.authUser!.sub) return reply.code(409).send({ error: "use_change_password", message: "Change your own password from your account." });
+    const policy = validatePassword(body.data.newPassword);
+    if (!policy.ok) return reply.code(400).send({ error: "weak_password", message: policy.reason });
+
+    const done = await app.sqlWrite`
+      UPDATE users SET password_hash = ${await hashPassword(body.data.newPassword)}, updated_at = now()
+      WHERE id = ${id}::uuid RETURNING email::text AS email`;
+    if (done.count === 0) return reply.code(404).send({ error: "user_not_found" });
+    await app.sqlWrite`DELETE FROM sessions WHERE user_id = ${id}::uuid`;
+    await app.sqlWrite`DELETE FROM login_failures WHERE subject = ${(done[0]!.email as string).toLowerCase()}`;
+    await app.sqlWrite`
+      INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+      VALUES (${request.authUser!.sub}, ${"password_reset_by_admin"}, ${request.ip}::inet, ${app.sqlWrite.json({ targetUserId: id })})`;
+    return reply.send({ changed: true, id });
   });
 
   /**

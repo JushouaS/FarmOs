@@ -38,10 +38,20 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
     // Server-side session validation: ensure the token was issued by us, has not
     // been revoked (logout clears the sessions row) and its account is still active.
     // The table keeps a hash of the token; a session saved before that is matched by the token itself.
+    // The roles come from the database, not from the token, so a change of role (or of what a role
+    // may do) applies on the very next request instead of when the token runs out.
     const session = await request.server.sqlRead`
-      SELECT s.id FROM sessions s
+      SELECT s.id,
+             COALESCE(array_agg(DISTINCT r.code) FILTER (WHERE r.code IS NOT NULL), '{}') AS roles,
+             COALESCE(array_agg(DISTINCT p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permissions
+      FROM sessions s
       JOIN users u ON u.id = s.user_id
+      LEFT JOIN user_roles ur ON ur.user_id = u.id
+      LEFT JOIN roles r ON r.id = ur.role_id
+      LEFT JOIN role_permissions rp ON rp.role_id = r.id
+      LEFT JOIN permissions p ON p.id = rp.permission_id
       WHERE s.access_token = ANY(${[hashAccessToken(token), token]}) AND u.is_active
+      GROUP BY s.id
       LIMIT 1`;
     if (session.count === 0) {
       return reply.code(401).send({ error: "session_revoked" });
@@ -50,8 +60,8 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
     request.authUser = {
       sub: payload.sub,
       email: payload.email,
-      roles: payload.roles as string[],
-      permissions: (payload.permissions ?? []) as string[],
+      roles: session[0]!.roles as string[],
+      permissions: session[0]!.permissions as string[],
     };
   } catch (err) {
     return reply.code(401).send({

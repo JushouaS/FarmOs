@@ -622,7 +622,10 @@ What was found and closed in the security review, and what you still decide:
   `auto` and the cookies become Secure there).
 - **Older backend (`cerebroil-backend`).** Every route now needs an `X-API-Key` from `API_KEYS` (none set = closed),
   its ports are open to this computer only, and it needs `POSTGRES_PASSWORD` in `.env`. The website does not use it.
-- **Known and accepted.** `zod` has an open advisory that needs a major upgrade (large oversized lists). `minimatch` and
-  `brace-expansion` come in through the linting tools only. A person's role is read from their token, so a role change
-  takes up to 15 minutes to reach a token that is already open; a disabled account is refused
-  at once, on its next request. There is no screen to create, disable or reset accounts yet.
+- **Accounts.** An administrator can list accounts (`GET /auth/users`), switch one off or on and change its roles
+  (`PATCH /auth/users/:id`), and set a new password (`POST /auth/users/:id/password`). Each of these signs that
+  account out of every session at once. An administrator cannot change their own account this way. A person's roles are
+  read from the database on every request, so a change applies on the next click. There is no screen for this yet:
+  today it is done through the API.
+- **Known and accepted.** `minimatch` and `brace-expansion` have open advisories; they come in through the linting
+  tools only, never in the running app. The API and the camera service talk over plain http (see above).
