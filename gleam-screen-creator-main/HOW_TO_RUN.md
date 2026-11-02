@@ -372,6 +372,19 @@ blocks that. A phone hotspot or a small router works.
    It ends by printing the Pi's address. The Pi answers only to the API (which sends the token) and to
    the Pi itself, so check the video from the laptop with the website's **Live Camera** page.
 
+   **If the camera does not appear**, run the check script. It looks at the cable, the camera's address, the
+   service and one real picture from the camera, and it never prints the camera's password. From the laptop,
+   copy it to the Pi (your user name and the Pi's address filled in), then run it on the Pi and read what it says
+   under "Summary":
+
+   ```
+   scp cerebroil-stream/check-pi.sh YOUR-PI-USER@PI-WIFI-ADDRESS:~/cerebroil-stream/
+   ```
+
+   ```
+   bash ~/cerebroil-stream/check-pi.sh
+   ```
+
 **On the laptop**, point the website and the API at the Pi, then restart both (Windows 2 and 4):
 
 - Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000` (only used for the "not answering" message now; the video itself comes through the API)

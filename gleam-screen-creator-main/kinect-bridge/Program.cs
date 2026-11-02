@@ -80,6 +80,16 @@ namespace CerebroilKinectBridge
         static long _lastSentTicks;
         static int _framesSent;
 
+        // The Kinect can drop out for a moment (a USB hiccup, power) and come back "available" without ever
+        // sending frames again. So the program notes when the sensor last delivered anything, and opens it
+        // again when it has been quiet for a while.
+        const int StallSeconds = 5;
+        static long _lastSensorTicks;
+        static volatile int _reopenAttempts;
+        static KinectSensor _sensor;
+        static DepthFrameReader _depthReader;
+        static ColorFrameReader _colorReader;
+
         static void Main(string[] args)
         {
             bool lan = Array.IndexOf(args, "--lan") >= 0;
@@ -102,15 +112,7 @@ namespace CerebroilKinectBridge
             _raw = new ushort[fd.Width * fd.Height];
             _small = new ushort[_outW * _outH];
 
-            sensor.IsAvailableChanged += delegate(object s, IsAvailableChangedEventArgs e)
-            {
-                Console.WriteLine(e.IsAvailable ? "Kinect is sending data." : "Kinect is not available (unplugged, no power, or not on USB 3.0).");
-            };
-            DepthFrameReader reader = sensor.DepthFrameSource.OpenReader();
-            reader.FrameArrived += OnFrame;
-            ColorFrameReader colorReader = sensor.ColorFrameSource.OpenReader();
-            colorReader.FrameArrived += OnColorFrame;
-            sensor.Open();
+            OpenKinect();
 
             HttpListener listener = new HttpListener();
             if (lan)
@@ -140,13 +142,68 @@ namespace CerebroilKinectBridge
             ManualResetEvent stop = new ManualResetEvent(false);
             Console.CancelKeyPress += delegate(object s, ConsoleCancelEventArgs e) { e.Cancel = true; stop.Set(); };
 
+            Thread watchdog = new Thread(WatchSensor);
+            watchdog.IsBackground = true;
+            watchdog.Start();
+
             Task.Run(() => AcceptLoop(listener));
             stop.WaitOne();
 
-            reader.Dispose();
-            colorReader.Dispose();
-            sensor.Close();
+            CloseKinect();
             listener.Close();
+        }
+
+        static void OpenKinect()
+        {
+            _sensor = KinectSensor.GetDefault();
+            _sensor.IsAvailableChanged += OnAvailableChanged;
+            _depthReader = _sensor.DepthFrameSource.OpenReader();
+            _depthReader.FrameArrived += OnFrame;
+            _colorReader = _sensor.ColorFrameSource.OpenReader();
+            _colorReader.FrameArrived += OnColorFrame;
+            Interlocked.Exchange(ref _lastSensorTicks, DateTime.UtcNow.Ticks);
+            _sensor.Open();
+        }
+
+        static void CloseKinect()
+        {
+            // Stop listening first, so a frame that arrives while the readers are closed finds nobody.
+            try { _depthReader.FrameArrived -= OnFrame; } catch (Exception) { }
+            try { _colorReader.FrameArrived -= OnColorFrame; } catch (Exception) { }
+            try { _sensor.IsAvailableChanged -= OnAvailableChanged; } catch (Exception) { }
+            Thread.Sleep(200);
+            try { _depthReader.Dispose(); } catch (Exception) { }
+            try { _colorReader.Dispose(); } catch (Exception) { }
+            try { _sensor.Close(); } catch (Exception) { }
+        }
+
+        static void OnAvailableChanged(object sender, IsAvailableChangedEventArgs e)
+        {
+            Console.WriteLine(e.IsAvailable ? "Kinect is sending data." : "Kinect is not available (unplugged, no power, or not on USB 3.0).");
+        }
+
+        /// <summary>Opens the Kinect again when it has delivered nothing for a while; waits longer after each failed try.</summary>
+        static void WatchSensor()
+        {
+            while (true)
+            {
+                Thread.Sleep(1000);
+                int attempts = _reopenAttempts;
+                int limit = attempts == 0 ? StallSeconds : Math.Min(60, StallSeconds << Math.Min(attempts, 4));
+                long quiet = (DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastSensorTicks)) / TimeSpan.TicksPerSecond;
+                if (quiet < limit) continue;
+                _reopenAttempts = attempts + 1;
+                Console.WriteLine("Nothing from the Kinect for " + quiet + " seconds. Opening it again.");
+                try
+                {
+                    CloseKinect();
+                    OpenKinect();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Could not open the Kinect again: " + ex.Message);
+                }
+            }
         }
 
         static async Task AcceptLoop(HttpListener listener)
@@ -234,6 +291,8 @@ namespace CerebroilKinectBridge
 
         static void OnFrame(object sender, DepthFrameArrivedEventArgs e)
         {
+            Interlocked.Exchange(ref _lastSensorTicks, DateTime.UtcNow.Ticks);
+            _reopenAttempts = 0;
             Client[] targets;
             lock (Lock) { targets = Clients.Where(c => c.Mode == 0).ToArray(); }
             if (targets.Length == 0) return;
@@ -242,7 +301,10 @@ namespace CerebroilKinectBridge
             if ((now - _lastSentTicks) / TimeSpan.TicksPerMillisecond < FrameGapMs) return;
 
             uint stamp;
-            using (DepthFrame frame = e.FrameReference.AcquireFrame())
+            DepthFrame depthFrame;
+            try { depthFrame = e.FrameReference.AcquireFrame(); }
+            catch (Exception) { return; } // the sensor is being opened again
+            using (DepthFrame frame = depthFrame)
             {
                 if (frame == null) return;
                 frame.CopyFrameDataToArray(_raw);
@@ -289,6 +351,8 @@ namespace CerebroilKinectBridge
         /// <summary>One colour picture, shrunk and compressed, to the viewers that asked for pictures.</summary>
         static void OnColorFrame(object sender, ColorFrameArrivedEventArgs e)
         {
+            Interlocked.Exchange(ref _lastSensorTicks, DateTime.UtcNow.Ticks);
+            _reopenAttempts = 0;
             Client[] targets;
             lock (Lock) { targets = Clients.Where(c => c.Mode == 1).ToArray(); }
             if (targets.Length == 0) return;
@@ -297,7 +361,10 @@ namespace CerebroilKinectBridge
             if ((now - _lastColorTicks) / TimeSpan.TicksPerMillisecond < ColorGapMs) return;
 
             int outW, outH;
-            using (ColorFrame frame = e.FrameReference.AcquireFrame())
+            ColorFrame colorFrame;
+            try { colorFrame = e.FrameReference.AcquireFrame(); }
+            catch (Exception) { return; } // the sensor is being opened again
+            using (ColorFrame frame = colorFrame)
             {
                 if (frame == null) return;
                 FrameDescription d = frame.FrameDescription;

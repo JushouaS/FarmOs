@@ -14,6 +14,9 @@ Kinect v2 --USB 3--> KinectBridge.exe --ws://localhost:8181--> Live Camera page
 - `KinectBridge.exe --lan` listens for other devices. Windows requires an administrator window, or
   `netsh http add urlacl url=http://+:8181/ user=Everyone` once.
 - The viewer is `src/components/farm/KinectDepthView.tsx`.
+- If the Kinect drops out (a loose USB cable, power) and comes back without sending pictures again, the bridge
+  notices after 5 seconds, prints `Nothing from the Kinect ... Opening it again.` and opens the sensor again. It
+  waits longer between tries (up to a minute) while the Kinect stays gone.
 
 ## Picture or depth
 
