@@ -56,6 +56,9 @@ const schema = z.object({
   // How long the temporary password an administrator hands out keeps working if the person has not signed in.
   TEMP_PASSWORD_HOURS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(336).default(48)),
 
+  // Where kinect_seg.py (the chicken outlines on the Kinect picture) runs: this computer, next to the Kinect.
+  KINECT_SEG_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("http://127.0.0.1:8182")),
+
   // Shared with the Kinect bridge (its KINECT_BRIDGE_KEY): the API hands signed-in viewers a short-lived ticket made
   // from it, and the bridge only streams depth frames to a viewer with one. Unset = the bridge needs no ticket.
   KINECT_BRIDGE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),

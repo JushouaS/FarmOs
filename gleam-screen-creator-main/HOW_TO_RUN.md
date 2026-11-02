@@ -512,6 +512,37 @@ You should see `Kinect is sending data.` and `Kinect bridge ready on ws://localh
 **Live Camera**, choose **Kinect**. A green `Live 3D depth` badge appears. Drag to turn the view,
 double-click (or **Reset view**) to go back. Press Ctrl+C in that window to stop it.
 
+The panel has two views, chosen with the **Picture** and **Depth 3D** buttons at its top right (the choice is
+remembered in that browser). **Picture** is the normal colour camera. **Depth 3D** is the depth as a 3D view: yellow
+is near, green farther, blue farthest, and black means the sensor got no reading there (closer than 0.5 m, farther
+than 4.5 m, or a dark, shiny or see-through surface). The bridge only makes the pictures while somebody is watching
+them. The picture is shown live and is not saved. After a change to `Program.cs`, run `build.cmd` again.
+
+### Chicken outlines on the Kinect picture (optional)
+
+On the **Picture** view the page can outline each chicken and count them. A small program does this on the
+computer the Kinect is plugged into: `cerebroil-stream\kinect_seg.py`. It reads the colour picture from the bridge,
+runs the trained segmentation model, and keeps the newest answer. Put the model at
+`cerebroil-stream\models\kinect_chicken_seg.pt` (it is not in the repository, like `detector.onnx`), then:
+
+```
+cd cerebroil-stream
+pip install -r requirements.txt
+pip install -r requirements-kinect.txt     (once; it brings PyTorch, so it is big)
+python kinect_seg.py
+```
+
+It only listens on this computer (`127.0.0.1:8182`). The API asks it (`GET /visual/kinect-chickens`, which needs a
+sign-in), so nobody reaches it from outside. It works only while somebody has the Picture view open, and rests
+otherwise. If it is not running, the Picture view says "Chicken finder is not running" and everything else works.
+`KINECT_SEG_URL` in `packages\api\.env` changes where the API looks for it. In a room with no chickens it may still
+find one now and then (a person or an object): the model counts anything above 25% confidence
+(`KINECT_SEG_CONFIDENCE`).
+
+**Weights are not connected yet.** The weight model (`models\weight_model_unregistered_provisional.json`, XGBoost,
+17 inputs) needs those 17 numbers measured from each bird's outline and the depth picture. Until they are
+defined, each bird's `weightG` stays empty and no weight is shown.
+
 It only accepts pages from this computer or your local network. To let a phone see the 3D view, first
 make a key (at least 16 characters), put it in `packages\api\.env` as `KINECT_BRIDGE_KEY=...`, restart the
 API, set the same value in the window that starts the bridge (`set KINECT_BRIDGE_KEY=...`), and start it with

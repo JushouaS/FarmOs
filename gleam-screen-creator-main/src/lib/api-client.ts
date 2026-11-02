@@ -406,6 +406,36 @@ export async function fetchKinectTicket(): Promise<string | null> {
   return res.ticket;
 }
 
+/** One chicken the Kinect picture shows: where it is, as shares (0 to 1) of the picture's width and height. */
+export interface KinectChicken {
+  confidence: number;
+  box: [number, number, number, number];
+  polygon: [number, number][];
+  /** Grams, or null while the weight model is not connected. */
+  weightG: number | null;
+}
+
+export interface KinectChickens {
+  ok: boolean;
+  /** Why there is no answer: "starting", "waiting_for_picture", "bridge_unreachable", "model_not_installed", "not_running", "error". */
+  status?: string;
+  message?: string;
+  at?: number;
+  width?: number;
+  height?: number;
+  count?: number;
+  birds?: KinectChicken[];
+}
+
+/** The newest chicken outlines on the Kinect picture. Never throws: a program that is not running comes back as `ok: false`. */
+export async function fetchKinectChickens(): Promise<KinectChickens> {
+  try {
+    return await apiFetch<KinectChickens>("/visual/kinect-chickens");
+  } catch (err) {
+    return { ok: false, status: err instanceof ApiError && err.status === 503 ? "not_running" : "error" };
+  }
+}
+
 /** Build the MJPEG stream URL for a given camera (served via Fastify proxy). */
 export function visionStreamUrl(cameraId: string): string {
   return `${API_BASE}/visual/stream/${encodeURIComponent(cameraId)}`;

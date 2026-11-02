@@ -18,6 +18,6 @@ if not exist "%KDLL%" (
 
 if not exist bin mkdir bin
 copy /y "%KDLL%" bin\ >nul
-"%CSC%" /nologo /target:exe /out:bin\KinectBridge.exe /reference:"%KDLL%" /reference:System.dll /reference:System.Core.dll Program.cs
+"%CSC%" /nologo /target:exe /out:bin\KinectBridge.exe /reference:"%KDLL%" /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll Program.cs
 if errorlevel 1 exit /b 1
 echo Built bin\KinectBridge.exe

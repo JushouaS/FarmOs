@@ -1,7 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,12 +28,20 @@ using Microsoft.Kinect;
 //   0 means "no reading" (too close, too far, or a shadow).
 // On connect the first message is a JSON "hello" with the size and the camera
 // intrinsics, so the page does not hard-code them.
+//
+// A viewer gets depth frames unless it asks for the picture: it sends the text
+// {"want":"color"} (or {"want":"depth"} to go back). A picture frame is one binary
+// message holding a JPEG (it starts with the bytes FF D8, which a depth frame
+// never does), about 960x540, about 10 a second. Pictures are only made while
+// somebody is watching them.
 namespace CerebroilKinectBridge
 {
     internal sealed class Client
     {
         public WebSocket Socket;
         public volatile bool Busy;
+        /// <summary>0 = depth frames, 1 = picture frames.</summary>
+        public volatile int Mode;
     }
 
     internal static class Program
@@ -43,7 +56,23 @@ namespace CerebroilKinectBridge
         // (the default, on this PC only) nobody needs one. With --lan a key is required.
         static readonly string BridgeKey = Environment.GetEnvironmentVariable("KINECT_BRIDGE_KEY") ?? "";
 
+        const int ColorStep = 2;         // keep every 2nd pixel: 1920x1080 becomes 960x540
+        const int ColorGapMs = 100;      // about 10 pictures a second
+        const long JpegQuality = 70L;
+
         static readonly object Lock = new object();
+        static byte[] _colorRaw;
+        static byte[] _colorSmall;
+        static long _lastColorTicks;
+        static readonly ImageCodecInfo JpegCodec = ImageCodecInfo.GetImageEncoders().First(c => c.MimeType == "image/jpeg");
+        static readonly EncoderParameters JpegParams = MakeJpegParams();
+
+        static EncoderParameters MakeJpegParams()
+        {
+            EncoderParameters p = new EncoderParameters(1);
+            p.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, JpegQuality);
+            return p;
+        }
         static readonly List<Client> Clients = new List<Client>();
         static ushort[] _raw;
         static ushort[] _small;
@@ -79,6 +108,8 @@ namespace CerebroilKinectBridge
             };
             DepthFrameReader reader = sensor.DepthFrameSource.OpenReader();
             reader.FrameArrived += OnFrame;
+            ColorFrameReader colorReader = sensor.ColorFrameSource.OpenReader();
+            colorReader.FrameArrived += OnColorFrame;
             sensor.Open();
 
             HttpListener listener = new HttpListener();
@@ -113,6 +144,7 @@ namespace CerebroilKinectBridge
             stop.WaitOne();
 
             reader.Dispose();
+            colorReader.Dispose();
             sensor.Close();
             listener.Close();
         }
@@ -171,12 +203,17 @@ namespace CerebroilKinectBridge
                 lock (Lock) { Clients.Add(client); }
                 Console.WriteLine("Viewer connected (" + Clients.Count + " now).");
 
-                // Nothing is expected from the page; reading just notices when it leaves.
+                // The page only ever says which kind of frame it wants; reading also notices when it leaves.
                 byte[] buf = new byte[256];
                 while (client.Socket.State == WebSocketState.Open)
                 {
                     WebSocketReceiveResult r = await client.Socket.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None);
                     if (r.MessageType == WebSocketMessageType.Close) break;
+                    if (r.MessageType == WebSocketMessageType.Text)
+                    {
+                        string said = Encoding.UTF8.GetString(buf, 0, r.Count);
+                        client.Mode = said.IndexOf("color", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0;
+                    }
                 }
                 Remove(client);
             }
@@ -198,7 +235,7 @@ namespace CerebroilKinectBridge
         static void OnFrame(object sender, DepthFrameArrivedEventArgs e)
         {
             Client[] targets;
-            lock (Lock) { targets = Clients.ToArray(); }
+            lock (Lock) { targets = Clients.Where(c => c.Mode == 0).ToArray(); }
             if (targets.Length == 0) return;
 
             long now = DateTime.UtcNow.Ticks;
@@ -247,6 +284,72 @@ namespace CerebroilKinectBridge
 
             _framesSent++;
             if (_framesSent % 150 == 0) Console.WriteLine("Sent " + _framesSent + " frames.");
+        }
+
+        /// <summary>One colour picture, shrunk and compressed, to the viewers that asked for pictures.</summary>
+        static void OnColorFrame(object sender, ColorFrameArrivedEventArgs e)
+        {
+            Client[] targets;
+            lock (Lock) { targets = Clients.Where(c => c.Mode == 1).ToArray(); }
+            if (targets.Length == 0) return;
+
+            long now = DateTime.UtcNow.Ticks;
+            if ((now - _lastColorTicks) / TimeSpan.TicksPerMillisecond < ColorGapMs) return;
+
+            int outW, outH;
+            using (ColorFrame frame = e.FrameReference.AcquireFrame())
+            {
+                if (frame == null) return;
+                FrameDescription d = frame.FrameDescription;
+                int srcW = d.Width;
+                int srcH = d.Height;
+                if (_colorRaw == null || _colorRaw.Length != srcW * srcH * 4) _colorRaw = new byte[srcW * srcH * 4];
+                frame.CopyConvertedFrameDataToArray(_colorRaw, ColorImageFormat.Bgra);
+                outW = srcW / ColorStep;
+                outH = srcH / ColorStep;
+                if (_colorSmall == null || _colorSmall.Length != outW * outH * 4) _colorSmall = new byte[outW * outH * 4];
+                for (int y = 0; y < outH; y++)
+                {
+                    int srcRow = y * ColorStep * srcW * 4;
+                    int dstRow = y * outW * 4;
+                    for (int x = 0; x < outW; x++)
+                    {
+                        int s4 = srcRow + x * ColorStep * 4;
+                        int d4 = dstRow + x * 4;
+                        _colorSmall[d4] = _colorRaw[s4];
+                        _colorSmall[d4 + 1] = _colorRaw[s4 + 1];
+                        _colorSmall[d4 + 2] = _colorRaw[s4 + 2];
+                        _colorSmall[d4 + 3] = 255;
+                    }
+                }
+            }
+            _lastColorTicks = now;
+
+            byte[] jpeg;
+            using (Bitmap bmp = new Bitmap(outW, outH, PixelFormat.Format32bppRgb))
+            {
+                BitmapData bits = bmp.LockBits(new Rectangle(0, 0, outW, outH), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
+                Marshal.Copy(_colorSmall, 0, bits.Scan0, _colorSmall.Length);
+                bmp.UnlockBits(bits);
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    bmp.Save(ms, JpegCodec, JpegParams);
+                    jpeg = ms.ToArray();
+                }
+            }
+
+            foreach (Client c in targets)
+            {
+                if (c.Busy || c.Socket.State != WebSocketState.Open) continue;
+                c.Busy = true;
+                Client captured = c;
+                c.Socket.SendAsync(new ArraySegment<byte>(jpeg), WebSocketMessageType.Binary, true, CancellationToken.None)
+                    .ContinueWith(delegate(Task t)
+                    {
+                        captured.Busy = false;
+                        if (t.IsFaulted) Remove(captured);
+                    });
+            }
         }
 
         static string Sign(string payload)

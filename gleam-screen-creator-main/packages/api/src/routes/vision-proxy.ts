@@ -162,6 +162,21 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   });
 
   // -----------------------------------------------------------------------
+  // GET /visual/kinect-chickens — the newest outlines of the chickens on the
+  // Kinect picture, from kinect_seg.py. Asking keeps that program working for
+  // another 15 seconds, so the page asks every second or two while it is open.
+  // -----------------------------------------------------------------------
+  app.get("/kinect-chickens", { preHandler: [requireAuth], config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    try {
+      const res = await fetch(`${env.KINECT_SEG_URL}/latest`, { signal: AbortSignal.timeout(4_000) });
+      return reply.code(res.ok ? 200 : 502).send(await res.json());
+    } catch {
+      return reply.code(503).send({ ok: false, status: "not_running", message: "The chicken finder (kinect_seg.py) is not running." });
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // GET /visual/stream/:cameraId — MJPEG multipart stream (proxied)
   // -----------------------------------------------------------------------
   app.get("/stream/:cameraId", { preHandler: [requireAuth] }, async (request, reply) => {
