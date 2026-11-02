@@ -383,6 +383,26 @@ export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
+              {/* Each bird's estimated weight, at the middle of its outline */}
+              {chickens.birds.map((b, i) =>
+                b.weightG != null && b.polygon.length > 0 ? (
+                  <text
+                    key={`w${i}`}
+                    x={(b.polygon.reduce((n, p) => n + p[0], 0) / b.polygon.length) * chickens.width!}
+                    y={(b.polygon.reduce((n, p) => n + p[1], 0) / b.polygon.length) * chickens.height!}
+                    fontSize={chickens.height! * 0.032}
+                    fontWeight="600"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill="#fff"
+                    stroke="#000"
+                    strokeWidth={chickens.height! * 0.008}
+                    paintOrder="stroke"
+                  >
+                    {b.weightG} g
+                  </text>
+                ) : null,
+              )}
             </svg>
           )}
         </>
@@ -415,12 +435,21 @@ export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
           className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/75 px-2 py-1 text-xs text-white/85"
         >
           {chickens.ok && chickens.count != null
-            ? chickens.count === 1
-              ? tr("1 chicken found")
-              : tr("{n} chickens found", { n: chickens.count })
+            ? chickens.weight
+              ? chickens.count === 1
+                ? tr("1 chicken found · about {g} g", { g: chickens.weight.meanG })
+                : tr("{n} chickens found · average about {g} g", { n: chickens.count, g: chickens.weight.meanG })
+              : chickens.count === 1
+                ? tr("1 chicken found")
+                : tr("{n} chickens found", { n: chickens.count })
             : chickens.status === "not_running" || chickens.status === "bridge_unreachable" || chickens.status === "model_not_installed"
               ? tr("Chicken finder is not running")
               : tr("Looking for chickens…")}
+          {chickens.ok && chickens.weight && (
+            <span className="block text-[11px] text-white/60">
+              {tr("Rough estimate: one bird can be off by about {pct}%", { pct: chickens.weight.errorPercent })}
+            </span>
+          )}
         </p>
       )}
       {mode === "depth" && (

@@ -16,9 +16,10 @@ after that it lets go of the bridge, so the sensor and the processor are left al
 The model is models/kinect_chicken_seg.pt (not in the repository), a YOLO11n-seg model trained on
 colour pictures with one class, "chicken". Change the place with KINECT_SEG_MODEL.
 
-Weights: each bird has a "weightG" that stays null for now. The weight model
-(models/weight_model_unregistered_provisional.json) needs 17 numbers measured from the bird's outline
-and the depth picture, and estimate_weight() below is where they will be made.
+Weights: each bird also gets a "weightG", an estimate from the size of its outline on the depth picture
+(kinect_weight.py, model models/weight_model_size_v1.json). It asks the bridge for the depth picture too. One bird is
+typically off by about 18 %; the "weight" summary (the flock's average) is much closer. Without the weight model or
+the depth picture every "weightG" is null and the outlines work as before.
 """
 from __future__ import annotations
 
@@ -39,6 +40,8 @@ import numpy as np
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 
+import kinect_weight
+
 load_dotenv(Path(__file__).parent / ".env")
 
 MODEL_PATH = Path(os.getenv("KINECT_SEG_MODEL", str(Path(__file__).parent / "models" / "kinect_chicken_seg.pt")))
@@ -58,7 +61,7 @@ _result: dict[str, Any] = {"ok": False, "status": "starting"}
 
 # ── A small WebSocket client (the standard library has none) ──────────────────────────────────────
 class Bridge:
-    def __init__(self) -> None:
+    def __init__(self, want: str = "color") -> None:
         path = "/"
         if BRIDGE_KEY:
             expiry = str(int(time.time()) + 120)
@@ -80,7 +83,7 @@ class Bridge:
             head += chunk
         if b" 101 " not in head.split(b"\r\n")[0]:
             raise ConnectionError(head.split(b"\r\n")[0].decode(errors="replace"))
-        self.send_text('{"want":"color"}')
+        self.send_text('{"want":"%s"}' % want)
 
     def send_text(self, text: str) -> None:
         data = text.encode()
@@ -123,6 +126,26 @@ class Bridge:
             self.sock.settimeout(5)
         return picture
 
+    def newest_depth(self, wait_s: float) -> np.ndarray | None:
+        """The newest depth picture waiting on a connection made with want="depth", in millimetres (0 = no reading)."""
+        frame = None
+        self.sock.settimeout(wait_s)
+        try:
+            while True:
+                op, data = self.read()
+                if op == 2 and data[:2] != b"\xff\xd8" and len(data) >= 8:
+                    w, h = struct.unpack("<HH", data[:4])
+                    if len(data) >= 8 + w * h * 2:
+                        frame = np.frombuffer(data, dtype="<u2", count=w * h, offset=8).reshape(h, w).astype(np.float32)
+                        self.sock.settimeout(0.02)
+                elif op == 8:
+                    raise ConnectionError("the bridge closed the connection")
+        except (socket.timeout, TimeoutError):
+            pass
+        finally:
+            self.sock.settimeout(5)
+        return frame
+
     def close(self) -> None:
         try:
             self.sock.close()
@@ -145,12 +168,33 @@ def load_model():
     return _model
 
 
-def estimate_weight(bird: dict[str, Any]) -> float | None:
-    """Grams for one bird, or None. Needs the 17 measurements the weight model was trained on."""
-    return None
+_weights = kinect_weight.WeightModel()
 
 
-def find_chickens(jpeg: bytes) -> dict[str, Any]:
+def add_weights(birds: list[dict[str, Any]], image_w: int, image_h: int, depth: np.ndarray | None) -> dict[str, Any]:
+    """Puts "weightG" on every bird it can (the rest stay null) and returns the "weight" summary and its status."""
+    for bird in birds:
+        bird["weightG"] = None
+    if not _weights.available:
+        return {"weightStatus": "model_not_installed", "weight": None}
+    if depth is None:
+        return {"weightStatus": "no_depth", "weight": None}
+    measured: list[tuple[dict[str, Any], dict[str, float]]] = []
+    for bird in birds:
+        mask = kinect_weight.mask_from_polygon(bird["polygon"], image_w, image_h, depth.shape[1], depth.shape[0])
+        m = kinect_weight.measure(depth, mask)
+        if m is not None:
+            measured.append((bird, m))
+    grams = _weights.predict([m for _, m in measured])
+    for (bird, _), g in zip(measured, grams):
+        bird["weightG"] = int(round(g / 10.0) * 10)
+    summary = kinect_weight.summarize(grams)
+    if summary:
+        summary["errorPercent"] = round(_weights.typical_error_percent)
+    return {"weightStatus": "ok" if summary else "no_birds", "weight": summary}
+
+
+def find_chickens(jpeg: bytes, depth: np.ndarray | None = None) -> dict[str, Any]:
     image = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError("the picture could not be read")
@@ -174,8 +218,8 @@ def find_chickens(jpeg: bytes) -> dict[str, Any]:
                 "box": [round(float(v), 4) for v in box],
                 "polygon": [[round(float(x), 4), round(float(y), 4)] for x, y in pts],
             }
-            bird["weightG"] = estimate_weight(bird)
             birds.append(bird)
+    weights = add_weights(birds, w, h, depth)
     return {
         "ok": True,
         "at": time.time(),
@@ -184,6 +228,7 @@ def find_chickens(jpeg: bytes) -> dict[str, Any]:
         "count": len(birds),
         "ms": int((time.time() - started) * 1000),
         "birds": birds,
+        **weights,
     }
 
 
@@ -191,22 +236,27 @@ def find_chickens(jpeg: bytes) -> dict[str, Any]:
 def worker() -> None:
     global _result
     bridge: Bridge | None = None
+    depth_bridge: Bridge | None = None
     while True:
         if time.time() > _wanted_until:
-            if bridge:
-                bridge.close()
-                bridge = None
+            for b in (bridge, depth_bridge):
+                if b:
+                    b.close()
+            bridge = depth_bridge = None
             time.sleep(0.3)
             continue
         try:
             if bridge is None:
                 bridge = Bridge()
+            if depth_bridge is None and _weights.available:
+                depth_bridge = Bridge("depth")
             jpeg = bridge.newest_picture(3.0)
             if jpeg is None:
                 with _lock:
                     _result = {"ok": False, "status": "waiting_for_picture", "message": "The Kinect is not sending a picture."}
                 continue
-            result = find_chickens(jpeg)
+            depth = depth_bridge.newest_depth(0.3) if depth_bridge else None
+            result = find_chickens(jpeg, depth)
             with _lock:
                 _result = result
         except FileNotFoundError as err:
@@ -214,9 +264,10 @@ def worker() -> None:
                 _result = {"ok": False, "status": "model_not_installed", "message": str(err)}
             time.sleep(3)
         except (OSError, ConnectionError) as err:
-            if bridge:
-                bridge.close()
-                bridge = None
+            for b in (bridge, depth_bridge):
+                if b:
+                    b.close()
+            bridge = depth_bridge = None
             with _lock:
                 _result = {"ok": False, "status": "bridge_unreachable", "message": f"The Kinect bridge is not answering ({err})."}
             time.sleep(2)

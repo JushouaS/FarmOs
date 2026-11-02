@@ -1,3 +1,6 @@
 # For kinect_seg.py only (the chicken outlines on the Kinect picture). Install it on the computer the Kinect is
 # plugged into, on top of requirements.txt. It brings PyTorch, so it is large; the Raspberry Pi does not need it.
 ultralytics>=8.3
+
+# The weight estimate for each bird (kinect_weight.py) runs a small xgboost model.
+xgboost>=2.0

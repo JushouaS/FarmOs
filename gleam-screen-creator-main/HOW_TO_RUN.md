@@ -455,6 +455,13 @@ is not installed, or the detector is busy with an uploaded clip, it falls back t
 "Moving areas" instead of "Birds seen". `SCAN_DETECTOR=0` in `cerebroil-stream/.env` turns the detector off for the
 scan. A bird's state (resting, inactive) needs minutes of watching, so the scan does not guess it.
 
+Every check also gives a weight on each bird, with nothing to tick or type. A video has no depth, so this is not the
+Kinect weight model: it spreads the standard weight for the grow-out day (Settings) over the birds in proportion to how
+big each bird's box is. With the right average one bird is typically about 17 % off, and rougher in a video, because a
+bird nearer the camera looks bigger and a box around a diagonal bird is bigger than the bird. If the clip shows birds of
+a different age than the day in Settings, all the weights shift together. It needs at least 5 birds followed in at least
+3 frames, and leaves out boxes cut off by the edge of the picture. The code is `src/lib/farm/video-weight.ts`.
+
 What the result shows (code: `cerebroil-stream/behavior.py`): each detected bird is followed from
 frame to frame and its box is colored by what it is doing.
 
@@ -593,9 +600,19 @@ otherwise. If it is not running, the Picture view says "Chicken finder is not ru
 find one now and then (a person or an object): the model counts anything above 25% confidence
 (`KINECT_SEG_CONFIDENCE`).
 
-**Weights are not connected yet.** The weight model (`models\weight_model_unregistered_provisional.json`, XGBoost,
-17 inputs) needs those 17 numbers measured from each bird's outline and the depth picture. Until they are
-defined, each bird's `weightG` stays empty and no weight is shown.
+**Weights.** Each outlined bird also gets an estimated weight. The Picture view shows it on the bird, and the
+flock's average under the picture. The weight comes from the size of the bird's outline on the depth picture
+(`cerebroil-stream\kinect_weight.py`): its footprint, length and width go into a small model
+(`models\weight_model_size_v1.json`, not in the repository like the other models). The program asks the bridge for
+the depth picture as well as the colour one. `pip install -r requirements-kinect.txt` brings `xgboost`, which it needs.
+
+How far to trust it: one bird is typically about 18 % (about 175 g) off, because a footprint says only so much; the
+flock's average from one picture is typically within about 5 % (tested on 40 labelled frames with the real outline
+model). The model was trained on one flock, days 26 to 40, so check it with a few birds on a scale before relying on
+it, and especially for birds much younger or older. To train it again on your own data (a CSV with the columns
+`projected_area_mm2`, `length_mm`, `width_mm`, `elongation`, `pixel_count`, `weight_g`, `session` and `band_id`):
+`python train_weight_model.py your.csv`. Without the model file, `xgboost` or the depth picture, the weights are left
+out and everything else works.
 
 It only accepts pages from this computer or your local network. To let a phone see the 3D view, first
 make a key (at least 16 characters), put it in `packages\api\.env` as `KINECT_BRIDGE_KEY=...`, restart the

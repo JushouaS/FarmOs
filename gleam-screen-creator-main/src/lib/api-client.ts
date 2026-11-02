@@ -414,7 +414,7 @@ export interface KinectChicken {
   confidence: number;
   box: [number, number, number, number];
   polygon: [number, number][];
-  /** Grams, or null while the weight model is not connected. */
+  /** Grams, estimated from the bird's size on the depth picture (about 18 % off for one bird), or null when it cannot be estimated. */
   weightG: number | null;
 }
 
@@ -428,6 +428,10 @@ export interface KinectChickens {
   height?: number;
   count?: number;
   birds?: KinectChicken[];
+  /** "ok", "no_depth" (no depth picture came), "model_not_installed" or "no_birds". */
+  weightStatus?: string;
+  /** The flock's average from the birds that have an estimate. It is much closer than one bird's estimate. */
+  weight?: { n: number; meanG: number; medianG: number; errorPercent: number } | null;
 }
 
 /** The newest chicken outlines on the Kinect picture. Never throws: a program that is not running comes back as `ok: false`. */

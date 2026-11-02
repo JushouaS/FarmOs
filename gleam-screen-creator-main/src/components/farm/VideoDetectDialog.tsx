@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Film, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { ApiError, DEMO_VIDEO_MAX_MB, convertVideo, detectVideo, type VideoDetection } from "@/lib/api-client";
 import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { VIDEO_WEIGHT_ERROR_PERCENT, estimateVideoWeights, type VideoWeights } from "@/lib/farm/video-weight";
 import { T, tr } from "@/lib/i18n";
 
 /* "Test video" on Live Camera: pick a clip from this device, the trained
@@ -84,7 +85,7 @@ function frameAt(frames: VideoDetection["frames"], t: number): number {
   return found;
 }
 
-export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: LightingHours }) {
+export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 1000 }: { lighting?: LightingHours; standardG?: number }) {
   const [open, setOpen] = useState(false);
   // Was the clip filmed with the lights off? Still birds are then resting, not inactive.
   const [night, setNight] = useState(false);
@@ -98,6 +99,7 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
   const [result, setResult] = useState<VideoDetection | null>(null);
   // Birds in the frame on screen: [all, inactive, huddling]
   const [inFrame, setInFrame] = useState<[number, number, number]>([0, 0, 0]);
+  const weightsRef = useRef<VideoWeights | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -111,6 +113,13 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
     setUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [file]);
+
+  // A rough weight for each bird, from the size of its box around the standard weight for the grow-out day.
+  const weights = useMemo(
+    () => (result ? estimateVideoWeights(result.frames, result.width, result.height, standardG) : null),
+    [result, standardG],
+  );
+  weightsRef.current = weights;
 
   // Draw the boxes of the sampled frame that matches the video's current time.
   useEffect(() => {
@@ -154,6 +163,22 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
         ctx.strokeStyle = color;
         ctx.lineWidth = state >= 2 ? 3 : 2;
         ctx.strokeRect(x * scale, y * scale, bw * scale, bh * scale);
+        // The bird's estimated weight, in the middle of its box.
+        const grams = id != null ? weightsRef.current?.byId.get(id) : undefined;
+        if (grams != null) {
+          const text = `${grams} g`;
+          ctx.font = "bold 12px ui-monospace, monospace";
+          ctx.textAlign = "center";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(0,0,0,0.85)";
+          ctx.strokeText(text, (x + bw / 2) * scale, (y + bh / 2) * scale + 4);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(text, (x + bw / 2) * scale, (y + bh / 2) * scale + 4);
+          ctx.textAlign = "left";
+          ctx.font = "12px ui-monospace, monospace";
+          ctx.strokeStyle = color;
+          ctx.lineWidth = state >= 2 ? 3 : 2;
+        }
         // Moving birds only get their number, and a group (huddle, resting, flock inactivity) one label, so the picture stays readable.
         let label = "";
         if (state === 0 || id == null) label = `${id != null ? `#${id} ` : ""}${Math.round(conf * 100)}%`;
@@ -433,6 +458,27 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
                 </p>
               </>
             )}
+            {result &&
+              (weights ? (
+                <>
+                  <p className="font-medium text-[var(--text-primary)]">
+                    {tr("Estimated weights: {n} birds, average {avg} g, from {min} g to {max} g. One bird can be off by about {pct}%.", {
+                      n: weights.n,
+                      avg: weights.averageG,
+                      min: weights.minG,
+                      max: weights.maxG,
+                      pct: VIDEO_WEIGHT_ERROR_PERCENT,
+                    })}
+                  </p>
+                  <p className="text-xs text-[var(--text-tertiary)]">
+                    {tr("Each weight comes from the size of the bird's box, around the standard weight for the grow-out day in Settings. Birds of a different age shift together, and a bird nearer the camera looks heavier, so treat them as a rough guide.")}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {tr("Too few birds were followed to estimate weights (at least 5 are needed).")}
+                </p>
+              ))}
             {partly && (
               <p className="text-xs text-[var(--text-tertiary)]">
                 {tr("Only the first {seconds} seconds were checked.", { seconds: Math.round(result.analyzed_seconds) })}
