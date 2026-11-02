@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import hmac
+import json
 import math
 import os
 import re
@@ -666,6 +667,33 @@ def behavior_status_route() -> tuple[Response, int] | Response:
     if LIVE is None:
         return jsonify({"running": False, "reason": "disabled"})
     return jsonify(LIVE.status(request.args.get("night") == "1"))
+
+
+SENSOR_FILE = Path(os.getenv("DHT22_FILE", str(Path(__file__).with_name("dht22.json"))))
+
+
+@app.get("/sensors")
+def sensors_route() -> tuple[Response, int] | Response:
+    """The newest temperature and humidity from the DHT22 on this Pi. dht22_reader.py (its own service)
+    writes the file; the API polls this and stores the readings (packages/api/src/sensor-monitor.ts)."""
+    err = _require_vision_token()
+    if err:
+        return err
+    try:
+        data = json.loads(SENSOR_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return jsonify({"running": False, "reason": "reader_not_started"})
+    except (OSError, ValueError):
+        return jsonify({"running": False, "reason": "reader_file_unreadable"})
+    at = data.get("at")
+    return jsonify({
+        "running": True,
+        "temperature": data.get("temperature"),
+        "humidity": data.get("humidity"),
+        # Seconds since the last good reading; None until there has been one.
+        "ageSeconds": round(time.time() - at, 1) if isinstance(at, (int, float)) else None,
+        "error": data.get("error"),
+    })
 
 
 @app.post("/demo/convert")

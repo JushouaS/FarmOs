@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
@@ -8,6 +8,7 @@ import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
+import { freshReading } from "@/lib/farm/pen-sensors";
 import { visionStreamUrl } from "@/lib/api-client";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay } from "@/lib/farm/sample";
 import { localeTag, tr } from "@/lib/i18n";
@@ -19,6 +20,23 @@ export const Route = createFileRoute("/visuals")({
 });
 
 type ViewLayout = "dual" | "dahua" | "kinect";
+
+/** One live reading with how it stands against its limits. */
+function PenValue({ text, status }: { text: string; status: string }) {
+  const label =
+    status === "critical" ? (
+      <span className="text-xs font-semibold text-[var(--status-red)]">{tr("(Critical)")}</span>
+    ) : status === "warning" ? (
+      <span className="text-xs font-semibold text-[var(--status-amber)]">{tr("(Warning)")}</span>
+    ) : (
+      <span className="text-xs font-semibold text-[var(--status-green)]">{tr("(Nominal)")}</span>
+    );
+  return (
+    <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+      {text} {label}
+    </span>
+  );
+}
 
 /* The menu button needs the app shell's controls, which only exist for
  * components rendered INSIDE <AppShell>. VisualsDashboardPage creates the
@@ -48,6 +66,16 @@ export function VisualsDashboardPage() {
   const overview = Route.useLoaderData() as any;
   const sample = useMemo(() => sampleForDay(overview), [overview]);
   const { farm, broilers } = sample;
+  // The pen's real air from the DHT22, when it has reported in the last few minutes. The page asks again
+  // every 30 seconds so the numbers keep up.
+  const router = useRouter();
+  useEffect(() => {
+    const timer = window.setInterval(() => void router.invalidate(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [router]);
+  const penTemperature = freshReading(overview, "temperature");
+  const penHumidity = freshReading(overview, "humidity");
+  const penHasLive = penTemperature !== null || penHumidity !== null;
   // When the day starts and the night starts comes from Settings.
   const lighting: LightingHours = overview?.lighting ?? DEFAULT_LIGHTING;
   const [layout, setLayout] = useState<ViewLayout>("dual");
@@ -464,26 +492,43 @@ export function VisualsDashboardPage() {
             {/* Quick Environment Telemetry */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <span className="label-section text-xs tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                {tr("Pen Sensor Telemetry")} <SampleBadge />
+                {tr("Pen Sensor Telemetry")} {!penHasLive && <SampleBadge />}
               </span>
 
               <div className="mt-3 space-y-2.5 text-xs">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[var(--text-secondary)] text-xs">{tr("Temperature:")}</span>
-                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    29.1°C <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
-                  </span>
+                  {penTemperature ? (
+                    <PenValue text={`${penTemperature.value.toFixed(1)}°C`} status={penTemperature.status} />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      {penHasLive && <SampleBadge />}
+                      <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+                        29.1°C <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
+                      </span>
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[var(--text-secondary)] text-xs">{tr("Humidity:")}</span>
-                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    63% <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
-                  </span>
+                  {penHumidity ? (
+                    <PenValue text={`${Math.round(penHumidity.value)}%`} status={penHumidity.status} />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      {penHasLive && <SampleBadge />}
+                      <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+                        63% <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
+                      </span>
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[var(--text-secondary)] text-xs">{tr("Ammonia (NH3):")}</span>
-                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    {tr("9 ppm")} <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Clean)")}</span>
+                  <span className="flex items-center gap-2">
+                    {penHasLive && <SampleBadge />}
+                    <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+                      {tr("9 ppm")} <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Clean)")}</span>
+                    </span>
                   </span>
                 </div>
               </div>

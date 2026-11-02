@@ -205,7 +205,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     const clusterReadingRows = liveCam
       ? await app.sqlRead`
           SELECT DISTINCT ON (s.id) st.code AS parameter, r.value, r.unit, r.status,
-                 sb.display_label AS "boundsLabel"
+                 r.recorded_at AS "recordedAt", sb.display_label AS "boundsLabel"
           FROM sensor_readings r
           JOIN sensors s ON s.id = r.sensor_id
           JOIN sensor_types st ON st.code = s.sensor_type_code
@@ -221,7 +221,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     // index.tsx reads `reading.bounds.label` — nest it to match, rather than
     // changing the frontend's access pattern for this one field.
     const clusterReadings = clusterReadingRows.map((r) => ({
-      parameter: r.parameter, value: r.value, unit: r.unit, status: r.status,
+      parameter: r.parameter, value: r.value, unit: r.unit, status: r.status, recordedAt: r.recordedAt,
       bounds: { label: r.boundsLabel ?? null },
     }));
     const cluster = liveCam

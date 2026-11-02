@@ -1,0 +1,30 @@
+# Paste ALL of this into the Raspberry Pi Connect terminal (one go) and press Enter, AFTER the DHT22 is wired and the Pi is on again.
+# Wiring (Pi switched off while you do it): sensor + to pin 1 (3.3 V), OUT to pin 7 (GPIO 4), - to pin 6 (GND).
+# It takes about 1 to 3 minutes. At the end copy everything it printed and send it back.
+#
+# What it does:
+#   A. shows what the Pi sees on the data pin (read only);
+#   B. downloads the latest camera service files from GitHub (your .env and the .venv are NOT touched);
+#   C. installs the sensor reader as a service (one apt package, python3-libgpiod; this uses sudo), with one test read;
+#   D. restarts the camera service so it can hand the reading to the website, and shows what it answers.
+
+echo; echo "=== A. The data pin (GPIO 4), read only"
+pinctrl get 4 2>/dev/null || echo "(pinctrl not available)"
+
+echo; echo "=== B. Getting the latest files"
+command -v git >/dev/null || sudo apt-get install -y git
+rm -rf ~/farmos-src
+git clone --quiet --depth 1 --filter=blob:none --sparse -b responsive-login-local-db https://github.com/JushouaS/FarmOs.git ~/farmos-src
+git -C ~/farmos-src sparse-checkout set cerebroil-stream
+cp -a ~/farmos-src/cerebroil-stream/. ~/cerebroil-stream/
+ls ~/cerebroil-stream | tr '\n' ' '; echo
+
+echo; echo "=== C. Installing the sensor reader"
+cd ~/cerebroil-stream && bash setup-dht22.sh
+
+echo; echo "=== D. Camera service and the sensor reading"
+sudo systemctl restart cerebroil-stream
+sleep 10
+curl -s -m 5 http://127.0.0.1:5000/sensors; echo
+cat ~/cerebroil-stream/dht22.json; echo
+journalctl -u dht22 -n 6 --no-pager

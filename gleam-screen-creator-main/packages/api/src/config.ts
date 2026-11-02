@@ -93,6 +93,11 @@ const schema = z.object({
   BEHAVIOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
   BEHAVIOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(30)),
 
+  // Live sensor monitor (sensor-monitor.ts): every SENSOR_POLL_SECONDS the API asks the camera service for
+  // the DHT22's newest temperature and humidity and stores them. "off" disables it.
+  SENSOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
+  SENSOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(60)),
+
   // Groq AI (Intelligence engine) — https://console.groq.com/keys
   // Optional at startup; required only when intelligence routes are hit.
   GROQ_API_KEY: z.string().optional(),

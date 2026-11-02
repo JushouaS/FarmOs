@@ -10,3 +10,7 @@ sus_responses/*.csv
 
 # Trained detector for the "Test video" button (not committed; see demo_detect.py)
 models/
+
+# The DHT22 reader's newest reading (dht22_reader.py writes it; it is a live value, not source)
+dht22.json
+dht22.tmp

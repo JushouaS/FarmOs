@@ -393,6 +393,40 @@ blocks that. A phone hotspot or a small router works.
 
 Remove those two lines to go back to the camera service on the laptop.
 
+### Temperature and humidity: the DHT22 sensor on the Raspberry Pi (optional)
+
+The pen's temperature and humidity come from a DHT22 sensor wired to the Pi. Switch the Pi **off** while you wire it.
+This is for a Raspberry Pi 4 and the 3-pin module (a small board with three pins marked `+`, `OUT` and `-`):
+
+| Sensor module | Raspberry Pi | Pin |
+|---|---|---|
+| `+` | 3.3 V power | **1** |
+| `OUT` (data) | GPIO 4 | **7** |
+| `-` | Ground | **6** |
+
+Use 3.3 V, not 5 V (the Pi's pins must not see 5 V). A bare 4-pin DHT22 (no board) also needs a 10 kΩ resistor
+between `+` and `OUT`; its pins, left to right with the grid facing you, are `+`, data, (not used), `-`.
+
+Switch the Pi on, and on the Pi run (in the folder with the camera service; it installs one package, tests the
+sensor once and starts a service that reads it all the time and at every boot):
+
+```
+cd ~/cerebroil-stream
+bash setup-dht22.sh
+```
+
+An occasional failed try in the test is normal for this sensor. If **every** try fails, check the three wires and that
+`OUT` is on pin 7 (counting from the corner pin 1, odd pins are the inner row). Another data pin: `DHT22_GPIO=17 bash
+setup-dht22.sh` (the number after "GPIO"). Then restart the camera service so it can hand the reading on:
+`sudo systemctl restart cerebroil-stream`.
+
+What happens next: the reading is kept in `~/cerebroil-stream/dht22.json`, the camera service shows it at `/sensors`, and
+the API asks for it every minute (`SENSOR_POLL_SECONDS`) and stores it as the two sensors `SN-DHT22-T` and `SN-DHT22-H`
+of Pen 1 (migration `0024`, run `bun run db:migrate` in `packages\api` once). The **Pen Sensor Telemetry** card on
+Live Camera and the dashboard then show real numbers, marked Warning or Critical outside the limits (temperature 20 to
+32 °C, humidity 50 to 70 %; they are rows in `sensor_bounds`). A reading older than 5 minutes is not shown as real: the
+card goes back to the sample values, marked as such. Ammonia is still a sample until that sensor is connected.
+
 ### Test video: the trained model on an uploaded clip (optional)
 
 The small film button in the **Live Camera** header opens "Test video". You pick a clip from the

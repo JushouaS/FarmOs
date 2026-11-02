@@ -28,6 +28,7 @@ import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
 import { startBehaviorMonitor } from "./behavior-monitor.js";
+import { startSensorMonitor } from "./sensor-monitor.js";
 import { startHousekeeping } from "./housekeeping.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 
@@ -109,6 +110,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerSettingsRoutes, { prefix: "/settings" });
 
   startBehaviorMonitor(app);
+  startSensorMonitor(app);
   startHousekeeping(app);
 
   return app;
