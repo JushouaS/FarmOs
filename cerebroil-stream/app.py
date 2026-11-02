@@ -28,6 +28,8 @@ import numpy as np
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
 
+import behavior
+
 # Load cerebroil-stream/.env (if present) before reading any of the vars below.
 load_dotenv()
 
@@ -537,6 +539,35 @@ def _analyze_dahua(frame_bytes: bytes) -> dict:
     return {"detections": detections[:50], "movement_index": movement_index, "aggression_events": 0}
 
 
+_detector_warned = False
+
+
+def _detect_birds(frame_bytes: bytes) -> tuple[list[list[float]], int, int] | None:
+    """The birds the trained detector (models/detector.onnx) finds in this picture, as
+    ([[x, y, w, h, confidence, class], ...], picture width, picture height).
+
+    None when it cannot be used right now: the model or onnxruntime is not installed, the detector is busy
+    with an uploaded test video, or SCAN_DETECTOR=0. The scan then reports motion only, as it always did."""
+    global _detector_warned
+    if os.getenv("SCAN_DETECTOR", "1") == "0":
+        return None
+    try:
+        import demo_detect
+
+        arr = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if arr is None:
+            return None
+        boxes = demo_detect.detect_frame(arr)
+    except Exception as exc:  # a missing model or package must never stop the scan
+        if not _detector_warned:
+            print(f"[scan] The trained detector cannot be used ({exc!r}); scans use motion only.")
+            _detector_warned = True
+        return None
+    if boxes is None:
+        return None
+    return boxes, int(arr.shape[1]), int(arr.shape[0])
+
+
 def _analyze_kinect(frame_bytes: bytes) -> dict | None:
     """ROI mean-intensity mass estimate from the depth colormap frame.
     Calibrated against the synthetic generator's bird-ellipse vs. empty-
@@ -588,26 +619,67 @@ def vision_analyze(camera_id: str) -> Response:
     }
 
     if source == "dahua":
-        analysis = _analyze_dahua(frame_bytes)
-        result["detections"] = analysis["detections"]
-        result["detection_count"] = len(analysis["detections"])
+        analysis = _analyze_dahua(frame_bytes)  # motion; also keeps this picture for the next pass to compare with
+        birds = _detect_birds(frame_bytes)
         mi = analysis["movement_index"]
-        result["behaviour"] = {
-            "movement_index": mi,
-            "movement_label": "Active" if mi > 0.02 else "Inactive",
-            "movement_status": "nominal" if mi > 0.02 else "warning",
-            "huddling_risk": round(max(0.0, 1.0 - mi * 10), 4),
-            "huddling_label": "Low" if mi > 0.02 else "High",
-            "huddling_status": "nominal" if mi > 0.02 else "warning",
-            "aggression_events": analysis["aggression_events"],
-        }
-        if result["detection_count"] >= 6:
-            result["clusters"] = [{
-                "label": "High density cluster",
-                "risk": round(min(1.0, result["detection_count"] / 20), 4),
-                "box": "roi",
-            }]
-            result["cluster_count"] = 1
+        if birds is None:
+            # Motion only: patches of the picture that moved. They are not birds, and the page says so.
+            result["detector"] = {"source": "motion"}
+            result["detections"] = analysis["detections"]
+            result["detection_count"] = len(analysis["detections"])
+            result["behaviour"] = {
+                "movement_index": mi,
+                "movement_label": "Active" if mi > 0.02 else "Inactive",
+                "movement_status": "nominal" if mi > 0.02 else "warning",
+                "huddling_risk": round(max(0.0, 1.0 - mi * 10), 4),
+                "huddling_label": "Low" if mi > 0.02 else "High",
+                "huddling_status": "nominal" if mi > 0.02 else "warning",
+                "aggression_events": analysis["aggression_events"],
+            }
+            if result["detection_count"] >= 6:
+                result["clusters"] = [{
+                    "label": "High density cluster",
+                    "risk": round(min(1.0, result["detection_count"] / 20), 4),
+                    "box": "roi",
+                }]
+                result["cluster_count"] = 1
+        else:
+            # Real birds from the trained detector, and the groups of them packed together like a huddle.
+            import demo_detect
+
+            boxes, width, height = birds
+            huddles = behavior.snapshot_huddles(boxes, float(width * height))
+            packed = sum(h["birds"] for h in huddles)
+            share = packed / len(boxes) if boxes else 0.0
+            crowded = share >= behavior.FDI_WARN
+            result["detector"] = {"source": "model", "model": demo_detect.MODEL_PATH.name}
+            result["detections"] = [
+                {
+                    "box_x": b[0], "box_y": b[1], "box_w": b[2], "box_h": b[3], "confidence": b[4],
+                    "behavior": "UNKNOWN", "estimated_weight_g": None, "weight_confidence": None, "flag": None,
+                }
+                for b in boxes[:200]
+            ]
+            result["detection_count"] = len(boxes)
+            result["behaviour"] = {
+                "movement_index": mi,
+                "movement_label": "Active" if mi > 0.02 else "Inactive",
+                "movement_status": "nominal" if mi > 0.02 else "warning",
+                "huddling_risk": round(share, 4),
+                "huddling_label": "High" if crowded else ("Moderate" if huddles else "Low"),
+                "huddling_status": "warning" if crowded else "nominal",
+                "aggression_events": 0,
+            }
+            result["clusters"] = [
+                {
+                    "label": "Birds packed together",
+                    "birds": h["birds"],
+                    "risk": round(h["birds"] / len(boxes), 4),
+                    "box": {"x": h["box"][0], "y": h["box"][1], "width": h["box"][2], "height": h["box"][3]},
+                }
+                for h in huddles
+            ]
+            result["cluster_count"] = len(huddles)
     else:
         result["weight"] = _analyze_kinect(frame_bytes)
 

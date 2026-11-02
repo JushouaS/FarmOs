@@ -448,6 +448,13 @@ Limits: the first 30 seconds are checked, about 4 frames per second (`DEMO_MAX_S
 second clip can take a minute or two. Without the model file the dialog says the detector is not
 installed.
 
+The **Analyze data** button on Live Camera uses the same model. It takes about 3 seconds: four pictures a
+second apart go through the detector, and the page shows how many birds were seen, the movement, and any group of
+birds packed closely together (a huddle in one picture; how long it lasts is the live monitor's job). When the model
+is not installed, or the detector is busy with an uploaded clip, it falls back to motion only and the page says
+"Moving areas" instead of "Birds seen". `SCAN_DETECTOR=0` in `cerebroil-stream/.env` turns the detector off for the
+scan. A bird's state (resting, inactive) needs minutes of watching, so the scan does not guess it.
+
 What the result shows (code: `cerebroil-stream/behavior.py`): each detected bird is followed from
 frame to frame and its box is colored by what it is doing.
 

@@ -145,7 +145,7 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
               </dd>
             </div>
             <div className="rounded-lg bg-[var(--surface-raised)] p-2">
-              <dt className="text-xs text-[var(--text-tertiary)]">{ui(lang, "areas")}</dt>
+              <dt className="text-xs text-[var(--text-tertiary)]">{ui(lang, scan.result.detector?.source === "model" ? "birds" : "areas")}</dt>
               <dd className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--text-primary)]">
                 {scan.result.detection_count}
               </dd>
@@ -184,7 +184,9 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
             })}
           </ul>
 
-          <p className="text-xs leading-relaxed text-[var(--text-tertiary)]">{ui(lang, "basis")}</p>
+          <p className="text-xs leading-relaxed text-[var(--text-tertiary)]">
+            {ui(lang, scan.result.detector?.source === "model" ? "basis_model" : "basis")}
+          </p>
         </div>
       )}
     </section>

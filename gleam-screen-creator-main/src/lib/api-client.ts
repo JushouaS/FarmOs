@@ -358,7 +358,10 @@ export interface VisionWeight {
 export interface VisionCluster {
   label: string;
   risk: number;
-  box: string;
+  /** "roi" from a motion-only scan, or the group's rectangle when the trained detector ran. */
+  box: string | { x: number; y: number; width: number; height: number };
+  /** How many birds are in this group (detector scans only). */
+  birds?: number;
 }
 
 export interface AnalysisResult {
@@ -474,6 +477,8 @@ export async function submitReport(body: ReportSubmission): Promise<void> {
 /* -------------------------------------------------------------------------- */
 
 export interface CameraScan extends AnalysisResult {
+  /** What found the birds: the trained detector (`model`) or motion only, when the model is not installed. */
+  detector?: { source: "model" | "motion"; model?: string };
   scan?: { samples: number; movement_min: number; movement_max: number; movement_mean: number };
 }
 

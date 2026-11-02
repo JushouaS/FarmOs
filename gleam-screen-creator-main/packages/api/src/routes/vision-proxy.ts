@@ -91,9 +91,11 @@ async function runScan(app: FastifyInstance, cameraId: string) {
   let dbWritten = false;
   try {
     // Many small moving areas with almost no movement overall is picture
-    // noise, not birds, so a scan saves the behaviour snapshot but not those
-    // areas as "detections", and a cluster warning only when movement is real.
-    const real = movement(chosen) > REAL_MOVEMENT;
+    // noise, not birds, so a motion-only scan saves the behaviour snapshot but
+    // not those areas as "detections", and a cluster warning only when movement
+    // is real. When the trained detector ran, the camera service reports real
+    // groups of birds packed together, and those are saved as they are.
+    const real = chosen?.detector?.source === "model" ? Number(chosen?.cluster_count ?? 0) > 0 : movement(chosen) > REAL_MOVEMENT;
     dbWritten = await persistAnalysis(app, cameraId, chosen, { detections: false, clusters: real });
   } catch (err) {
     app.log.error({ err, cameraId }, "vision scan: DB write failed, returning the scan unpersisted");
