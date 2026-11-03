@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { saveLighting } from "@/lib/api-client";
-import { clock12, type LightingHours } from "@/lib/farm/dataset";
+import { clock12, type LightingHours } from "@/lib/farm/lighting";
 import { Block, Hint, NOT_ALLOWED, SaveRow, Section, useSaver } from "./SettingsParts";
 import { tr } from "@/lib/i18n";
 

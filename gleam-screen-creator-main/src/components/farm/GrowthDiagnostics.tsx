@@ -11,19 +11,14 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
-import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, type SampleFlock } from "@/lib/farm/sample";
+import { Link } from "@tanstack/react-router";
+import { HEAVY_RATIO, UNDERWEIGHT_RATIO, rangeLabel, type FlockWeights } from "@/lib/farm/weights";
 import { localeTag, tr } from "@/lib/i18n";
 
 /* The diagnostics card (ready, then processing, then a report) and the growth report built on it.
  * Analytics and the dashboard's Analyze Growth button both show it, so it lives here. */
 
 export type InsightLevel = "positive" | "warning" | "critical" | "info";
-
-/** The breed's weight on the last day, carried by how far ahead or behind the flock is now. */
-export function projectedHarvestG(sample: SampleFlock): number | null {
-  const last = sample.farm.weight.curve.find((p) => p.day === sample.endDay)?.standardG;
-  return last ? Math.round((last * sample.farm.weight.actualAvgG) / sample.standardG) : null;
-}
 
 /** What to do about feed on this day of the grow-out (usual stages: grower, then finisher, then withdrawal before catching). */
 function feedAdvice(day: number, endDay: number): string {
@@ -251,38 +246,51 @@ export function DiagnosticsCard({
 
 
 /* ── Weight growth report ────────────────────────────────────── */
-export function GrowthAnalysisSection({ sample, autoRun }: { sample: SampleFlock; autoRun?: boolean }) {
-  const { farm, broilers, endDay } = sample;
-  const wd = sample.weightBreakdown;
-  const total = broilers.length;
+/** The report on the birds that were weighed (typed in on Flock Tracking). With none, it says how to get one. */
+export function GrowthAnalysisSection({ flock, autoRun }: { flock: FlockWeights; autoRun?: boolean }) {
+  const { birds, endDay, day } = flock;
+  const total = birds.length;
+  if (total === 0 || flock.avgG === null || !flock.standardG || flock.variancePercent === null) {
+    return (
+      <div className="cb-card p-5">
+        <h2 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{tr("Automated Growth Diagnostics & Trajectory")}</h2>
+        <p className="mt-1.5 max-w-xl text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+          {tr("No bird weights have been typed in yet. Weigh a few birds, type their weights on Flock Tracking, and the growth report appears here.")}
+        </p>
+        <Link to="/flock-monitoring" className="tap mt-3 inline-flex text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>
+          {tr("Open Flock Tracking →")}
+        </Link>
+      </div>
+    );
+  }
+
+  const wd = flock.breakdown;
   const optPct = Math.round((wd.Optimal / total) * 100);
-  const avgW = farm.weight.actualAvgG;
-  const stdW = farm.weight.standardG;
+  const avgW = flock.avgG;
+  const stdW = flock.standardG;
   const wDelta = avgW - stdW;
-  const day = farm.cycle.day;
-  const variancePercent = farm.weight.variancePercent;
+  const measuredDay = flock.measuredDay ?? day;
+  const variancePercent = flock.variancePercent;
   const above = variancePercent >= 0;
   const signedVar = `${above ? "+" : ""}${variancePercent}%`;
-  const sd = farm.cohorts[0]?.standardDeviationG ?? 0;
-  const lightest = broilers.reduce((a, b) => (b.weightG < a.weightG ? b : a));
-  const harvestG = projectedHarvestG(sample);
-  const lo = fmtW(stdW * UNDERWEIGHT_RATIO);
-  const hi = fmtW(stdW * HEAVY_RATIO);
+  const sd = flock.sdG;
+  const lightest = birds.reduce((a, b) => (b.weightG < a.weightG ? b : a));
+  const harvestG = flock.projectedHarvestG;
   return (
     <DiagnosticsCard
       title={tr("Automated Growth Diagnostics & Trajectory")}
-      description={tr("Run multi-factor AI diagnostic on current {total}-bird depth-scan telemetry, Ross 308 standard variance, cohort uniformity, and feed efficiency projections for Day {endDay} harvest.", { total, endDay })}
-      chips={[tr("{total} Scans Ready", { total }), tr("Day {day} Cohort", { day }), tr("Ross 308 Benchmark"), tr("FCR {fcr} Correlation", { fcr: farm.feed.fcr })]}
+      description={tr("Check the {total} birds that were weighed against the Ross 308 standard for Day {day}: how far ahead or behind the flock is, how even the weights are, and where the flock is heading for Day {endDay}.", { total, day: measuredDay, endDay })}
+      chips={[tr("{total} birds weighed", { total }), tr("Day {day} weights", { day: measuredDay }), tr("Ross 308 Benchmark")]}
       buttonLabel={tr("Process & Analyze Growth")}
       processingTitle={tr("Processing Telemetry & Growth Curves...")}
       steps={[
-        tr("Ingesting {total} depth-scan weight and morphometric records...", { total }),
-        tr("Benchmarking flock curve against Ross 308 Day {day} standards ({signedVar} delta)...", { day, signedVar }),
-        tr("Evaluating cohort uniformity & clustering at drinker lines..."),
-        tr("Synthesizing actionable harvest yield projections..."),
+        tr("Reading the {total} weights typed in for Day {day}...", { total, day: measuredDay }),
+        tr("Benchmarking flock curve against Ross 308 Day {day} standards ({signedVar} delta)...", { day: measuredDay, signedVar }),
+        tr("Checking how even the weights are..."),
+        tr("Working out where the flock is heading for harvest..."),
       ]}
       reportTitle={tr("Flock Growth Diagnostic Report")}
-      evaluated={tr("{total} Broiler Depth-Scans Evaluated", { total })}
+      evaluated={tr("{total} birds weighed", { total })}
       autoRun={autoRun}
     >
           {/* Diagnostic Key Takeaway Scorecards */}
@@ -320,23 +328,35 @@ export function GrowthAnalysisSection({ sample, autoRun }: { sample: SampleFlock
 
           {/* Detailed Insight Cards */}
           <div className="space-y-3">
+            {total < 10 && (
+              <InsightCard
+                level="info"
+                title={tr("Only {total} birds were weighed", { total })}
+                body={tr("A report from fewer than 10 birds can be far from the real flock. Weigh more birds and type them in for a more reliable picture.")}
+              />
+            )}
+
             <InsightCard
               level={above ? "positive" : variancePercent > -5 ? "info" : "warning"}
               title={tr("Flock is {value}% {value2} Ross 308 breed standard", { value: Math.abs(variancePercent), value2: above ? tr("above") : tr("below") })}
-              body={tr("Average weight of {avgW} g at Day {day} {value} the standard benchmark of {stdW} g by {value2} g. {value3}", { avgW, day, value: above ? tr("exceeds") : tr("is under"), stdW, value2: Math.abs(wDelta), value3: above ? tr("Growth acceleration reflects optimal feed conversion and house environmental controls.") : tr("Check feed access, water flow and house temperature.") })}
+              body={tr("Average weight of {avgW} g at Day {day} {value} the standard benchmark of {stdW} g by {value2} g. {value3}", { avgW, day: measuredDay, value: above ? tr("exceeds") : tr("is under"), stdW, value2: Math.abs(wDelta), value3: above ? tr("The flock is growing faster than the standard.") : tr("Check feed access, water flow and house temperature.") })}
             />
 
             <InsightCard
               level={optPct >= 80 ? "positive" : "info"}
               title={tr("{optPct}% of birds in optimal weight range ({value})", { optPct, value: rangeLabel(stdW * UNDERWEIGHT_RATIO, stdW * HEAVY_RATIO) })}
-              body={tr("{Optimal} of {total} birds are clustered in the target growth bracket for Day {day}. Standard deviation is {value} (±{sd} g), {value2}.", { Optimal: wd.Optimal, total, day, value: sd <= avgW * 0.1 ? tr("low") : tr("moderate"), sd, value2: sd <= avgW * 0.1 ? tr("showing good flock uniformity") : tr("so keep an eye on the lighter birds") })}
+              body={
+                sd !== null
+                  ? tr("{Optimal} of {total} birds are clustered in the target growth bracket for Day {day}. Standard deviation is {value} (±{sd} g), {value2}.", { Optimal: wd.Optimal, total, day: measuredDay, value: sd <= avgW * 0.1 ? tr("low") : tr("moderate"), sd, value2: sd <= avgW * 0.1 ? tr("showing good flock uniformity") : tr("so keep an eye on the lighter birds") })
+                  : tr("{Optimal} of {total} birds are in the target growth bracket for Day {day}.", { Optimal: wd.Optimal, total, day: measuredDay })
+              }
             />
 
             {wd.Underweight > 0 && (
               <InsightCard
                 level="warning"
                 title={tr("{Underweight} underweight {value} flagged for feeder access", { Underweight: wd.Underweight, value: wd.Underweight === 1 ? tr("bird") : tr("birds") })}
-                body={tr("Bird {id} ({value} g) is currently {value2} g below the flock average. Telemetry indicates lower movement frequency near Zone CAM-01. Recommend adjusting drinker nipple height and confirming feed pan distribution.", { id: lightest.id, value: lightest.weightG.toLocaleString(), value2: Math.max(0, avgW - lightest.weightG) })}
+                body={tr("Bird {id} ({value} g) is {value2} g below the flock average. Check that the lightest birds can reach the feeders and drinkers, and look at them for signs of illness.", { id: lightest.id, value: lightest.weightG.toLocaleString(), value2: Math.max(0, avgW - lightest.weightG) })}
               />
             )}
 

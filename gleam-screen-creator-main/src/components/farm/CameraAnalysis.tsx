@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Info, Loader2, OctagonAlert, ScanSearch } from "lucide-react";
 import { ApiError, scanCamera } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
-import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import {
   CHROME,
   buildFindings,

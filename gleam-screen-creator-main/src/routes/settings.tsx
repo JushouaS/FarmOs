@@ -18,7 +18,7 @@ import {
 } from "@/lib/api-client";
 import { PushError, disablePush, enablePush, pushSupported } from "@/lib/push";
 import { useAuth } from "@/lib/auth-context";
-import { DEFAULT_LIGHTING } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING } from "@/lib/farm/lighting";
 import { getNotificationPreferences, getOperationsOverview } from "@/lib/farm/repository";
 import { T, localeTag, tr } from "@/lib/i18n";
 

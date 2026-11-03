@@ -1,8 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { buildFarmSnapshot } from "./farm/snapshot";
-import { getOperationsOverview } from "./farm/repository";
-import { sampleForDay } from "./farm/sample";
+import { buildLiveSnapshot } from "./farm/snapshot";
+import { getLiveSnapshotInputs } from "./farm/repository";
 
 /**
  * Intelligence engine — powered by Groq's free OpenAI-compatible API.
@@ -27,11 +26,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
  * is on the grow-out day Settings has set (not the day the server started).
  */
 async function currentSnapshot(): Promise<string> {
-  try {
-    return buildFarmSnapshot(sampleForDay(await getOperationsOverview()).farm);
-  } catch {
-    return buildFarmSnapshot();
-  }
+  return buildLiveSnapshot(await getLiveSnapshotInputs()).text;
 }
 
 /** What to add to a prompt so the model writes for farmers in the language chosen in the app. */
@@ -43,8 +38,10 @@ const languageNote = (lang?: string) => (lang && LANGUAGE_NOTE[lang] ? `\n${LANG
 
 const systemPrompt = (snapshot: string, lang?: string) => `You are the CereBroiler Intelligence Engine inside the FARM_OS operations console.
 Produce analysis strictly grounded in the telemetry snapshot below. Be precise and clinical;
-reference sensors, houses and figures from the snapshot. Respond in plain text only
-(no markdown, no headings).${languageNote(lang)}
+reference sensors, houses and figures from the snapshot. Use only figures that are in the snapshot.
+Where the snapshot says something is unknown, silent or not measured, say that it is not known;
+never estimate it, and never invent birds, readings, incidents or causes.
+Respond in plain text only (no markdown, no headings).${languageNote(lang)}
 
 ${snapshot}`;
 
@@ -166,8 +163,9 @@ async function callEngineWithTiming(
 /* -------------------------------------------------------------------------- */
 
 const BRIEFING_PROMPT = `Compile the automated situation briefing for the farm operator right now.
-Cover: overall flock status, the open incident in the snapshot with its root cause, and the
-immediate outlook. Maximum 130 words, 2-3 short paragraphs separated by blank lines.`;
+Cover: what the snapshot shows about the flock's weight, the pen's air and behavior, any open
+alerts, and what is not known and should be checked or measured next. If very little is measured,
+say so plainly and list what to measure. Maximum 130 words, 2-3 short paragraphs separated by blank lines.`;
 
 export const fetchSituationBriefing = createServerFn({ method: "POST" }).handler(async ({ data }) => {
   const lang = ((data ?? {}) as { lang?: string }).lang;
@@ -192,7 +190,8 @@ const alertSchema = z.object({
 export type FeedbackAlert = z.infer<typeof alertSchema>;
 
 const alertsPrompt = (snapshot: string, lang?: string) => `Analyze the telemetry snapshot and produce feedback alerts for the farm operator.
-Return ONLY a JSON array (no markdown fences, no prose) of 3 to 5 objects with exactly these keys:
+Return ONLY a JSON array (no markdown fences, no prose) of 3 to 5 objects with exactly these keys.
+Use only figures from the snapshot; for data the snapshot says is missing, give a "warning" about the missing measurement instead of guessing:
 "severity" (one of "critical", "warning", "nominal"), "title" (<= 8 words, uppercase),
 "detail" (one sentence citing snapshot figures), "action" (one imperative sentence).
 Order from most to least severe.${lang && LANGUAGE_NOTE[lang] ? `\nKeep the JSON keys and the "severity" values in English exactly as listed; only "title", "detail" and "action" are written in the chosen language.${languageNote(lang)}` : ""}

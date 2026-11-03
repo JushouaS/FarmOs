@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { GrowthCard } from "@/components/farm/GrowthCard";
 import { GrowthAnalysisSection } from "@/components/farm/GrowthDiagnostics";
-import { SampleNotice } from "@/components/farm/SampleBadge";
-import { sampleForDay } from "@/lib/farm/sample";
+import { fetchWeightSpread } from "@/lib/api-client";
+import { NO_SPREAD, buildFlockWeights, type WeightSpread } from "@/lib/farm/weights";
 import { buildGrowthCardData } from "@/lib/farm/growth";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { tr } from "@/lib/i18n";
@@ -52,7 +52,12 @@ function Dashboard() {
   const growth = buildGrowthCardData(data);
   // The analysis opens under the Growth card. Each press starts it again (a new key), and it scrolls into view.
   const [analysisRun, setAnalysisRun] = useState(0);
-  const sample = useMemo(() => sampleForDay(data), [data]);
+  // The report describes the birds that were weighed and typed in on Flock Tracking.
+  const [spread, setSpread] = useState<WeightSpread>(NO_SPREAD);
+  useEffect(() => {
+    void fetchWeightSpread().then(setSpread);
+  }, [analysisRun]);
+  const flock = useMemo(() => buildFlockWeights(data, spread), [data, spread]);
 
   return (
     <AppShell>
@@ -84,8 +89,7 @@ function Dashboard() {
 
       {analysisRun > 0 && (
         <div className="mb-6">
-          <SampleNotice>{tr("The weight spread, bird counts and feed figures in this report are built-in sample data, as on the Analytics page.")}</SampleNotice>
-          <GrowthAnalysisSection key={analysisRun} sample={sample} autoRun />
+          <GrowthAnalysisSection key={analysisRun} flock={flock} autoRun />
         </div>
       )}
     </AppShell>

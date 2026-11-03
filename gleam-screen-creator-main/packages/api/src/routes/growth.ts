@@ -3,11 +3,14 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { raiseAlert } from "../notify.js";
 import { syncDayWeight } from "../measured-weights.js";
+import { currentDay, databaseToday, readCycleSetting, standardAtDay, type WeightPoint } from "../cycle-day.js";
 
 /**
  * GET  /growth/analytics  — growth curve, cohorts, volumetric sample, mortality.
  * GET/PUT/DELETE /growth/actual-weights — the weight a person measured for a bird on a
  *                            grow-out day, to compare with the estimate (Flock Tracking).
+ * GET  /growth/weight-spread — the weights typed in for the newest grow-out day (up to today) that has any,
+ *                            with the breed standard for that day; the pages work out the spread from it.
  * POST /growth/mortality  — log an observed daily death count for a house
  *                            (OPERATOR/FARM_MANAGER/ADMIN). Raises a
  *                            mortality_spike alert when the daily count
@@ -65,6 +68,25 @@ export async function registerGrowthRoutes(app: FastifyInstance) {
       FROM actual_weights WHERE cycle_id = ${cycleId} AND day < ${q.data.day}
       ORDER BY bird_id, day DESC`;
     return reply.send(rows);
+  });
+
+  // The set of weights the Dashboard report, the Analytics weight tab and the AI briefing describe.
+  app.get("/weight-spread", { preHandler: [requireAuth] }, async (_request, reply) => {
+    const empty = { day: null, n: 0, standardG: null, birds: [] };
+    const cycleId = await activeCycleId(app);
+    if (!cycleId) return reply.send(empty);
+    const today = await databaseToday(app);
+    const day = currentDay(await readCycleSetting(app, today), today);
+    const newest = await app.sqlRead`
+      SELECT max(day)::int AS day FROM actual_weights WHERE cycle_id = ${cycleId} AND day <= ${day}`;
+    const measuredDay = newest[0]?.day as number | null;
+    if (measuredDay === null || measuredDay === undefined) return reply.send(empty);
+    const rows = await app.sqlRead`
+      SELECT bird_id AS "id", actual_g::float AS "weightG"
+      FROM actual_weights WHERE cycle_id = ${cycleId} AND day = ${measuredDay} ORDER BY bird_id`;
+    const standards = await app.sqlRead`SELECT day, standard_g AS "standardG" FROM cycle_weights WHERE cycle_id = ${cycleId}`;
+    const points: WeightPoint[] = standards.map((r) => ({ day: Number(r.day), actualG: null, standardG: Number(r.standardG) }));
+    return reply.send({ day: measuredDay, n: rows.length, standardG: standardAtDay(points, measuredDay), birds: rows });
   });
 
   // Enter (or correct) a bird's weight for a day.

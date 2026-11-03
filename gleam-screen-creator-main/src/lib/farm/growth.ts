@@ -24,6 +24,8 @@
  *   ammonia                   temperature, humidity, nh3  { value, unit, status, bounds.label }
  */
 
+import { FRESH_MS } from "./pen-sensors";
+
 export interface GrowthPoint {
   day: number;
   actualG: number;
@@ -74,10 +76,18 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function reading(readings: any[], parameter: string): GrowthReading {
-  const r = readings.find((x) => x?.parameter === parameter);
+/**
+ * The newest reading of one kind. One that is older than the sensor's reporting rhythm (a sensor that stopped,
+ * or a sample row from 2024) is not "the pen's air now", so its value is left empty and the card shows "—".
+ */
+function reading(readings: any[], parameter: string, now = Date.now()): GrowthReading {
+  const r = readings
+    .filter((x) => x?.parameter === parameter)
+    .sort((a, b) => Date.parse(b?.recordedAt ?? "") - Date.parse(a?.recordedAt ?? "") || 0)[0];
+  const at = r?.recordedAt ? Date.parse(r.recordedAt) : NaN;
+  const fresh = Number.isFinite(at) && now - at <= FRESH_MS;
   return {
-    value: num(r?.value),
+    value: fresh ? num(r?.value) : null,
     unit: typeof r?.unit === "string" ? r.unit : null,
     range: typeof r?.bounds?.label === "string" ? r.bounds.label : null,
     status: typeof r?.status === "string" ? r.status : null,

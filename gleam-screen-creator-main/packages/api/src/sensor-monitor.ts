@@ -92,11 +92,14 @@ export function startSensorMonitor(app: FastifyInstance): void {
     const silent = minutesSilent(lastGoodAt, Date.now());
     if (silent === null || silent < env.SENSOR_OFFLINE_MINUTES || reported) return;
     reported = true;
+    // An outage that was already reported in the last 12 hours (even one somebody has acknowledged) is not reported
+    // again just because the API restarted.
+    const recent = await app.sqlRead`SELECT 1 FROM alerts WHERE kind = 'Sensor Offline' AND raised_at > now() - interval '12 hours' LIMIT 1`;
+    if (recent.length > 0) return;
     await raiseAlert(app, {
       kind: "Sensor Offline",
       severity: "warning",
       message: `The pen temperature and humidity sensor has sent no reading for ${silent} minutes (${why}). Check its wires and power on the Raspberry Pi.`,
-      dedupeMinutes: 12 * 60,
     });
   };
 

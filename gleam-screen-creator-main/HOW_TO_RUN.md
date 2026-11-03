@@ -59,7 +59,6 @@ Everything lives under one parent folder:
 drive-download-20260831T212213Z-1-001\
   gleam-screen-creator-main\                <-- PARENT folder
     cerebroil-stream\                        <-- camera service (Python)   [used]
-    cerebroil-backend\                       <-- older Python/FastAPI backend [NOT used by the website]
     gleam-screen-creator-main\               <-- the project (git repo, web app)
       src\                                   <-- website code (React)
       packages\api\                          <-- API server + database scripts
@@ -676,8 +675,8 @@ taskkill /PID <the number in the last column> /F
 
 - The placeholder camera service that used to be in `packages\vision` (and the `npm run dev:vision` script) was removed.
   The only camera service is `cerebroil-stream`. It stays in git history if it is ever wanted.
-- `cerebroil-backend` is an older FastAPI backend written for a Raspberry Pi (YOLOv8, ByteTrack, ROS 2).
-  The website does **not** use it.
+- `cerebroil-backend` (an older FastAPI backend for a Raspberry Pi with YOLOv8, ByteTrack and ROS 2) was removed.
+  The website never used it. It stays in git history if it is ever wanted.
 
 ---
 
@@ -729,11 +728,29 @@ What is real and what is a stand-in (important when you write about it; kept up 
   - logins, accounts, settings, alerts raised by the monitors, and mortality typed in by a person.
 - **Stand-in or derived:**
   - the weights on the Test video are the standard weight for the day spread over the birds by box size, not measured;
-  - the Analytics **Weight Growth** tab, the per-bird table on **Flock Monitoring** and the report under the Dashboard's
-    Growth card are built-in sample data (each says so on the page);
-  - the **Insights** AI text is written from the built-in sample flock, not the live one (plan.md task T1.3);
-  - alerts, incidents and archived reports that came with the database (dated 2024) are demo rows;
+  - the **Weight Growth** tab, the report under the Dashboard's Growth card and the **Insights** AI text describe only the
+    birds whose weights were typed in on Flock Tracking; with none typed in they say so instead of showing numbers;
+  - the Insights AI needs `GROQ_API_KEY` in the project root `.env`, and it is told to say "not measured" for anything it
+    has no data for;
+  - a new database comes with demo rows dated 2024 (extra houses, cameras, an incident, reports); see "Setting up your
+    own farm" below to remove them;
   - there is no feed, water or ammonia sensor, so those figures are not shown.
+
+
+## Setting up your own farm (once, after the database is created)
+
+A new database comes with demo rows: three extra houses, two extra cameras, their sensors, four alerts, an incident,
+reports and cohorts, all dated 2024, and a facility named `POULTRY_AI`. To remove them and set your own farm name, the
+house the camera watches and how many birds are in it, run this in `packages\api` (it only shows what it would change
+until you add `--yes`; back the database up first with `scripts\backup-db.ps1`):
+
+```
+npx tsx scripts/seed-farm.ts --name "Your Farm Name" --birds 20
+npx tsx scripts/seed-farm.ts --name "Your Farm Name" --birds 20 --yes
+```
+
+What was measured for real stays: the DHT22 readings, typed-in weights, accounts, settings and any alerts raised by the
+monitors. Options: `--house "Pen 1"`, `--breed "Ross 308"`.
 
 
 ## Privacy Policy
@@ -762,8 +779,6 @@ What was found and closed in the security review, and what you still decide:
   or Administrator role. One test video runs at a time.
 - **Behind a proxy?** Set `TRUST_PROXY` to the proxy's address. Use HTTPS in production (`COOKIE_SECURE` stays on
   `auto` and the cookies become Secure there).
-- **Older backend (`cerebroil-backend`).** Every route now needs an `X-API-Key` from `API_KEYS` (none set = closed),
-  its ports are open to this computer only, and it needs `POSTGRES_PASSWORD` in `.env`. The website does not use it.
 - **Accounts.** An administrator opens **Settings, Accounts** (only administrators see it) to add a person with an
   email, a role and a temporary password, to switch an account off or on, and to set a new temporary password. The
   person gets an email with the password; it works for `TEMP_PASSWORD_HOURS` (48 by default), and the first

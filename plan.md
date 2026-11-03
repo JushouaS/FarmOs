@@ -71,10 +71,10 @@ Verified by reading every `INSERT`/`UPDATE` in `app/packages/api/src` and `app/p
 | Typed-in scale weights | `actual_weights` | Yes: `PUT /growth/actual-weights` | **Real** (manual) |
 | Mortality | `mortality_logs` | Yes: `POST /growth/mortality` | **Real** (manual only) |
 | Dashboard weight curve, sample size | `cycle_weights` | Yes since 2026-11-04: mean of typed-in `actual_weights` per day (`measured-weights.ts`). Before that, no writer; only the `0009` seed | **Seed data, confirmed**: 7 rows, newest dated 2024-05-25 (days 7 to 42); the Dashboard reads its "actual" weight off this curve |
-| Dashboard FCR, daily gain, feed eaten, water, activity % | `feed_samples`, `water_samples`, `activity_samples` | **No writer anywhere** | **Empty, confirmed**: 0 rows in each table, so the cards show "—"; no physical source exists |
+| Dashboard FCR, daily gain, feed eaten, water, activity % | `feed_samples`, `water_samples`, `activity_samples` | **No writer anywhere** | **Empty, confirmed**: 0 rows, so nothing is shown. The Growth card no longer has an ammonia cell, and its temperature and humidity show only a reading from the last 5 minutes |
 | FCR target | `FCR_TARGET = 1.70` in `routes/operations.ts` | n/a | Constant, not per day |
-| Analytics → Weight Growth tab, Flock Monitoring per-bird table, Dashboard analysis report | `app/src/lib/farm/dataset.ts` via `sampleForDay()` (`app/src/lib/farm/sample.ts`) | n/a | **Sample**, each marked with `SampleNotice` |
-| Insights → AI briefing and alert analysis | `app/src/lib/intelligence.ts` line 31: `buildFarmSnapshot(sampleForDay(...).farm)` | n/a | **Built from the sample flock**, and `GROQ_API_KEY` is not in the root `.env` (only `TINYFISH_API_KEY`, `VITE_VISION_ORIGIN`), so it cannot run now |
+| Analytics → Weight Growth tab, Dashboard analysis report, Flock Tracking | `actual_weights` (typed in) through `GET /growth/weight-spread` and `app/src/lib/farm/weights.ts` | Yes: `PUT /growth/actual-weights` | **Real since 2026-11-04**: the sample dataset (`dataset.ts`, `sample.ts`) is deleted. With no weights typed in the pages show "No weights yet" |
+| Insights → AI briefing and alert analysis | `app/src/lib/farm/snapshot.ts` (`buildLiveSnapshot`) from the overview, the typed-in weights and the live behavior monitor | n/a | **Real since 2026-11-04**; lists what is NOT MEASURED and tells the model not to guess. `GROQ_API_KEY` is still not set in the root `.env`, so it cannot run until you add one |
 | Alerts, incidents, archived reports, anomaly events | seeded rows from `0009` | Alerts: yes, from monitors (`behavior-monitor.ts`, `notify.ts`); incidents/reports: seed | **Seed, confirmed for alerts**: 4 rows, newest 2024-05-25. Incidents and reports not counted: **Requires investigation** |
 
 ### 2.3 Sample data already removed (commit `1e22610` and earlier)
@@ -138,9 +138,9 @@ back under memory pressure.
 | ID | Gap | Evidence | Severity |
 |----|-----|----------|----------|
 | G-01 | Local PostgreSQL on Windows is unreliable under memory pressure (backend processes fail to start, error 487) | `server.log`; psql refused connections at 0.4 GB free | Critical |
-| G-02 | Dashboard weight curve, sample size, confidence are seed data; no code writes `cycle_weights` | grep of `INSERT INTO`/`UPDATE` in `app/packages/api/src`; `0009` seed | Critical |
-| G-03 | Insights AI briefing is generated from the sample flock; `GROQ_API_KEY` missing | `app/src/lib/intelligence.ts:31`; root `.env` keys | Critical |
-| G-04 | Dashboard FCR, feed, water, activity cards have no data source and no writer | `routes/operations.ts` lines ~142–185; no `INSERT` | High |
+| G-02 | ~~Dashboard weight curve is seed data~~ **Fixed 2026-11-04** (T1.1, migration 0025) | | Done |
+| G-03 | ~~Insights AI briefing built from the sample flock~~ **Fixed 2026-11-04** (T1.3). Still needs `GROQ_API_KEY` | | High (key) |
+| G-04 | ~~Dashboard feed, water, activity cards have no source~~ **Hidden 2026-11-04** (T1.2). Adding feed entry by hand is optional (see Optional enhancements) | | Done |
 | G-05 | No database backup; trained models (`detector.onnx`, `kinect_chicken_seg.pt`, `weight_model_size_v1.json`) are git-ignored, so only exist on two machines | `.gitignore`, `cerebroil-stream/models/`, no `pg_dump` anywhere | Critical |
 | G-06 | No automated tests | repo-wide search | High |
 | G-07 | Kinect panel shows a **simulated picture with fake weights** (K-001… 799 g) when the bridge is down | Screenshot 2026-11-03; HOW_TO_RUN §7 | High |
@@ -148,15 +148,15 @@ back under memory pressure.
 | G-09 | Kinect bridge and chicken finder start by hand on the laptop; nothing restarts them; both were down at assessment | Port check | High |
 | G-10 | DHT22 fault; no "sensor offline" detection or alert | `/sensors` reply | Medium |
 | G-11 | Behavior monitor off; thresholds uncalibrated | `/behavior/status` → `disabled` | High |
-| G-12 | Dead/alternative code: `cerebroil-backend/` (orphan), `app/packages/vision/` (stub, port clash with the real camera service), `app/scripts` has no tests | HOW_TO_RUN §9 | Medium |
-| G-13 | Seeded demo rows (facility "Data Cruz Poultry Farm", alerts, incidents, reports, `0011_seed_default_admin.sql`) ship with every fresh database | Migrations 0009, 0011 | High |
+| G-12 | ~~Dead code~~ **Removed 2026-11-04**: `cerebroil-backend/`, `app/packages/vision/`, `dataset.ts`, `sample.ts`. A git-ignored `cerebroil-backend/.env` is left in that folder for you to delete | | Done |
+| G-13 | Demo rows ship with every fresh database. **Tool written 2026-11-04**: `app/packages/api/scripts/seed-farm.ts` removes them and sets the real farm (tested on a copy). **Still to do:** run it on the real database with the farm's real name | Migrations 0009, 0011 | High |
 | G-14 | Lint: 3,045 findings, mostly formatting; CRLF/LF warnings on every commit | eslint run; git warnings | Low |
 | G-15 | No production hosting config (no Dockerfile for API/web, no process manager, no CI, no monitoring) | repo search; only `cerebroil-stream/Dockerfile` exists | Critical |
 | G-16 | API ↔ Pi traffic is plain http on a LAN; a cloud API cannot reach a Pi on a private network | HOW_TO_RUN security notes | High |
 | G-17 | Test-video weights are the standard weight redistributed, not measured; shown to the user with a 20% error | `video-weight.ts` | Medium |
 | G-18 | Documentation stale (§2.4) | — | Medium |
 | G-19 | `demoJobRunning` stays set if the browser disconnects mid-upload (user sees "Another video is being checked") | `routes/vision-proxy.ts` | Low |
-| G-20 | Pages still on sample data: Analytics Weight Growth tab, Flock Monitoring per-bird table, Dashboard analysis report | §2.2 | High |
+| G-20 | ~~Pages still on sample data~~ **Fixed 2026-11-04** (T1.4) | | Done |
 
 ---
 
@@ -213,17 +213,17 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 - Depends on: T1.0.
 - Acceptance: with only typed-in weights for a day, the Dashboard shows exactly their mean and count; a day with no data shows no point; no seeded value appears for any day.
 
-**T1.2 Decide and implement feed, water, activity, FCR** — *High*
+**T1.2 Decide and implement feed, water, activity, FCR** — *High* — **done 2026-11-04 by hiding**: the ammonia cell is gone from the Growth card and the temperature and humidity show only fresh readings (`app/src/lib/farm/growth.ts`); the feed, water and activity tables stay empty and nothing displays them. A manual feed-entry form was not built (optional).
 - Description: no sensor exists. Either hide the cards and `FCR_TARGET` usage, or add manual entry (feed delivered per day) and compute FCR from it and the measured weight; activity % can come from the live monitor once T2.1 is done.
 - Files: `app/packages/api/src/routes/operations.ts`, `app/src/lib/farm/growth.ts`, `app/src/components/farm/GrowthCard.tsx`.
 - Acceptance: no card shows a number that has no writer; chosen manual-entry fields validate (≥ 0) and survive a restart.
 
-**T1.3 Feed the AI briefing real data only** — *Critical*
+**T1.3 Feed the AI briefing real data only** — *Critical* — **done 2026-11-04**: `snapshot.ts` writes the briefing input only from the overview, the typed-in weights (`GET /growth/weight-spread`), fresh DHT22 readings, the live behavior monitor and alerts from the last 7 days, and lists what is NOT MEASURED; the prompts tell the model not to guess; the Insights page reads the overview instead of the old sample report (`getMonitoringReport` and `getVisualTelemetry` are deleted). Tested in `app/src/lib/farm/weights.test.ts` (`bun run test` at the project root). **Still to do:** set `GROQ_API_KEY` in the root `.env`.
 - Description: replace `sampleForDay(...).farm` in `app/src/lib/intelligence.ts` with a snapshot from the live overview, live monitor, Kinect average and DHT22; when a field is unknown say so in the prompt and in the answer; set `GROQ_API_KEY`.
 - Files: `app/src/lib/intelligence.ts`, `app/src/routes/intelligence.tsx`, `app/src/lib/analysis-insights.ts`.
 - Acceptance: with the sample dataset deleted from the build, the briefing still works; with no data it says "not enough data" rather than inventing numbers; key missing gives a clear message.
 
-**T1.4 Replace the remaining sample pages** — *High* (G-20)
+**T1.4 Replace the remaining sample pages** — *High* (G-20) — **done 2026-11-04**: Analytics → Weight Growth, the Dashboard report and the Flock Tracking sheet use the weights typed in (`weights.ts`, new `GET /growth/weight-spread`); with none they say so. Flock Tracking now lists B-001 to the pen's flock size and drops the sample estimates, differences and flags. No `SampleNotice` or `sampleForDay` is left.
 - Description: Analytics Weight Growth tab from real weights (T1.1) and Kinect distribution; Flock Monitoring per-bird table: either remove it or drive it from Kinect tracking (needs an ID tracker, out of scope: recommend removal and keep the flock summary); Dashboard analysis report from real numbers.
 - Files: `app/src/routes/telemetry.tsx`, `app/src/routes/flock-monitoring.tsx`, `app/src/routes/index.tsx`, `app/src/components/farm/GrowthDiagnostics.tsx`.
 - Depends on: T1.1.
@@ -234,12 +234,12 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 - Files: `app/src/components/farm/KinectDepthView.tsx`, `app/src/routes/visuals.tsx`, `app/src/lib/i18n/messages/`.
 - Acceptance: stopping `KinectBridge.exe` shows the message within 10 s and no fake weights.
 
-**T1.6 Clean production seed** — *High* (G-13)
+**T1.6 Clean production seed** — *High* (G-13) — **tool done 2026-11-04**: `npx tsx scripts/seed-farm.ts --name "<farm>" [--house --birds --breed] [--yes]` (a dry run unless `--yes`, one transaction). Tried on a restored copy: it removed the 2024 incident, alerts, reports, anomaly events, cohorts, 2 demo cameras, 7 demo sensors and 3 demo houses, kept the real house, camera, DHT22 readings and accounts, and all API tests passed on the cleaned copy. **Not run on your real database yet: it needs your farm's real name.**
 - Description: split `0009`/`0011` into reference data (roles, sensor types, bounds, breed standard) and demo data; provide a `seed-farm` command that sets the real farm name, house, population, start date, and removes demo alerts/incidents/reports.
 - Files: `app/packages/api/migrations/`, `app/packages/api/scripts/`.
 - Acceptance: a fresh database plus the seed command shows no demo alert, incident or report and no "Data Cruz" name unless that is the real farm.
 
-**T1.7 Remove dead code** — *Medium* (G-12) — **partly done 2026-11-04**: `app/packages/vision/` and the `dev:vision` script are removed; still to do: `cerebroil-backend/`, the `dataset.ts` helpers and `sample.ts` (after T1.4)
+**T1.7 Remove dead code** — *Medium* (G-12) — **partly done 2026-11-04**: `app/packages/vision/` and the `dev:vision` script are removed; still to do: `cerebroil-backend/`, the `dataset.ts` helpers and `sample.ts` (after T1.4) — **done 2026-11-04**: `cerebroil-backend/` (46 tracked files), `app/packages/vision/`, `app/src/lib/farm/dataset.ts`, `sample.ts` and `SampleBadge.tsx` are deleted (all in git history); the lighting helpers moved to `app/src/lib/farm/lighting.ts` and the weight helpers to `weights.ts`; `WEBSITE_GAPS_AND_PLAN.md` is removed.
 - Description: delete or archive `app/packages/vision/` and `cerebroil-backend/`; move `DEFAULT_LIGHTING`, `clock12`, `isNightCycle` out of `app/src/lib/farm/dataset.ts` into a small `lighting` module (used by `settings.tsx`, `LightingSection.tsx`, `CameraAnalysis.tsx`, `VideoDetectDialog.tsx`); delete `dataset.ts`/`sample.ts` after T1.4.
 - Acceptance: build passes with those files gone; `npm run dev:vision` script removed.
 

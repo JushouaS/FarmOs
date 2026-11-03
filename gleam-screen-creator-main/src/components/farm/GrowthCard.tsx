@@ -6,7 +6,7 @@ import { tr } from "@/lib/i18n";
 
 /* The dashboard's growth card: how heavy the birds are against the breed's
  * target weight, as a headline, a plain-language sentence and a chart with real
- * axes. The house readings (flock, temperature, humidity, ammonia) sit small
+ * axes. The house readings (flock, temperature, humidity) sit small
  * under the weight sentence, beside the chart.
  *
  * The card holds no figures, names or units of its own. Everything it shows
@@ -441,7 +441,6 @@ export function GrowthCard({ data, onAnalyze }: Props) {
             />
             <ReadingCell label={tr("Temperature")} reading={data.temperature} />
             <ReadingCell label={tr("Humidity")} reading={data.humidity} />
-            <ReadingCell label={tr("Ammonia NH₃")} reading={data.ammonia} />
           </dl>
         </div>
 

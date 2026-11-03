@@ -4,7 +4,7 @@
  * The DHT22 on the Raspberry Pi is stored about once a minute. A reading older than this is the
  * seeded sample from 2024 or a sensor that has stopped, and must not be shown as the pen's air.
  */
-const FRESH_MS = 5 * 60_000;
+export const FRESH_MS = 5 * 60_000;
 
 export interface PenReading {
   value: number;

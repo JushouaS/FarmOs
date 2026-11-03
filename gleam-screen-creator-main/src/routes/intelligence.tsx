@@ -1,14 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/farm/AppShell";
-import { getMonitoringReport } from "@/lib/farm/repository";
+import { getOperationsOverview } from "@/lib/farm/repository";
 import { fetchSituationBriefing, fetchFeedbackAlerts } from "@/lib/intelligence";
 import { fetchLiveBehavior } from "@/lib/api-client";
 import { T, getLanguage, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/intelligence")({
   head: () => ({ meta: [{ title: tr("Insights — CereBroiler") }] }),
-  loader: () => getMonitoringReport(),
+  loader: () => getOperationsOverview(),
   component: InsightsPage,
 });
 
@@ -24,7 +24,7 @@ function InsightsPage() {
   const report = Route.useLoaderData() as any;
   const day = Number(report?.cycle?.day ?? 0);
   const endDay = Number(report?.cycle?.endDay ?? report?.cycle?.lengthDays ?? 45);
-  const behind = report?.weightStatus === "warning";
+  const behind = report?.weight?.status === "warning";
   const lang = getLanguage();
   // What the live behavior monitor sees now; it says "off" until LIVE_BEHAVIOR=1 is set on the camera computer.
   const behaviorQ = useQuery({
@@ -36,7 +36,7 @@ function InsightsPage() {
   const monitor = behaviorQ.data?.running ? behaviorQ.data : null;
   const stillBirds = monitor ? (monitor.flock_inactive ? (monitor.birds ?? 0) : (monitor.inactive?.length ?? 0)) : 0;
   const observations: { ok: boolean | null; text: string }[] = [];
-  if (report?.weightStatus) {
+  if (report?.weight?.actualAvgG != null) {
     observations.push(behind ? { ok: false, text: tr("Average weight is behind the target") } : { ok: true, text: tr("Average weight is on track") });
   }
   if (monitor) {
@@ -201,7 +201,11 @@ function InsightsPage() {
             </h3>
             <div className="rounded-lg px-3 py-2 text-xs font-medium"
               style={{ background: "var(--status-green-bg)", color: "var(--status-green-text)", border: "1px solid var(--status-green-border)" }}>
-              {behind ? tr("Day {day} of {endDay}: behind the weight target, check feed and water", { day, endDay }) : tr("Day {day} of {endDay}: on track for harvest", { day, endDay })}
+              {report?.weight?.actualAvgG == null
+                ? tr("Day {day} of {endDay}: no bird weights typed in yet", { day, endDay })
+                : behind
+                  ? tr("Day {day} of {endDay}: behind the weight target, check feed and water", { day, endDay })
+                  : tr("Day {day} of {endDay}: on track for harvest", { day, endDay })}
             </div>
           </div>
 

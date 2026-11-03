@@ -9,6 +9,8 @@
  * optimistically update without a full page reload.
  */
 
+import { NO_SPREAD, type WeightSpread } from "@/lib/farm/weights";
+
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
@@ -596,8 +598,17 @@ export async function fetchPreviousWeights(day: number): Promise<{ birdId: strin
   return apiFetch(`/growth/actual-weights/previous?day=${encodeURIComponent(day)}`);
 }
 
-export async function saveActualWeight(input: { birdId: string; day: number; actualG: number; estimatedG: number }): Promise<unknown> {
+export async function saveActualWeight(input: { birdId: string; day: number; actualG: number; estimatedG?: number }): Promise<unknown> {
   return apiFetch("/growth/actual-weights", { method: "PUT", body: JSON.stringify(input) });
+}
+
+/** The weights typed in for the newest grow-out day that has any (NO_SPREAD-shaped when none, or when the API is away). */
+export async function fetchWeightSpread(): Promise<WeightSpread> {
+  try {
+    return await apiFetch<WeightSpread>("/growth/weight-spread");
+  } catch {
+    return NO_SPREAD;
+  }
 }
 
 export async function deleteActualWeight(birdId: string, day: number): Promise<unknown> {

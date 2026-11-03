@@ -9,7 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ApiError, DEMO_VIDEO_MAX_MB, convertVideo, detectVideo, type VideoDetection } from "@/lib/api-client";
-import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import { VIDEO_WEIGHT_ERROR_PERCENT, estimateVideoWeights, type VideoWeights } from "@/lib/farm/video-weight";
 import { T, tr } from "@/lib/i18n";
 

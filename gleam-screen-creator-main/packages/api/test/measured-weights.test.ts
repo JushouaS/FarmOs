@@ -108,6 +108,17 @@ describe.skipIf(!live)("typed-in weights reach the Dashboard", () => {
     expect(typeof w.variancePercent).toBe("number");
   });
 
+  test("the weight spread lists the birds weighed on the newest day, with the standard for it", async () => {
+    const res = await app.inject({ method: "GET", url: "/growth/weight-spread", headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    const spread = res.json();
+    expect(spread.day).toBe(day);
+    expect(spread.n).toBe(2);
+    expect(spread.birds.map((b: { id: string }) => b.id)).toEqual(["B-9001", "B-9002"]);
+    expect(spread.birds.map((b: { weightG: number }) => b.weightG)).toEqual([1000, 1201]);
+    expect(spread.standardG).toBeGreaterThan(0);
+  });
+
   test("correcting one weight changes the mean, and removing them all removes the point", async () => {
     await put("B-9002", 1001);
     expect((await overview()).weight.actualAvgG).toBe(1001); // round((1000 + 1001) / 2) = 1001 (half rounds up)
@@ -117,5 +128,7 @@ describe.skipIf(!live)("typed-in weights reach the Dashboard", () => {
     const w = (await overview()).weight;
     expect(w.actualAvgG).toBeNull();
     expect(w.curve.filter((p: { day: number }) => p.day === day)).toEqual([]);
+    const spread = (await app.inject({ method: "GET", url: "/growth/weight-spread", headers: { cookie } })).json();
+    expect(spread).toEqual({ day: null, n: 0, standardG: null, birds: [] });
   });
 });

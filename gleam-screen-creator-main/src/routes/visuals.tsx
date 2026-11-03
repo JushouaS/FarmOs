@@ -5,11 +5,11 @@ import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
 import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
-import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { freshReading, silentFor } from "@/lib/farm/pen-sensors";
 import { fetchLiveBehavior, visionStreamUrl, type KinectChickens, type LiveBehavior } from "@/lib/api-client";
-import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay, weightCategoryFor } from "@/lib/farm/sample";
+import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, standardForToday, weightCategoryFor } from "@/lib/farm/weights";
 import { localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/visuals")({
@@ -61,10 +61,9 @@ function ShellButtons() {
 }
 
 export function VisualsDashboardPage() {
-  // The sample flock, moved to the grow-out day set in Settings.
   const overview = Route.useLoaderData() as any;
-  const sample = useMemo(() => sampleForDay(overview), [overview]);
-  const { farm } = sample;
+  // The breed standard for today, to sort the weighed birds into under, optimal and over.
+  const standardG = standardForToday(overview) ?? 0;
   // The pen's real air from the DHT22, when it has reported in the last few minutes. The page asks again
   // every 30 seconds so the numbers keep up.
   const router = useRouter();
@@ -169,9 +168,9 @@ export function VisualsDashboardPage() {
 
   // Birds the Kinect weighed in its newest picture, sorted into under, optimal and over the standard for the day.
   const weighed =
-    flock?.ok && flock.birds && Date.now() / 1000 - (flock.at ?? 0) < 15 ? flock.birds.filter((b) => b.weightG != null) : [];
+    standardG > 0 && flock?.ok && flock.birds && Date.now() / 1000 - (flock.at ?? 0) < 15 ? flock.birds.filter((b) => b.weightG != null) : [];
   const weightCounts = { Underweight: 0, Optimal: 0, Overweight: 0 };
-  for (const b of weighed) weightCounts[weightCategoryFor(b.weightG as number, sample.standardG)]++;
+  for (const b of weighed) weightCounts[weightCategoryFor(b.weightG as number, standardG)]++;
   const weighedAverage = flock?.weight?.meanG ?? (weighed.length ? Math.round(weighed.reduce((n, b) => n + (b.weightG as number), 0) / weighed.length) : 0);
 
   // What the live monitor sees: birds followed, birds that stayed still, and birds huddled.
@@ -216,10 +215,10 @@ export function VisualsDashboardPage() {
             {/* Farm & Pen Info Tag */}
             <div className="hidden items-center gap-1.5 text-xs text-[var(--text-secondary)] xl:flex">
               <span className="rounded bg-[var(--surface-raised)] px-2 py-0.5 font-medium">
-                {farm.facility.houses[0].label}
+                {overview?.cluster?.houseLabel ?? ""}
               </span>
               <span className="text-[var(--text-tertiary)]">/</span>
-              <span>{farm.facility.name}</span>
+              <span>{overview?.facility?.name ?? ""}</span>
             </div>
           </div>
 
@@ -270,7 +269,7 @@ export function VisualsDashboardPage() {
             </div>
 
             {/* Try the trained detector on an uploaded video */}
-            <VideoDetectDialog lighting={lighting} standardG={sample.standardG} />
+            <VideoDetectDialog lighting={lighting} standardG={standardG || undefined} />
 
             {/* Fullscreen Trigger Button */}
             <button
@@ -454,17 +453,17 @@ export function VisualsDashboardPage() {
                     <div className="rounded-lg bg-[var(--surface-raised)] p-3">
                       <div className="text-xs font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
                       <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Underweight}</div>
-                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(sample.standardG * UNDERWEIGHT_RATIO)}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(standardG * UNDERWEIGHT_RATIO)}</div>
                     </div>
                     <div className="rounded-lg bg-[var(--surface-raised)] p-3">
                       <div className="text-xs font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
                       <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Optimal}</div>
-                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{rangeLabel(sample.standardG * UNDERWEIGHT_RATIO, sample.standardG * HEAVY_RATIO)}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{rangeLabel(standardG * UNDERWEIGHT_RATIO, standardG * HEAVY_RATIO)}</div>
                     </div>
                     <div className="rounded-lg bg-[var(--surface-raised)] p-3">
                       <div className="text-xs font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
                       <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Overweight}</div>
-                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(sample.standardG * HEAVY_RATIO)}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(standardG * HEAVY_RATIO)}</div>
                     </div>
                   </div>
                   <p className="mt-2.5 text-xs text-[var(--text-secondary)]">
