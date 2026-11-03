@@ -44,4 +44,13 @@ export const part25: Messages = {
     "Wala pang nasusukat na timbang. Ilagay ang timbang ng ilang manok sa Flock Tracking at lalabas dito ang average.",
     "Wala pay nasukod nga gibug-aton. Ibutang ang gibug-aton sa pipila ka manok sa Flock Tracking ug mugawas dinhi ang average.",
   ],
+  "Kinect is not connected": ["Hindi nakakonekta ang Kinect", "Wala konektado ang Kinect"],
+  "The Kinect picture and the bird weights appear when the Kinect bridge is running on the computer it is plugged into. This page keeps trying.": [
+    "Lalabas ang larawan ng Kinect at ang timbang ng mga manok kapag tumatakbo ang Kinect bridge sa computer na nakasaksak ito. Patuloy na sumusubok ang pahinang ito.",
+    "Mugawas ang hulagway sa Kinect ug ang gibug-aton sa mga manok kon nagdagan ang Kinect bridge sa kompyuter diin kini gisaksak. Padayon nga misulay kini nga panid.",
+  ],
+  "{n} min": ["{n} min", "{n} min"],
+  "{n} h": ["{n} oras", "{n} ka oras"],
+  "{n} days": ["{n} araw", "{n} ka adlaw"],
+  "Sensor offline · last reading {ago} ago": ["Offline ang sensor · huling basa {ago} ang nakalipas", "Offline ang sensor · katapusang basa {ago} ang milabay"],
 };

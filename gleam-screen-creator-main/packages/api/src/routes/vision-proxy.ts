@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { Readable } from "node:stream";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { env } from "../config.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 
@@ -22,6 +22,21 @@ const CAN_USE_CAMERA = requireRole("OPERATOR", "FARM_MANAGER", "ADMIN");
 
 // The test-video jobs keep the camera computer busy for minutes: one at a time.
 let demoJobRunning = false;
+
+/**
+ * The signal for a request to the camera service on behalf of a browser: it stops after `ms`, and also when the
+ * browser's connection closes (the tab closed, the upload cancelled, the page reloaded). Without that the job lock
+ * below stayed set for up to five minutes for a result nobody was waiting for, and the next try heard "Another
+ * video is being checked". Call `release` when the request is finished so the listener does not pile up on a
+ * connection that is kept open for the next request.
+ */
+function untilTimeoutOrDisconnect(request: FastifyRequest, ms: number): { signal: AbortSignal; release: () => void } {
+  const gone = new AbortController();
+  const socket = request.raw.socket;
+  const onClose = () => gone.abort();
+  socket.once("close", onClose);
+  return { signal: AbortSignal.any([gone.signal, AbortSignal.timeout(ms)]), release: () => socket.off("close", onClose) };
+}
 
 /** Largest video the "Test video" button accepts. Also enforced by the vision service. */
 const DEMO_VIDEO_MAX_BYTES = 60 * 1024 * 1024;
@@ -350,6 +365,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
       }
       if (demoJobRunning) return reply.code(429).send({ error: "busy", message: "Another video is being checked. Try again in a minute." });
       demoJobRunning = true;
+      const watch = untilTimeoutOrDisconnect(request, 5 * 60_000);
       try {
         // ?night=1 tells the detector the clip was filmed with the lights off.
         const night = (request.query as { night?: string }).night === "1";
@@ -358,7 +374,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
           headers: { ...visionHeaders(), "Content-Type": "application/octet-stream" },
           body: new Uint8Array(video),
           // A small computer takes a while to go through a clip.
-          signal: AbortSignal.timeout(5 * 60_000),
+          signal: watch.signal,
         });
         const body = await res.json().catch(() => ({ error: "demo_detect_error" }));
         return reply.code(res.status).send(body);
@@ -366,6 +382,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         return reply.code(503).send({ error: "vision_service_unavailable" });
       } finally {
         demoJobRunning = false;
+        watch.release();
       }
     },
   );
@@ -389,12 +406,13 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
       }
       if (demoJobRunning) return reply.code(429).send({ error: "busy", message: "Another video is being checked. Try again in a minute." });
       demoJobRunning = true;
+      const watch = untilTimeoutOrDisconnect(request, 5 * 60_000);
       try {
         const res = await fetch(`${VISION_BASE}/demo/convert`, {
           method: "POST",
           headers: { ...visionHeaders(), "Content-Type": "application/octet-stream" },
           body: new Uint8Array(video),
-          signal: AbortSignal.timeout(5 * 60_000),
+          signal: watch.signal,
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({ error: "demo_convert_error" }));
@@ -405,6 +423,7 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
         return reply.code(503).send({ error: "vision_service_unavailable" });
       } finally {
         demoJobRunning = false;
+        watch.release();
       }
     },
   );

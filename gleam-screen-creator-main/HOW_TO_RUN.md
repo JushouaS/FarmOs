@@ -63,7 +63,6 @@ drive-download-20260831T212213Z-1-001\
     gleam-screen-creator-main\               <-- the project (git repo, web app)
       src\                                   <-- website code (React)
       packages\api\                          <-- API server + database scripts
-      packages\vision\                       <-- alternative camera stub [NOT used, see section 9]
       HOW_TO_RUN.md                          <-- this file
 ```
 
@@ -675,9 +674,8 @@ taskkill /PID <the number in the last column> /F
 
 ## 9. Things that exist but are not part of the normal start
 
-- `gleam-screen-creator-main\packages\vision` is an alternative camera service that returns
-  **placeholder** data. It also uses port 5000, so **never run it at the same time** as
-  `cerebroil-stream`. The root script `npm run dev:vision` starts it; ignore that script.
+- The placeholder camera service that used to be in `packages\vision` (and the `npm run dev:vision` script) was removed.
+  The only camera service is `cerebroil-stream`. It stays in git history if it is ever wanted.
 - `cerebroil-backend` is an older FastAPI backend written for a Raspberry Pi (YOLOv8, ByteTrack, ROS 2).
   The website does **not** use it.
 
@@ -720,12 +718,22 @@ Whichever port is missing tells you which window to start.
 | The AI briefing (Insights page) | `src\lib\intelligence.ts` (Groq, Llama 3.3 70B) |
 | The built-in sample data | `src\lib\farm\dataset.ts` |
 
-What is real and what is a stand-in (important when you write about it):
+What is real and what is a stand-in (important when you write about it; kept up to date in `plan.md` section 2.2):
 
-- **Real:** the camera video, the frame-by-frame movement analysis (OpenCV), the logins, settings,
-  database, and the Insights AI (when a Groq key is set).
-- **Stand-in:** there is no trained detector (YOLO) and no weight model. The Kinect is simulated,
-  and the per-bird weights on Analytics and Flock Tracking are sample data scaled to the chosen day.
+- **Real:**
+  - the Dahua video and the pen's temperature and humidity (the DHT22 on the Raspberry Pi);
+  - the bird count on **Analyze data** and the boxes on the Test video (the trained detector, `detector.onnx`);
+  - the Kinect picture, the outlines and the per-bird weights (about 18 % off for one bird, see the Kinect section);
+  - the live behavior numbers, once `LIVE_BEHAVIOR=1` is set on the Pi;
+  - the Dashboard's Growth card: the average of the weights typed in on Flock Tracking, for each day they were typed;
+  - logins, accounts, settings, alerts raised by the monitors, and mortality typed in by a person.
+- **Stand-in or derived:**
+  - the weights on the Test video are the standard weight for the day spread over the birds by box size, not measured;
+  - the Analytics **Weight Growth** tab, the per-bird table on **Flock Monitoring** and the report under the Dashboard's
+    Growth card are built-in sample data (each says so on the page);
+  - the **Insights** AI text is written from the built-in sample flock, not the live one (plan.md task T1.3);
+  - alerts, incidents and archived reports that came with the database (dated 2024) are demo rows;
+  - there is no feed, water or ammonia sensor, so those figures are not shown.
 
 
 ## Privacy Policy

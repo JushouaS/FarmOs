@@ -13,6 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "bun test --timeout 30000",
+    "test:node": "tsx --test test/demo-lock.node-test.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/migrate.ts --up-to 0009_seed_from_dataset",
     "db:local:init": "tsx scripts/local-db.ts init",

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "./config.js";
+import { raiseAlert } from "./notify.js";
 
 /**
  * Stores the pen's real temperature and humidity.
@@ -17,6 +18,11 @@ const SENSORS = [
 
 /** A reading older than this is not stored: the sensor or its reader has stopped. */
 const MAX_AGE_SECONDS = 120;
+
+/** Whole minutes since the last stored reading, or null when there has never been one (a pen with no sensor is not "offline"). */
+export function minutesSilent(lastGoodAt: number | null, now: number): number | null {
+  return lastGoodAt === null ? null : Math.max(0, Math.floor((now - lastGoodAt) / 60_000));
+}
 
 /** What the camera service reports at /sensors. */
 export interface SensorReport {
@@ -63,10 +69,36 @@ export async function storeReport(app: FastifyInstance, report: SensorReport, no
   return stored;
 }
 
+/** The time of the newest stored DHT22 reading, so a restart does not forget that the sensor used to work. */
+async function newestStoredReading(app: FastifyInstance): Promise<number | null> {
+  const rows = await app.sqlRead`SELECT max(recorded_at) AS at FROM sensor_readings WHERE sensor_id IN ('SN-DHT22-T', 'SN-DHT22-H')`;
+  const at = rows[0]?.at ? new Date(rows[0].at as string | Date).getTime() : NaN;
+  return Number.isFinite(at) ? at : null;
+}
+
 export function startSensorMonitor(app: FastifyInstance): void {
   if (env.SENSOR_MONITOR === "off") return;
   let warned = false;
   let lastAt = 0;
+  // When a reading was last stored (null: never), and whether this silence has been reported already.
+  let lastGoodAt: number | null = null;
+  let reported = false;
+  void newestStoredReading(app).then((at) => {
+    lastGoodAt = lastGoodAt ?? at;
+  }).catch(() => {});
+
+  // Says so when a sensor that used to report has gone quiet: a wire came loose, the Pi lost power, or the reader stopped.
+  const checkSilence = async (why: string) => {
+    const silent = minutesSilent(lastGoodAt, Date.now());
+    if (silent === null || silent < env.SENSOR_OFFLINE_MINUTES || reported) return;
+    reported = true;
+    await raiseAlert(app, {
+      kind: "Sensor Offline",
+      severity: "warning",
+      message: `The pen temperature and humidity sensor has sent no reading for ${silent} minutes (${why}). Check its wires and power on the Raspberry Pi.`,
+      dedupeMinutes: 12 * 60,
+    });
+  };
 
   const tick = async () => {
     let report: SensorReport;
@@ -83,6 +115,7 @@ export function startSensorMonitor(app: FastifyInstance): void {
         app.log.info({ err: err instanceof Error ? err.message : err }, "sensor monitor: camera service not answering");
         warned = true;
       }
+      await checkSilence("the camera computer is not answering");
       return;
     }
     warned = false;
@@ -90,7 +123,13 @@ export function startSensorMonitor(app: FastifyInstance): void {
     const at = report.ageSeconds != null ? Date.now() - report.ageSeconds * 1000 : 0;
     if (Math.abs(at - lastAt) < 2_000) return;
     const stored = await storeReport(app, report);
-    if (stored > 0) lastAt = at;
+    if (stored > 0) {
+      lastAt = at;
+      lastGoodAt = Date.now();
+      reported = false;
+    } else {
+      await checkSilence(report.error ?? "the sensor did not answer");
+    }
   };
 
   const timer = setInterval(() => void tick().catch((err) => app.log.error({ err }, "sensor monitor failed")), env.SENSOR_POLL_SECONDS * 1000);

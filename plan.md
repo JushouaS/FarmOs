@@ -95,8 +95,10 @@ Built-in `admin`/`admin` login removed from the API and the browser (`app/src/li
 
 The database refused connections until it was stopped and started again (G-01). The counts were then read with `psql`:
 `cycle_weights` 7 rows (newest 2024-05-25, seed), `feed_samples` 0, `water_samples` 0, `activity_samples` 0, `alerts` 4 (newest
-2024-05-25, seed), `actual_weights` 0, `detections` 0, `users` 1, `sensor_readings` 655 (DHT22). Not counted: `incidents`,
-`monitoring_reports`, `archived_reports` (T1.0 still covers them). The restart cleared the connection failures, but they will come
+2024-05-25, seed), `actual_weights` 0, `detections` 0, `users` 1, `sensor_readings` 655 (DHT22). Also counted: `incidents` 1, `monitoring_reports` 1,
+`archived_reports` 3 and `anomaly_events` 5 (all dated May 2024, seed), `cohorts` 4 (seed), `incident_peaks` 1, `notifications` 8 (test sends on
+2026-11-02). `houses` holds three seed houses (H01 4,210 birds, H03 4,260, H04 4,190) beside the real "Pen 1" (H02, 20 birds); `cameras`
+holds two seed cameras (UNIT_04_NORTH, UNIT_02_NORTH) beside the real CAM-01. The facility is named POULTRY_AI. The restart cleared the connection failures, but they will come
 back under memory pressure.
 
 ---
@@ -188,20 +190,20 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 - Files: `app/packages/api/.env`, `cerebroil-stream/.env`, root `.env` (all git-ignored).
 - Acceptance: old admin password no longer works; every secret in the three `.env` files is new; `git grep` for the old values returns nothing; MFA accounts re-enrolled if `JWT_SECRET` changed (HOW_TO_RUN notes this).
 
-**T0.3 Backups** — *Critical* — **started 2026-11-04**: `app/scripts/backup-db.ps1` written and run; the first dump (165 KB) and a models zip (14 MB) are in `C:\Users\Jush\cerebroil-backups`. The dump was restored into a throwaway database (49 tables, 1 user, 7 cycle_weights, 655 sensor_readings) and that database was deleted. **Still to do:** a nightly Task Scheduler job, and a copy on a different computer or drive.
+**T0.3 Backups** — *Critical* — **mostly done 2026-11-04** (a Windows task "Cerebroil nightly backup" runs the script daily at 8 pm and catches up if the laptop was off; remaining: a copy on another computer or drive): `app/scripts/backup-db.ps1` written and run; the first dump (165 KB) and a models zip (14 MB) are in `C:\Users\Jush\cerebroil-backups`. The dump was restored into a throwaway database (49 tables, 1 user, 7 cycle_weights, 655 sensor_readings) and that database was deleted. **Still to do:** a nightly Task Scheduler job, and a copy on a different computer or drive.
 - Description: scheduled `pg_dump` (daily, keep 14), copied off the machine; copy `cerebroil-stream/models/*` and the training CSVs to a second location and record checksums; document restore.
 - Files: new `app/scripts/backup-db.*`, `app/HOW_TO_RUN.md`.
 - Depends on: T0.1.
 - Acceptance: a restore of last night's dump into a blank database gives the same row counts; models exist in two places.
 
-**T0.4 Repair the DHT22 and make faults visible** — *High*
+**T0.4 Repair the DHT22 and make faults visible** — *High* — **software done 2026-11-04**: a "Sensor Offline" alert after `SENSOR_OFFLINE_MINUTES` (default 10) without a reading, once per outage (`sensor-monitor.ts`), and Live Camera shows "Sensor offline · last reading 2 h ago" instead of a bare "No reading". **Still to do on site:** reseat the wires and restart `dht22`
 - Description: reseat wires/3.3 V on the Pi, restart `dht22`; add a "sensor offline" notice when the newest reading is older than a threshold (API alert and a line on Live Camera instead of silent "No reading").
 - Files: Pi (`sudo systemctl restart dht22`), `app/packages/api/src/sensor-monitor.ts`, `app/src/routes/visuals.tsx`.
 - Acceptance: new `sensor_readings` rows every minute for 1 h; unplugging the sensor raises an alert within 10 min and clears it when plugged in.
 
 ### Phase 1 — Honest data (O1)
 
-**T1.0 Confirm what the database really holds** — *Critical* — **mostly done 2026-11-04** (see §2.5); still to count: `incidents`, `monitoring_reports`, `archived_reports`
+**T1.0 Confirm what the database really holds** — *Critical* — **done 2026-11-04** (see §2.5): the demo alerts, incident, reports, anomaly events, cohorts, three houses and two cameras are all seed rows; T1.6 removes them
 - Description: after T0.1, count rows and newest `recorded_at` of `cycle_weights`, `feed_samples`, `water_samples`, `activity_samples`, `alerts`, `incidents`, `monitoring_reports`, `archived_reports`; record the result in this file.
 - Acceptance: §2.2 table updated from the actual counts.
 
@@ -227,7 +229,7 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 - Depends on: T1.1.
 - Acceptance: `grep -r "sampleForDay" app/src` returns nothing outside tests; no `SampleNotice` rendered anywhere.
 
-**T1.5 Honest Kinect fallback** — *High* (G-07)
+**T1.5 Honest Kinect fallback** — *High* (G-07) — **done 2026-11-04**: the Kinect panel shows "Kinect is not connected" (and keeps retrying) instead of the camera service's simulated picture and the sample K-001 weights; `src/routes/visuals.tsx`
 - Description: when the bridge is not connected, show "Kinect is not connected" instead of the simulated picture with K-00x weights.
 - Files: `app/src/components/farm/KinectDepthView.tsx`, `app/src/routes/visuals.tsx`, `app/src/lib/i18n/messages/`.
 - Acceptance: stopping `KinectBridge.exe` shows the message within 10 s and no fake weights.
@@ -237,7 +239,7 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 - Files: `app/packages/api/migrations/`, `app/packages/api/scripts/`.
 - Acceptance: a fresh database plus the seed command shows no demo alert, incident or report and no "Data Cruz" name unless that is the real farm.
 
-**T1.7 Remove dead code** — *Medium* (G-12)
+**T1.7 Remove dead code** — *Medium* (G-12) — **partly done 2026-11-04**: `app/packages/vision/` and the `dev:vision` script are removed; still to do: `cerebroil-backend/`, the `dataset.ts` helpers and `sample.ts` (after T1.4)
 - Description: delete or archive `app/packages/vision/` and `cerebroil-backend/`; move `DEFAULT_LIGHTING`, `clock12`, `isNightCycle` out of `app/src/lib/farm/dataset.ts` into a small `lighting` module (used by `settings.tsx`, `LightingSection.tsx`, `CameraAnalysis.tsx`, `VideoDetectDialog.tsx`); delete `dataset.ts`/`sample.ts` after T1.4.
 - Acceptance: build passes with those files gone; `npm run dev:vision` script removed.
 
@@ -275,9 +277,9 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 
 **T4.1 Tests** — *High* (G-06). Add Vitest. Priority: `app/src/lib/farm/video-weight.ts`, `app/src/lib/farm/growth.ts`, `app/packages/api/src/cycle-day.ts`, `lighting.ts`, `behavior-monitor.ts` raise logic, auth lockout, role checks, `scripts/public-gateway.mjs` (cookie prefixing, ticket check, forwarded-for replacement); Python: `cerebroil-stream/behavior.py` (huddle grouping) and `kinect_weight.py`. Acceptance: `npm test` runs in CI; coverage on the listed modules ≥ 70%.
 **T4.2 Lint and formatting** — *Low* (G-14). Run Prettier once with a committed config and `.gitattributes` for line endings; fix the 55 `any` and 3 `exhaustive-deps`. Acceptance: `eslint .` has 0 errors.
-**T4.3 Documentation** — *Medium* (G-18). Rewrite `app/HOW_TO_RUN.md` §11, `app/CEREBROILER.md`, `app/README.md`; delete `WEBSITE_GAPS_AND_PLAN.md`; add `docs/validation.md` and a backup/restore page.
+**T4.3 Documentation** — *Medium* (G-18) — **partly done 2026-11-04**: `HOW_TO_RUN.md` §9 and §11, `README.md` and a status note at the top of `CEREBROILER.md` are current; still to do: rewrite the old sections of `CEREBROILER.md`, add `docs/validation.md`, remove `WEBSITE_GAPS_AND_PLAN.md`. Rewrite `app/HOW_TO_RUN.md` §11, `app/CEREBROILER.md`, `app/README.md`; delete `WEBSITE_GAPS_AND_PLAN.md`; add `docs/validation.md` and a backup/restore page.
 **T4.4 Mobile and accessibility pass** — *Low*. Check each page at 375 px and with keyboard only (the project's `antislop.md` rules apply; ask the owner which antislop mode to use before UI work, per `app/AGENTS.md`).
-**T4.5 Small fixes** — *Low* (G-19). Release `demoJobRunning` when the client disconnects (`routes/vision-proxy.ts`); abort the upstream job.
+**T4.5 Small fixes** — *Low* (G-19) — **done 2026-11-04**: the Test video requests stop when the browser's connection closes (`untilTimeoutOrDisconnect` in `routes/vision-proxy.ts`), so the lock is released; checked by `bun run test:node` (`test/demo-lock.node-test.ts`, fails on the old code, passes now; it runs on Node because Bun does not report the closed connection). Release `demoJobRunning` when the client disconnects (`routes/vision-proxy.ts`); abort the upstream job.
 **T4.6 Security review** — *High*. `bun audit`/`npm audit`; re-check rate limits, CORS origins for the real domain, `helmet` CSP with the tunnel hostname, role checks on every new route (`/visual/behavior`, `/operations/sensor-history` require sign-in only: confirm that is intended).
 
 ### Optional enhancements (not needed for the objectives)

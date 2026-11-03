@@ -7,7 +7,7 @@ import { KinectDepthView } from "@/components/farm/KinectDepthView";
 import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
 import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
-import { freshReading } from "@/lib/farm/pen-sensors";
+import { freshReading, silentFor } from "@/lib/farm/pen-sensors";
 import { fetchLiveBehavior, visionStreamUrl, type KinectChickens, type LiveBehavior } from "@/lib/api-client";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay, weightCategoryFor } from "@/lib/farm/sample";
 import { localeTag, tr } from "@/lib/i18n";
@@ -74,11 +74,27 @@ export function VisualsDashboardPage() {
   }, [router]);
   const penTemperature = freshReading(overview, "temperature");
   const penHumidity = freshReading(overview, "humidity");
+  // A sensor that worked and then went quiet is "offline", not just "no reading": someone should look at its wires.
+  const quietFor = (parameter: "temperature" | "humidity") => {
+    const ms = silentFor(overview, parameter);
+    if (ms === null) return null;
+    const min = Math.round(ms / 60_000);
+    if (min < 60) return tr("{n} min", { n: min });
+    const hours = Math.round(min / 60);
+    return hours < 48 ? tr("{n} h", { n: hours }) : tr("{n} days", { n: Math.round(hours / 24) });
+  };
+  const noReading = (parameter: "temperature" | "humidity") => {
+    const ago = quietFor(parameter);
+    return ago ? (
+      <span className="font-mono text-xs text-[var(--status-amber)]">{tr("Sensor offline · last reading {ago} ago", { ago })}</span>
+    ) : (
+      <span className="font-mono text-xs text-[var(--text-tertiary)]">{tr("No reading")}</span>
+    );
+  };
   // When the day starts and the night starts comes from Settings.
   const lighting: LightingHours = overview?.lighting ?? DEFAULT_LIGHTING;
   const [layout, setLayout] = useState<ViewLayout>("dual");
   const [dahuaError, setDahuaError] = useState(false);
-  const [kinectError, setKinectError] = useState(false);
   // A camera picture is one long connection. When the API restarts, the camera computer restarts or the network drops
   // for a moment, the browser leaves the picture frozen and never asks again. So every 10 seconds the page asks whether
   // the camera path works and, when it works again after being away, opens the pictures anew.
@@ -94,7 +110,6 @@ export function VisualsDashboardPage() {
         if (away) {
           away = false;
           setDahuaError(false);
-          setKinectError(false);
           setStreamKey((k) => k + 1);
         }
       } catch {
@@ -355,63 +370,23 @@ export function VisualsDashboardPage() {
                   {/* Video Viewport Container — 16:9 box when the page scrolls,
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
-                    <KinectDepthView onFlock={setFlock} fallback={<>
-                    {!kinectError ? (
-                      feedOrigin && (
-                        <img
-                          key={`kinect-${streamKey}`}
-                          src={`${visionStreamUrl("KINECT-01")}?k=${streamKey}`}
-                          alt={tr("Microsoft Kinect 3D depth sensor station feed")}
-                          className="h-full w-full object-contain"
-                          onError={() => setKinectError(true)}
-                        />
-                      )
-                    ) : (
+                    {/* While the bridge is not running the view keeps asking for it, so this needs no button. It never
+                        shows a stand-in picture: the camera service's simulated depth image is not the weighing station. */}
+                    <KinectDepthView onFlock={setFlock} fallback={
                       <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
                         <div className="mb-2 rounded-full bg-[var(--status-blue-bg)] p-3 text-[var(--status-blue-text)]">
-                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                             <polygon points="12 2 2 7 12 12 22 7 12 2" />
                             <polyline points="2 17 12 22 22 17" />
                             <polyline points="2 12 12 17 22 12" />
                           </svg>
                         </div>
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                          {tr("Depth station not reachable")}
-                        </h3>
-                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("No depth feed from {feedHost}. Start cerebroil-stream, then recheck.", { feedHost })}</p>
-                        <button
-                          type="button"
-                          onClick={() => setKinectError(false)}
-                          className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
-                        >
-                          {tr("Recheck Sensor")}
-                        </button>
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{tr("Kinect is not connected")}</h3>
+                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
+                          {tr("The Kinect picture and the bird weights appear when the Kinect bridge is running on the computer it is plugged into. This page keeps trying.")}
+                        </p>
                       </div>
-                    )}
-
-                    {/* Interactive Kinect Depth-Target Overlay */}
-                    {!kinectError && (
-                      <div className="pointer-events-none absolute inset-0">
-                        {sample.kinect.map((kd) => (
-                          <div
-                            key={kd.id}
-                            style={{
-                              left: `${kd.x}%`,
-                              top: `${kd.y}%`,
-                              width: `${kd.w}%`,
-                              height: `${kd.h}%`,
-                            }}
-                            className="absolute rounded border border-dashed border-[var(--brand)] bg-[rgba(52,211,153,0.06)]"
-                          >
-                            <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-xs font-mono text-[var(--brand)]">
-                              <span>{kd.id}</span>
-                              <span className="text-[var(--text-primary)] tabular-nums">{kd.weightG}g</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    </>} />
+                    } />
                   </div>
                 </div>
               )}
@@ -518,7 +493,7 @@ export function VisualsDashboardPage() {
                   {penTemperature ? (
                     <PenValue text={`${penTemperature.value.toFixed(1)}°C`} status={penTemperature.status} />
                   ) : (
-                    <span className="font-mono text-xs text-[var(--text-tertiary)]">{tr("No reading")}</span>
+                    noReading("temperature")
                   )}
                 </div>
                 <div className="flex items-center justify-between gap-2">
@@ -526,7 +501,7 @@ export function VisualsDashboardPage() {
                   {penHumidity ? (
                     <PenValue text={`${Math.round(penHumidity.value)}%`} status={penHumidity.status} />
                   ) : (
-                    <span className="font-mono text-xs text-[var(--text-tertiary)]">{tr("No reading")}</span>
+                    noReading("humidity")
                   )}
                 </div>
               </div>

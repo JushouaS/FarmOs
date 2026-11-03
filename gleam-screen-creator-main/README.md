@@ -1,33 +1,33 @@
-# **App Creator Studio**
+# Cerebroil (CereBroiler)
 
-Build this app using the HTML files referenced below. You can hotlink the images referenced in the HTML. The attached images are screenshots of the desired screens. Here are public links to the html of the screens which you should read and use to build the app:
+Monitors a broiler pen: live Dahua camera, Kinect depth with chicken outlines and weights, bird counts, behavior alerts,
+pen temperature and humidity, weight growth against the Ross 308 standard, alerts and notifications.
 
-1. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMmFmMjdjNmIwNDczNjY0YzhkMDI5ZTNlEgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
-2. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMmIyNmZlNjkwNDczNjY0YzhkMDI5ZTNlEgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
-3. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMmIwMzNhNGQwMWE2MTEzYzRmMGEyYWRkEgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
-4. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMmIwZmMzM2MwNzc5YmZmYmRiMDk2YTQyEgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
-5. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMzJjNDEyNzUwNTc2MzEzY2YyMmFlMDViEgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
-6. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMzJiNTE3ZTIwODlhZjcyMThjM2Q0NWQ4EgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
-7. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMzI1YzgxNzAwMzMyY2EyZjcwMWM4MTMyEgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
-8. https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1N2FlMzJiZDIyMDAwMzMyY2EyZjcwMWM4MTMyEgsSBxCx1vC9zhUYAZIBIwoKcHJvamVjdF9pZBIVQhM2NTYzNjczMjc3NTA2NDM0NTky&filename=&opi=89354086
+| Part | Folder | What it is |
+|------|--------|------------|
+| Website | `src/` | TanStack Start, React 19, Vite 8, Tailwind 4 |
+| API | `packages/api/` | Fastify 5, PostgreSQL (raw SQL, numbered migrations), JWT sessions |
+| Camera service | `../cerebroil-stream/` | Python on a Raspberry Pi: stream, trained detector, behavior, DHT22 |
+| Kinect bridge | `kinect-bridge/` | C# program that streams the Kinect to the website |
+| Public link | `scripts/` | A gateway and a script that put the site behind one tunnel |
 
-This project was built with [Lovable](https://lovable.dev).
+## Start here
 
-## Build with Lovable
+- **Run it:** `HOW_TO_RUN.md` (one-time setup, daily start, checks, troubleshooting, security notes).
+- **What is real and what is sample data, and what is left to do:** `../plan.md`.
+- **Original design notes:** `CEREBROILER.md` (partly out of date, it says so at the top).
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/6917ab50-3c47-4dcb-b0ab-ce7b44d7fa6f).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Quick start once set up (see `HOW_TO_RUN.md` for the first time):
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+cd packages/api && bun run db:local:start && bun run dev     # database, then API on :4000
+bun run dev                                                  # website on :8080 (project root)
+cd packages/api && bun run test                               # API tests (need the database; use a development one)
 ```
+
+Back up the database and the trained models with `powershell -ExecutionPolicy Bypass -File scripts/backup-db.ps1`.
+
+## Lovable
+
+This project is connected to [Lovable](https://lovable.dev). Commits pushed to the connected branch appear in the Lovable
+editor, so do not force-push or rewrite pushed history, and keep the branch working (`AGENTS.md`).

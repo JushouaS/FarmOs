@@ -2,6 +2,12 @@
 
 > AI-powered broiler chicken farm monitoring system. Tracks flock health, environment, weight, and behavior in real time using computer vision and large language models.
 
+> **Status.** This document describes the application as first designed (a single sample pen). The running system has since changed:
+> the data comes from a PostgreSQL database through the Fastify API in `packages/api`, the camera work runs in `cerebroil-stream` on a
+> Raspberry Pi, and most pages show live data. For how to run it, what is real and what is still sample data, read
+> `HOW_TO_RUN.md` (sections 1, 2 and 11) and `../plan.md`. Sections below that mention the 28-bird sample pen, SQLite/D1 or
+> Cloudflare describe the original design, not the current one.
+
 ---
 
 ## Table of Contents
@@ -24,7 +30,7 @@
 CereBroiler is a full-stack SSR web application for small-scale broiler chicken farmers. It gives a single-screen view of everything happening in the pen:
 
 - Live camera feed with AI detections overlaid
-- Real-time environment sensors (temperature, humidity, ammonia)
+- Real-time pen temperature and humidity (a DHT22 sensor on the Raspberry Pi)
 - Flock activity monitoring (active vs inactive birds)
 - AI-generated health insights and alert triage (via Groq LLM)
 - Weight growth tracking against Ross 308 breed standard
@@ -47,7 +53,7 @@ The demo dataset is seeded from `src/lib/farm/dataset.ts` — a single pen of **
 | Charts | Custom SVG (no external chart library) |
 | AI / LLM | Groq API (`llama-3.3-70b-versatile`) |
 | Build tool | Vite 8 |
-| Runtime | Node.js (dev) / Cloudflare Workers (production via Nitro) |
+| Runtime | Node.js; production build with Nitro's `node-server` preset |
 | Package manager | Bun (lockfile) / npm (scripts) |
 
 ---
@@ -100,9 +106,9 @@ gleam-screen-creator-main/
 │       ├── src/
 │       │   ├── app.ts           # Hono app entry
 │       │   ├── auth/            # Auth routes + JWT middleware
-│       │   ├── db/              # Database client (SQLite/Cloudflare D1)
+│       │   ├── db/              # Database client (PostgreSQL, postgres.js)
 │       │   └── routes/          # API route handlers
-│       └── migrations/          # SQL migration files (0001–0012)
+│       └── migrations/          # SQL migration files (0001–0025)
 │
 ├── vite.config.ts               # Vite config (network access + SSR fix)
 ├── package.json                 # Root package.json
@@ -144,11 +150,9 @@ Network: http://192.168.x.x:8080/   ← other devices on the same Wi-Fi
 npm run dev:api
 ```
 
-### Start the vision server (optional, Python)
+### Start the camera service (optional, Python)
 
-```bash
-npm run dev:vision
-```
+The camera service is `cerebroil-stream` (it runs on the Raspberry Pi); see `HOW_TO_RUN.md` section 4.
 
 ---
 

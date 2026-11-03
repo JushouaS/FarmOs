@@ -10,7 +10,6 @@
   "scripts": {
     "dev": "vite dev",
     "dev:api": "npm run dev --workspace=@farm-os/api",
-    "dev:vision": "cd packages/vision && python app.py",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

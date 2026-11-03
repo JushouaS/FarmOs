@@ -97,6 +97,8 @@ const schema = z.object({
   // the DHT22's newest temperature and humidity and stores them. "off" disables it.
   SENSOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
   SENSOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(60)),
+  // A "Sensor Offline" alert is raised when a sensor that has worked has sent nothing for this many minutes.
+  SENSOR_OFFLINE_MINUTES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(2).default(10)),
 
   // Groq AI (Intelligence engine) — https://console.groq.com/keys
   // Optional at startup; required only when intelligence routes are hit.
