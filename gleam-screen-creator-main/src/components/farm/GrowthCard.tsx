@@ -348,7 +348,7 @@ function ReadingCell({ label, reading }: { label: string; reading: GrowthReading
 }
 
 export function GrowthCard({ data, onAnalyze }: Props) {
-  const { curve, standardCurve, actualG, standardG, variancePercent, cycleLength, cycleStart, cycleDay: day, flock } = data;
+  const { curve, standardCurve, actualG, standardG, variancePercent, cycleLength, cycleStart, cycleDay: day, flock, measuredDay, sampleSize } = data;
   const targetLabel = data.standardName ? `${data.standardName} target` : "target";
   const has = actualG != null && standardG != null && curve.length > 0;
   const state = variancePercent != null ? standing(variancePercent) : null;
@@ -360,7 +360,8 @@ export function GrowthCard({ data, onAnalyze }: Props) {
       }[state.tone]
     : null;
   const gap = has ? Math.round(Math.abs(actualG! - standardG!)) : 0;
-  const dayText = day != null ? tr(" for day {day}", { day }) : "";
+  // The standard in the sentence is the one for the day the birds were weighed, which is not always today.
+  const dayText = (measuredDay ?? day) != null ? tr(" for day {day}", { day: (measuredDay ?? day)! }) : "";
 
   return (
     <section aria-labelledby="growth-title" className="cb-card mb-6 p-5 sm:p-6">
@@ -413,6 +414,20 @@ export function GrowthCard({ data, onAnalyze }: Props) {
               {gap === 0
                 ? tr("Right on the {targetLabel} of {value} kg{dayText}.", { targetLabel, value: kg(standardG!, 3), dayText })
                 : tr("{gap} g {value} than the {targetLabel} of {value2} kg{dayText}.", { gap, value: actualG! >= standardG! ? tr("heavier") : tr("lighter"), targetLabel, value2: kg(standardG!, 3), dayText })}
+            </p>
+          )}
+
+          {has && measuredDay != null && (
+            <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
+              {sampleSize != null
+                ? tr("Weighed on Day {day}, {n} birds on the scale.", { day: measuredDay, n: sampleSize })
+                : tr("Weighed on Day {day}.", { day: measuredDay })}
+              {day != null && measuredDay < day ? tr(" Enter today's weights on Flock Tracking to update it.") : ""}
+            </p>
+          )}
+          {!has && (
+            <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+              {tr("No weight measured yet. Type in the weights of a few birds on Flock Tracking and the average shows here.")}
             </p>
           )}
 

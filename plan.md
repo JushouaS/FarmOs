@@ -70,7 +70,7 @@ Verified by reading every `INSERT`/`UPDATE` in `app/packages/api/src` and `app/p
 | Behavior (inactive, huddling) | `cerebroil-stream/live_behavior.py` | Off: `LIVE_BEHAVIOR` is not set on the Pi (`/behavior/status` answered `disabled`) | **Real code, switched off** |
 | Typed-in scale weights | `actual_weights` | Yes: `PUT /growth/actual-weights` | **Real** (manual) |
 | Mortality | `mortality_logs` | Yes: `POST /growth/mortality` | **Real** (manual only) |
-| Dashboard weight curve, sample size, confidence | `cycle_weights` | **No writer.** Only `0009_seed_from_dataset.sql` inserts | **Seed data, confirmed**: 7 rows, newest dated 2024-05-25 (days 7 to 42); the Dashboard reads its "actual" weight off this curve |
+| Dashboard weight curve, sample size | `cycle_weights` | Yes since 2026-11-04: mean of typed-in `actual_weights` per day (`measured-weights.ts`). Before that, no writer; only the `0009` seed | **Seed data, confirmed**: 7 rows, newest dated 2024-05-25 (days 7 to 42); the Dashboard reads its "actual" weight off this curve |
 | Dashboard FCR, daily gain, feed eaten, water, activity % | `feed_samples`, `water_samples`, `activity_samples` | **No writer anywhere** | **Empty, confirmed**: 0 rows in each table, so the cards show "—"; no physical source exists |
 | FCR target | `FCR_TARGET = 1.70` in `routes/operations.ts` | n/a | Constant, not per day |
 | Analytics → Weight Growth tab, Flock Monitoring per-bird table, Dashboard analysis report | `app/src/lib/farm/dataset.ts` via `sampleForDay()` (`app/src/lib/farm/sample.ts`) | n/a | **Sample**, each marked with `SampleNotice` |
@@ -205,7 +205,7 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 - Description: after T0.1, count rows and newest `recorded_at` of `cycle_weights`, `feed_samples`, `water_samples`, `activity_samples`, `alerts`, `incidents`, `monitoring_reports`, `archived_reports`; record the result in this file.
 - Acceptance: §2.2 table updated from the actual counts.
 
-**T1.1 Give `cycle_weights` a real writer** — *Critical*
+**T1.1 Give `cycle_weights` a real writer** — *Critical* — **done 2026-11-04 for typed-in weights** (not committed when written): migration `0025_measured_weights.sql` clears the 2024 sample measurements and keeps the standards; `packages/api/src/measured-weights.ts` saves the day's mean and bird count whenever a weight is typed in or removed (`routes/growth.ts`) and once at start-up; `routes/operations.ts` reads only measured days (`latestMeasured`, `curveToDate` in `cycle-day.ts`); the Growth card says which day was weighed. `bun test` in `packages/api` (`test/measured-weights.test.ts`, 7 tests) passes. **Kinect weights are deliberately not written here** until T2.7 has validated them.
 - Description: decide the source of the Dashboard's daily weight: the day's mean of Kinect weights, the mean of typed-in `actual_weights`, or both (scale entry wins). Add an API job/route that upserts one `cycle_weights` row per day with `actual_g`, `sample_size`, `estimation_confidence`; stop reading seeded rows for days with no measurement.
 - Files: `app/packages/api/src/routes/growth.ts`, `routes/operations.ts` (weight block), new migration if a `source` column is needed, `app/src/lib/farm/growth.ts`.
 - Depends on: T1.0.

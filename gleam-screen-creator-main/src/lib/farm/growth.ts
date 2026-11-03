@@ -13,7 +13,8 @@
  *   cycleStart                cycle.startDay (the day the window starts, Settings)
  *   curve                     weight.curve[]  { day, actualG, standardG } up to today
  *   standardCurve             weight.standardCurve[]  { day, standardG } to the last day
- *   actualG / standardG       weight.actualAvgG / weight.standardG
+ *   actualG / standardG       weight.actualAvgG / weight.standardG (the newest measured day, and its standard)
+ *   measuredDay               weight.measuredDay  the day that weight was measured (null: nothing measured yet)
  *   variancePercent           weight.variancePercent
  *   confidencePercent         weight.estimationConfidencePercent
  *   sampleSize                weight.sampleSize
@@ -53,6 +54,8 @@ export interface GrowthCardData {
   variancePercent: number | null;
   confidencePercent: number | null;
   sampleSize: number | null;
+  /** The grow-out day `actualG` was measured on, which is not always today. */
+  measuredDay: number | null;
   fcr: number | null;
   flock: { total: number | null; active: number | null; inactive: number | null };
   temperature: GrowthReading;
@@ -131,6 +134,7 @@ export function buildGrowthCardData(overview: any): GrowthCardData {
     variancePercent: variance,
     confidencePercent: num(overview?.weight?.estimationConfidencePercent),
     sampleSize: num(overview?.weight?.sampleSize),
+    measuredDay: num(overview?.weight?.measuredDay),
     fcr: num(overview?.feed?.fcr),
     flock: { total, active, inactive: active !== null && total !== null ? total - active : null },
     temperature: reading(readings, "temperature"),

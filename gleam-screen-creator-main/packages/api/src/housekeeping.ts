@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { syncAllWeights } from "./measured-weights.js";
 
 /**
  * Clears out what is no longer needed: sessions whose 30 days have passed (they are otherwise only
@@ -18,6 +19,8 @@ export function startHousekeeping(app: FastifyInstance): void {
     }
   };
   void sweep();
+  // Weights typed in before the Dashboard read them from cycle_weights are brought up to date once.
+  void syncAllWeights(app).catch((err) => app.log.warn({ err }, "could not bring the measured weights up to date"));
   const timer = setInterval(() => void sweep(), 60 * 60 * 1000);
   timer.unref();
   app.addHook("onClose", async () => clearInterval(timer));

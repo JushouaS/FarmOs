@@ -7,9 +7,10 @@ import {
   currentDay,
   curveToDate,
   databaseToday,
+  latestMeasured,
   readCycleSetting,
+  standardAtDay,
   standardCurve,
-  weightAtDay,
   type WeightPoint,
 } from "../cycle-day.js";
 
@@ -110,31 +111,29 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       : [];
     const stored: WeightPoint[] = storedRows.map((r) => ({
       day: Number(r.day),
-      actualG: Number(r.actualG),
+      actualG: r.actualG === null ? null : Number(r.actualG),
       standardG: Number(r.standardG),
     }));
-    // Weight for today's grow-out day (read off the stored curve when no row
-    // is stored for exactly today), not the last row in the table.
-    const lw = weightAtDay(stored, day);
-    // Confidence and sample size come from the stored weigh-in nearest to today
-    // that recorded them.
-    const measured = storedRows
-      .filter((r) => r.estimationConfidence != null)
-      .sort((a, b) => Math.abs(Number(a.day) - day) - Math.abs(Number(b.day) - day))[0];
-    const variancePercent = lw && lw.standardG ? ((lw.actualG - lw.standardG) / lw.standardG) * 100 : 0;
-    const estimationConfidencePercent = measured ? Number(measured.estimationConfidence) * 100 : null;
+    // The weight is the newest measurement on or before today (a day nobody weighed is never filled in
+    // from the stored curve), compared with the standard for the day it was measured. With no
+    // measurement the figures are null and the pages say so.
+    const lw = latestMeasured(stored, day);
+    const measuredRow = lw ? storedRows.find((r) => Number(r.day) === lw.day) : undefined;
+    const variancePercent = lw && lw.standardG ? ((lw.actualG - lw.standardG) / lw.standardG) * 100 : null;
+    const estimationConfidencePercent =
+      measuredRow?.estimationConfidence != null ? Number(measuredRow.estimationConfidence) * 100 : null;
     const weight = {
       actualAvgG: lw?.actualG ?? null,
-      standardG: lw?.standardG ?? null,
+      // The day the figure was measured, so a page can say "weighed on Day 21" when it is not today.
+      measuredDay: lw?.day ?? null,
+      standardG: lw ? lw.standardG : standardAtDay(stored, day),
       variancePercent,
-      // Only one confidence figure is actually stored (estimation_confidence);
-      // used for both fields pending a separate model-confidence column.
       modelConfidence: estimationConfidencePercent,
       estimationConfidencePercent,
-      sampleSize: measured?.sampleSize ?? null,
-      status: variancePercent >= 0 ? "optimal" : variancePercent > -5 ? "nominal" : "warning",
-      // Weigh-ins from the start day to today, and the target for every day of
-      // the window (the dashed line, which carries on to day 45).
+      sampleSize: measuredRow?.sampleSize != null ? Number(measuredRow.sampleSize) : null,
+      status: variancePercent === null ? "nominal" : variancePercent >= 0 ? "optimal" : variancePercent > -5 ? "nominal" : "warning",
+      // The measured days from the start day to today, and the target for every day of the window
+      // (the dashed line, which carries on to day 45).
       curve: activeCycle ? curveToDate(stored, setting.startDay, day) : [],
       standardCurve: activeCycle ? standardCurve(stored, setting.startDay, CYCLE_END_DAY) : [],
     };
@@ -254,7 +253,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     const hasWarning = alerts.some((a) => a.severity === "warning" && !a.acknowledged) || weight.status === "warning";
     const summary = {
       status: hasCritical ? "critical" : hasWarning ? "warning" : weight.status === "optimal" ? "optimal" : "nominal",
-      confidence: estimationConfidencePercent ?? 80,
+      confidence: estimationConfidencePercent,
     };
 
     return reply.send({

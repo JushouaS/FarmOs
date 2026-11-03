@@ -569,8 +569,10 @@ Once a bird has a weight, the "vs Standard" figure uses it instead of the estima
 
 **Every day is new data.** The boxes belong to the grow-out day (it counts up at midnight), so a new day
 starts with empty boxes and the earlier days stay saved. **Gain** on each bird shows how much it gained
-since the last day it was weighed. (The Dashboard's Growth card shows the pen's average weight by day
-against the standard.)
+since the last day it was weighed. The Dashboard's Growth card draws the pen's average weight by day against the standard, and that
+average is the mean of the weights typed in here for the day (and how many birds were weighed). A day nobody
+weighed has no point: the chart does not guess it. Run `npm run db:migrate` once (migration 0025 clears the
+2024 sample weights the card used to show).
 
 A weight is kept per bird and per grow-out day, so if someone changes the day in Settings to a day that
 already has weights, those weights show again. Typing a new value for the same bird and day replaces the

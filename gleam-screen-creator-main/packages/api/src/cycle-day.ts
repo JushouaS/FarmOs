@@ -21,9 +21,13 @@ export interface CycleSetting {
   startedOn: string;
 }
 
+/**
+ * One day of the weight table. `standardG` is the breed's target (reference data). `actualG` is a
+ * measurement, or null when nothing was measured that day: a day with no measurement is never filled in.
+ */
 export interface WeightPoint {
   day: number;
-  actualG: number;
+  actualG: number | null;
   standardG: number;
 }
 
@@ -74,34 +78,38 @@ function lerp(points: { day: number; v: number }[], day: number): number | null 
   return a.v + ((b.v - a.v) * (day - a.day)) / (b.day - a.day);
 }
 
-export function weightAtDay(rows: WeightPoint[], day: number): { actualG: number; standardG: number } | null {
-  const exact = rows.find((r) => r.day === day);
-  if (exact) return { actualG: exact.actualG, standardG: exact.standardG };
-  const actualG = lerp(rows.map((r) => ({ day: r.day, v: r.actualG })), day);
-  const standardG = lerp(rows.map((r) => ({ day: r.day, v: r.standardG })), day);
-  return actualG === null || standardG === null ? null : { actualG: Math.round(actualG), standardG: Math.round(standardG) };
+/** The breed's target weight for any day, read off the stored standards (a straight line between stored days). */
+export function standardAtDay(rows: WeightPoint[], day: number): number | null {
+  const v = lerp(rows.map((r) => ({ day: r.day, v: r.standardG })), day);
+  return v === null ? null : Math.round(v);
+}
+
+/** The newest measurement on or before `day`, with the standard for the day it was measured. */
+export function latestMeasured(rows: WeightPoint[], day: number): { day: number; actualG: number; standardG: number } | null {
+  let best: WeightPoint | null = null;
+  for (const r of rows) {
+    if (r.actualG !== null && r.day <= day && (best === null || r.day > best.day)) best = r;
+  }
+  if (!best || best.actualG === null) return null;
+  return { day: best.day, actualG: best.actualG, standardG: standardAtDay(rows, best.day) ?? best.standardG };
 }
 
 /** The breed's target weight for every day of the window, the dashed line on the growth chart. */
 export function standardCurve(rows: WeightPoint[], fromDay: number, toDay: number) {
   const out: { day: number; standardG: number }[] = [];
   for (let day = fromDay; day <= toDay; day++) {
-    const w = weightAtDay(rows, day);
-    if (w) out.push({ day, standardG: w.standardG });
+    const standardG = standardAtDay(rows, day);
+    if (standardG !== null) out.push({ day, standardG });
   }
   return out;
 }
 
-/**
- * The weigh-ins to date: one point per day from the start day to today. A day
- * with a stored weigh-in uses it; for any other day the stored curve is read at
- * that day, a stand-in until the scans write one row per day.
- */
-export function curveToDate(rows: WeightPoint[], fromDay: number, today: number): WeightPoint[] {
-  const out: WeightPoint[] = [];
-  for (let day = fromDay; day <= today; day++) {
-    const w = weightAtDay(rows, day);
-    if (w) out.push({ day, ...w });
+/** The weigh-ins to date: one point for each day from the start day to today that has a measurement. */
+export function curveToDate(rows: WeightPoint[], fromDay: number, today: number): { day: number; actualG: number; standardG: number }[] {
+  const out: { day: number; actualG: number; standardG: number }[] = [];
+  for (const r of [...rows].sort((a, b) => a.day - b.day)) {
+    if (r.actualG === null || r.day < fromDay || r.day > today) continue;
+    out.push({ day: r.day, actualG: r.actualG, standardG: standardAtDay(rows, r.day) ?? r.standardG });
   }
   return out;
 }

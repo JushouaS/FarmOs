@@ -37,4 +37,11 @@ export const part25: Messages = {
     "Wala pay insight. Pindota ang Refresh aron makahimo niini gikan sa karon nga datos sa panon.",
   ],
   "Grow-out Status": ["Katayuan ng Grow-out", "Kahimtang sa Grow-out"],
+  "Weighed on Day {day}, {n} birds on the scale.": ["Natimbang noong Day {day}, {n} manok sa timbangan.", "Natimbang niadtong Day {day}, {n} ka manok sa timbangan."],
+  "Weighed on Day {day}.": ["Natimbang noong Day {day}.", "Natimbang niadtong Day {day}."],
+  " Enter today's weights on Flock Tracking to update it.": [" Ilagay ang mga timbang ngayon sa Flock Tracking para ma-update ito.", " Ibutang ang mga gibug-aton karon sa Flock Tracking aron ma-update kini."],
+  "No weight measured yet. Type in the weights of a few birds on Flock Tracking and the average shows here.": [
+    "Wala pang nasusukat na timbang. Ilagay ang timbang ng ilang manok sa Flock Tracking at lalabas dito ang average.",
+    "Wala pay nasukod nga gibug-aton. Ibutang ang gibug-aton sa pipila ka manok sa Flock Tracking ug mugawas dinhi ang average.",
+  ],
 };

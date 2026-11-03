@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { raiseAlert } from "../notify.js";
+import { syncDayWeight } from "../measured-weights.js";
 
 /**
  * GET  /growth/analytics  — growth curve, cohorts, volumetric sample, mortality.
@@ -82,6 +83,8 @@ export async function registerGrowthRoutes(app: FastifyInstance) {
         ON CONFLICT (cycle_id, bird_id, day) DO UPDATE SET
           actual_g = EXCLUDED.actual_g, estimated_g = EXCLUDED.estimated_g,
           recorded_by = EXCLUDED.recorded_by, recorded_at = now()`;
+      // The Dashboard's weight for this day is the mean of the weights entered for it.
+      await syncDayWeight(app, cycleId, day);
       return reply.send({ saved: true, birdId: id, day, actualG });
     },
   );
@@ -98,6 +101,7 @@ export async function registerGrowthRoutes(app: FastifyInstance) {
       const gone = await app.sqlWrite`
         DELETE FROM actual_weights WHERE cycle_id = ${cycleId} AND bird_id = ${q.data.birdId} AND day = ${q.data.day}
         RETURNING bird_id`;
+      await syncDayWeight(app, cycleId, q.data.day);
       return reply.send({ removed: gone.count > 0 });
     },
   );
@@ -114,7 +118,7 @@ export async function registerGrowthRoutes(app: FastifyInstance) {
       SELECT day, actual_g AS "actualG", standard_g AS "standardG",
              sample_size AS "sampleSize", estimation_confidence AS "estimationConfidence"
       FROM cycle_weights
-      WHERE cycle_id = ${c.id}
+      WHERE cycle_id = ${c.id} AND actual_g IS NOT NULL
       ORDER BY day ASC`;
 
     const cohorts = await app.sqlRead`
