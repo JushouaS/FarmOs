@@ -70,12 +70,12 @@ Verified by reading every `INSERT`/`UPDATE` in `app/packages/api/src` and `app/p
 | Behavior (inactive, huddling) | `cerebroil-stream/live_behavior.py` | Off: `LIVE_BEHAVIOR` is not set on the Pi (`/behavior/status` answered `disabled`) | **Real code, switched off** |
 | Typed-in scale weights | `actual_weights` | Yes: `PUT /growth/actual-weights` | **Real** (manual) |
 | Mortality | `mortality_logs` | Yes: `POST /growth/mortality` | **Real** (manual only) |
-| Dashboard weight curve, sample size, confidence | `cycle_weights` | **No writer.** Only `0009_seed_from_dataset.sql` inserts | **Seed data** (DB contents not re-queried, see §2.5) |
-| Dashboard FCR, daily gain, feed eaten, water, activity % | `feed_samples`, `water_samples`, `activity_samples` | **No writer anywhere** | **Seed data or empty**; no physical source exists |
+| Dashboard weight curve, sample size, confidence | `cycle_weights` | **No writer.** Only `0009_seed_from_dataset.sql` inserts | **Seed data, confirmed**: 7 rows, newest dated 2024-05-25 (days 7 to 42); the Dashboard reads its "actual" weight off this curve |
+| Dashboard FCR, daily gain, feed eaten, water, activity % | `feed_samples`, `water_samples`, `activity_samples` | **No writer anywhere** | **Empty, confirmed**: 0 rows in each table, so the cards show "—"; no physical source exists |
 | FCR target | `FCR_TARGET = 1.70` in `routes/operations.ts` | n/a | Constant, not per day |
 | Analytics → Weight Growth tab, Flock Monitoring per-bird table, Dashboard analysis report | `app/src/lib/farm/dataset.ts` via `sampleForDay()` (`app/src/lib/farm/sample.ts`) | n/a | **Sample**, each marked with `SampleNotice` |
 | Insights → AI briefing and alert analysis | `app/src/lib/intelligence.ts` line 31: `buildFarmSnapshot(sampleForDay(...).farm)` | n/a | **Built from the sample flock**, and `GROQ_API_KEY` is not in the root `.env` (only `TINYFISH_API_KEY`, `VITE_VISION_ORIGIN`), so it cannot run now |
-| Alerts, incidents, archived reports, anomaly events | seeded rows from `0009` | Alerts: yes, from monitors (`behavior-monitor.ts`, `notify.ts`); incidents/reports: seed | **Mixed**; **Requires investigation** which seeded rows remain |
+| Alerts, incidents, archived reports, anomaly events | seeded rows from `0009` | Alerts: yes, from monitors (`behavior-monitor.ts`, `notify.ts`); incidents/reports: seed | **Seed, confirmed for alerts**: 4 rows, newest 2024-05-25. Incidents and reports not counted: **Requires investigation** |
 
 ### 2.3 Sample data already removed (commit `1e22610` and earlier)
 
@@ -91,11 +91,13 @@ Built-in `admin`/`admin` login removed from the API and the browser (`app/src/li
 - `app/README.md` is the Lovable template text.
 - `WEBSITE_GAPS_AND_PLAN.md` lists problems since fixed (admin fallback, mock-backed pages, no vision contract) and is superseded by this file.
 
-### 2.5 Not verifiable during this assessment
+### 2.5 Database contents (checked 2026-11-04 after restarting the database)
 
-The local database refused connections (see §2.1), so the row counts of `cycle_weights`, `feed_samples`, `water_samples`,
-`activity_samples`, `alerts`, `incidents` and `monitoring_reports` were **not re-queried**. The "seed data" conclusions above come
-from the code (no writer exists), not from the table contents. Task T1.0 confirms them.
+The database refused connections until it was stopped and started again (G-01). The counts were then read with `psql`:
+`cycle_weights` 7 rows (newest 2024-05-25, seed), `feed_samples` 0, `water_samples` 0, `activity_samples` 0, `alerts` 4 (newest
+2024-05-25, seed), `actual_weights` 0, `detections` 0, `users` 1, `sensor_readings` 655 (DHT22). Not counted: `incidents`,
+`monitoring_reports`, `archived_reports` (T1.0 still covers them). The restart cleared the connection failures, but they will come
+back under memory pressure.
 
 ---
 
@@ -186,7 +188,7 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 - Files: `app/packages/api/.env`, `cerebroil-stream/.env`, root `.env` (all git-ignored).
 - Acceptance: old admin password no longer works; every secret in the three `.env` files is new; `git grep` for the old values returns nothing; MFA accounts re-enrolled if `JWT_SECRET` changed (HOW_TO_RUN notes this).
 
-**T0.3 Backups** — *Critical*
+**T0.3 Backups** — *Critical* — **started 2026-11-04**: `app/scripts/backup-db.ps1` written and run; the first dump (165 KB) and a models zip (14 MB) are in `C:\Users\Jush\cerebroil-backups`. The dump was restored into a throwaway database (49 tables, 1 user, 7 cycle_weights, 655 sensor_readings) and that database was deleted. **Still to do:** a nightly Task Scheduler job, and a copy on a different computer or drive.
 - Description: scheduled `pg_dump` (daily, keep 14), copied off the machine; copy `cerebroil-stream/models/*` and the training CSVs to a second location and record checksums; document restore.
 - Files: new `app/scripts/backup-db.*`, `app/HOW_TO_RUN.md`.
 - Depends on: T0.1.
@@ -199,7 +201,7 @@ Milestones: **M0** stable base (Phase 0) → **M1** honest data (Phase 1) → **
 
 ### Phase 1 — Honest data (O1)
 
-**T1.0 Confirm what the database really holds** — *Critical*
+**T1.0 Confirm what the database really holds** — *Critical* — **mostly done 2026-11-04** (see §2.5); still to count: `incidents`, `monitoring_reports`, `archived_reports`
 - Description: after T0.1, count rows and newest `recorded_at` of `cycle_weights`, `feed_samples`, `water_samples`, `activity_samples`, `alerts`, `incidents`, `monitoring_reports`, `archived_reports`; record the result in this file.
 - Acceptance: §2.2 table updated from the actual counts.
 
