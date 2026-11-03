@@ -267,12 +267,6 @@ function LoginPage() {
                 <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
                   {tr("Sign in")}
                 </h1>
-                <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  {tr("Demo access")}{" "}
-                  <span className="font-mono text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                    {tr("admin / admin")}
-                  </span>
-                </p>
 
                 {error && (
                   <div

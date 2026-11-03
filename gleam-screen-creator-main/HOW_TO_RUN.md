@@ -252,19 +252,17 @@ You should see:
 
 ### Open it
 
-Go to **http://localhost:8080** in your browser.
-
-Development sign in (only works on your own computer in development mode):
+Go to **http://localhost:8080** in your browser and sign in with the administrator account. There is no built-in
+login: `admin` / `admin` was removed and does not work anywhere. The administrator is made once, with a random
+password that is shown only once, so save it in a password manager straight away:
 
 ```
-Username: admin
-Password: admin
+cd packages\api
+.\node_modules\.bin\tsx.exe scripts\seed-admin.ts
 ```
 
-"Your own computer" means the computer the API runs on: a phone or another laptop on the network cannot
-use `admin` / `admin`, even in development. Accounts are not open to the public either: only a signed-in
-administrator can create one (`POST /auth/register`, with the role `ADMIN`, `FARM_MANAGER`, `OPERATOR` or
-`VIEWER`). There is no screen for it yet.
+The user name is `admin@cerebroiler.dev`. Run the same command again any time to replace a lost password (the old one
+stops working). Accounts are not open to the public: an administrator adds people in **Settings, Accounts**.
 
 ---
 
@@ -306,6 +304,38 @@ computer gets `unauthorized` from that address on purpose: everyone else watches
    Allow them (Windows Security, Firewall, Allow an app) or ask for help.
 
 The API must be listening on all addresses (`API_HOST=0.0.0.0` in `packages\api\.env`).
+
+### Sharing the site on a public link (optional)
+
+For a demo to people outside your network (a panel, a visitor), one command makes the whole site reachable at a
+temporary `https://...trycloudflare.com` address. Anyone who has the link can reach the sign-in page, so read the
+points below first.
+
+1. Make the administrator password, once: see "Open it" above (`scripts\seed-admin.ts`). Never share it.
+2. Start the database (`bun run db:local:start` in `packages\api`). Build the Kinect bridge once (`kinect-bridge\build.cmd`)
+   if you want the Kinect picture. Download `cloudflared.exe` (Cloudflare's free tunnel program, from
+   github.com/cloudflare/cloudflared/releases, the `windows-amd64.exe` file) into `C:\Users\YOU\cloudflared\`.
+3. Run:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\start-public.ps1
+```
+
+   It starts the API in **production mode** (port 4100), the production website (8180), the Kinect bridge with an access key,
+   and `scripts\public-gateway.mjs` (port 9000), the one door that puts the website, the API (under `/api`) and the Kinect
+   picture behind a single address. It then prints `PUBLIC LINK: https://...`. Use `-NoTunnel` to try everything on this
+   computer first (`http://localhost:9000`), `-Rebuild` after changing the website, and `-Stop` to stop it all.
+
+What is different from your own `localhost:8080` site:
+
+- Nothing opens without an account. The API is in production mode, secure cookies are on, there is no built-in login,
+  and the Kinect picture needs a ticket that only signed-in people get.
+- The link changes every time, and works only while this computer and the script's programs are running. The
+  Raspberry Pi must be on the same network as this computer for the camera, the scan, the Test video and the sensor.
+- The tunnel needs this computer to reach Cloudflare on port 7844. School, office and public Wi-Fi often blocks it (the
+  link then shows the error "530"). Use home Wi-Fi or a phone hotspot.
+- Give people their own accounts (**Settings, Accounts**), not the administrator's.
+
 
 ---
 
@@ -707,8 +737,8 @@ When the policy changes in a way that matters, edit the text in `src/lib/privacy
 
 What was found and closed in the security review, and what you still decide:
 
-- **Accounts.** Only a signed-in administrator can create accounts (`POST /auth/register`). `admin` / `admin` works
-  only from the computer the API runs on, in development mode.
+- **Accounts.** Only a signed-in administrator can create accounts (`POST /auth/register`). There is no built-in
+  `admin` / `admin` login any more: the administrator is made by `scripts/seed-admin.ts` with a random password.
 - **Wrong passwords.** Five wrong tries in 30 minutes lock that email from that network address for the rest of the
   30 minutes. The answers are the same whether or not the email has an account. The second-step code is limited
   per account. Run `npm run db:migrate` once (it adds the `login_failures` table).

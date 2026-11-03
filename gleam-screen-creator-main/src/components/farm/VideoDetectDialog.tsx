@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Film, Loader2 } from "lucide-react";
+import { Film, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +103,9 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Full screen is for the video AND the readings drawn over it, so it is this box that goes full screen.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     if (!file) {
@@ -120,6 +123,16 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
     [result, standardG],
   );
   weightsRef.current = weights;
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement != null && document.fullscreenElement === stageRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else void stageRef.current?.requestFullscreen().catch(() => {});
+  };
 
   // Draw the boxes of the sampled frame that matches the video's current time.
   useEffect(() => {
@@ -142,7 +155,10 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
       ctx.clearRect(0, 0, w, h);
       const idx = video.currentTime <= result.analyzed_seconds + 0.5 ? frameAt(result.frames, video.currentTime) : -1;
       const boxes = idx >= 0 ? result.frames[idx].boxes : [];
-      const scale = w / result.width;
+      // The video is fitted inside this box (with bars at the sides or top in full screen); the boxes follow it.
+      const scale = Math.min(w / result.width, h / result.height);
+      const offX = (w - result.width * scale) / 2;
+      const offY = (h - result.height * scale) / 2;
       ctx.lineWidth = 2;
       ctx.font = "12px ui-monospace, monospace";
       let inactive = 0;
@@ -162,7 +178,7 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
         const color = STATE_COLORS[state] ?? STATE_COLORS[0];
         ctx.strokeStyle = color;
         ctx.lineWidth = state >= 2 ? 3 : 2;
-        ctx.strokeRect(x * scale, y * scale, bw * scale, bh * scale);
+        ctx.strokeRect(x * scale + offX, y * scale + offY, bw * scale, bh * scale);
         // The bird's estimated weight, in the middle of its box.
         const grams = id != null ? weightsRef.current?.byId.get(id) : undefined;
         if (grams != null) {
@@ -171,9 +187,9 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
           ctx.textAlign = "center";
           ctx.lineWidth = 3;
           ctx.strokeStyle = "rgba(0,0,0,0.85)";
-          ctx.strokeText(text, (x + bw / 2) * scale, (y + bh / 2) * scale + 4);
+          ctx.strokeText(text, (x + bw / 2) * scale + offX, (y + bh / 2) * scale + offY + 4);
           ctx.fillStyle = "#fff";
-          ctx.fillText(text, (x + bw / 2) * scale, (y + bh / 2) * scale + 4);
+          ctx.fillText(text, (x + bw / 2) * scale + offX, (y + bh / 2) * scale + offY + 4);
           ctx.textAlign = "left";
           ctx.font = "12px ui-monospace, monospace";
           ctx.strokeStyle = color;
@@ -186,11 +202,11 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
         else label = `#${id} ${tr(STATE_NAMES[state])}`;
         if (!label) continue;
         const tw = ctx.measureText(label).width + 8;
-        const ly = Math.max(0, y * scale - 16);
+        const ly = Math.max(0, y * scale + offY - 16);
         ctx.fillStyle = "rgba(0,0,0,0.75)";
-        ctx.fillRect(x * scale, ly, tw, 16);
+        ctx.fillRect(x * scale + offX, ly, tw, 16);
         ctx.fillStyle = color;
-        ctx.fillText(label, x * scale + 4, ly + 12);
+        ctx.fillText(label, x * scale + offX + 4, ly + 12);
       }
       const key = `${boxes.length}/${inactive}/${huddling}`;
       if (key !== shown) {
@@ -375,17 +391,31 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
         )}
 
         {url && (
-          <div className="relative overflow-hidden rounded-xl border border-[var(--border-default)] bg-black">
+          <div
+            ref={stageRef}
+            className={`relative overflow-hidden bg-black ${fullscreen ? "" : "rounded-xl border border-[var(--border-default)]"}`}
+          >
             <video
               ref={videoRef}
               src={url}
               controls
+              controlsList="nofullscreen"
+              disablePictureInPicture
               playsInline
               muted
-              className="block max-h-[50vh] w-full"
+              className={fullscreen ? "block h-full w-full object-contain" : "block max-h-[50vh] w-full"}
               onError={() => setNeedsConvert(true)}
             />
             {result && <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 h-full w-full" />}
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              aria-label={fullscreen ? tr("Exit full screen") : tr("Full screen")}
+              title={fullscreen ? tr("Exit full screen") : tr("Full screen")}
+              className="tap absolute right-2 top-2 rounded-md bg-black/70 p-1.5 text-white/85 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
+            >
+              {fullscreen ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
+            </button>
           </div>
         )}
 

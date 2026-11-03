@@ -81,6 +81,31 @@ export function VisualsDashboardPage() {
   const [layout, setLayout] = useState<ViewLayout>("dual");
   const [dahuaError, setDahuaError] = useState(false);
   const [kinectError, setKinectError] = useState(false);
+  // A camera picture is one long connection. When the API restarts, the camera computer restarts or the network drops
+  // for a moment, the browser leaves the picture frozen and never asks again. So every 10 seconds the page asks whether
+  // the camera path works and, when it works again after being away, opens the pictures anew.
+  const [streamKey, setStreamKey] = useState(0);
+  useEffect(() => {
+    const healthUrl = visionStreamUrl("CAM-01").replace(/[/]visual[/]stream[/].*$/, "/visual/health");
+    let away = false;
+    const check = async () => {
+      try {
+        const res = await fetch(healthUrl, { cache: "no-store", credentials: "include" });
+        if (res.status === 401) return;                       // not signed in: nothing to learn
+        if (!res.ok) throw new Error("camera path is down");
+        if (away) {
+          away = false;
+          setDahuaError(false);
+          setKinectError(false);
+          setStreamKey((k) => k + 1);
+        }
+      } catch {
+        away = true;
+      }
+    };
+    const timer = window.setInterval(() => void check(), 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
   // The clock drives the day/night cycle: day is 05:00 to 16:59, and birds
   // count as sleeping the rest of the time (isNightCycle). Null until mounted so the server render and
   // the first client render match.
@@ -99,6 +124,12 @@ export function VisualsDashboardPage() {
   useEffect(() => {
     // VITE_VISION_ORIGIN points the page at a camera service on another machine
     // (the Raspberry Pi), for example http://192.168.1.20:5000.
+    // On a public https address the visitor is not on the farm's network, so the message names the address
+    // they are using, never the camera computer's private one.
+    if (window.location.protocol === "https:") {
+      setFeedOrigin(window.location.origin);
+      return;
+    }
     const configured = import.meta.env.VITE_VISION_ORIGIN as string | undefined;
     setFeedOrigin(configured?.trim().replace(/\/+$/, "") || `${window.location.protocol}//${window.location.hostname}:5000`);
   }, []);
@@ -245,7 +276,8 @@ export function VisualsDashboardPage() {
                     {!dahuaError ? (
                       feedOrigin && (
                         <img
-                          src={visionStreamUrl("CAM-01")}
+                          key={`dahua-${streamKey}`}
+                          src={`${visionStreamUrl("CAM-01")}?k=${streamKey}`}
                           alt={tr("Live camera feed of the broilers' behavior")}
                           className="h-full w-full object-contain"
                           onError={() => setDahuaError(true)}
@@ -302,7 +334,8 @@ export function VisualsDashboardPage() {
                     {!kinectError ? (
                       feedOrigin && (
                         <img
-                          src={visionStreamUrl("KINECT-01")}
+                          key={`kinect-${streamKey}`}
+                          src={`${visionStreamUrl("KINECT-01")}?k=${streamKey}`}
                           alt={tr("Microsoft Kinect 3D depth sensor station feed")}
                           className="h-full w-full object-contain"
                           onError={() => setKinectError(true)}

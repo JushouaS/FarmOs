@@ -51,3 +51,6 @@ __pycache__/
 
 # SUS questionnaire responses written by packages/api (personal data)
 packages/api/data/
+
+# Output of scripts/start-public.ps1 (logs, process ids)
+.public-run

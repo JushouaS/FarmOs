@@ -12,9 +12,12 @@
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
-  // Same host that served the page, so LAN devices reach this machine's API.
   (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    ? window.location.protocol === "https:"
+      ? // A public https address (see scripts/public-gateway.mjs): the API is behind the same address, under /api.
+        `${window.location.origin}/api`
+      : // Same host that served the page, so LAN devices reach this machine's API.
+        `${window.location.protocol}//${window.location.hostname}:4000`
     : "http://localhost:4000");
 
 export class ApiError extends Error {

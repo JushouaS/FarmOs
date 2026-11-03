@@ -95,7 +95,13 @@ export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
         /* not reachable right now: try without, and the retry below tries again */
       }
       if (closed) return;
-      const socket = new WebSocket(`ws://${window.location.hostname}:${BRIDGE_PORT}/${ticket ? `?t=${encodeURIComponent(ticket)}` : ""}`);
+      const query = ticket ? `?t=${encodeURIComponent(ticket)}` : "";
+      // On a public https address the browser needs a secure connection, which the public gateway passes on to the bridge.
+      const address =
+        window.location.protocol === "https:"
+          ? `wss://${window.location.host}/kinect/${query}`
+          : `ws://${window.location.hostname}:${BRIDGE_PORT}/${query}`;
+      const socket = new WebSocket(address);
       ws = socket;
       wsRef.current = socket;
       socket.binaryType = "arraybuffer";

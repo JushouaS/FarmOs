@@ -60,22 +60,6 @@ const registerBody = z.object({
   roles: z.array(z.enum(ROLE_CODES)).min(1).max(ROLE_CODES.length).default(["VIEWER"]),
 });
 
-/**
- * Whether a request comes from the computer the API runs on (it reaches the API through localhost, or through
- * this computer's own network address). It looks at the socket, not at request.ip: with trustProxy on, request.ip
- * follows an X-Forwarded-For header that anyone can write.
- */
-export function fromThisComputer(request: { raw: { socket: { remoteAddress?: string; localAddress?: string } } }): boolean {
-  const { remoteAddress, localAddress } = request.raw.socket;
-  if (!remoteAddress) return false;
-  const strip = (a: string) => a.replace(/^::ffff:/, "");
-  const remote = strip(remoteAddress);
-  return remote === "127.0.0.1" || remote === "::1" || (!!localAddress && remote === strip(localAddress));
-}
-
-/** Account the development-only "admin" / "admin" login maps to (see /login). */
-const DEV_ADMIN_EMAIL = "admin@cerebroiler.dev";
-
 const loginBody = z.object({
   email: emailSchema,
   password: passwordSchema,
@@ -262,23 +246,6 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   });
 
   app.post("/login", { ...loginRateLimit }, async (request, reply) => {
-    // Development-only shortcut matching the "admin / admin" demo hint on the
-    // sign-in page: signs in as the seeded admin without touching its real
-    // password. Never active outside NODE_ENV=development, and only for a request
-    // made from this computer: another device on the network cannot use it.
-    const body = request.body as { email?: unknown; password?: unknown } | undefined;
-    if (env.NODE_ENV === "development" && body?.email === "admin" && body?.password === "admin" && fromThisComputer(request)) {
-      const admin = await app.sqlRead`
-        SELECT id FROM users WHERE email = ${DEV_ADMIN_EMAIL} AND is_active`;
-      if (admin.count === 0) return reply.code(401).send({ error: "invalid_credentials" });
-      await app.sqlWrite`
-        INSERT INTO auth_audit (user_id, action, ip_address, metadata)
-        VALUES (${admin[0]!.id}, ${"login_dev_admin"}, ${request.ip}::inet, ${app.sqlWrite.json({})})`;
-      const session = await issueSession(admin[0]!.id as string, request.ip, request.headers["user-agent"] ?? null);
-      setSessionCookies(reply, session);
-      return reply.send({ user: session.user });
-    }
-
     const parsed = loginBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body", issues: parsed.error.issues });
     const { email, password } = parsed.data;

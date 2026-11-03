@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { POLICY_UPDATED } from "./privacy-version";
 
 /**
  * The API base URL is read from the Vite env variable `VITE_API_URL`.
@@ -17,64 +16,26 @@ import { POLICY_UPDATED } from "./privacy-version";
  *
  * Authentication is carried in httpOnly, Secure, SameSite=Strict cookies
  * issued by the API. The frontend never stores tokens in localStorage.
- * Exception: the local admin account (below) persists its demo session
- * profile (not a token) so a page refresh keeps the user signed in while
- * no backend is running.
  */
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
   (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    ? window.location.protocol === "https:"
+      ? // A public https address (see scripts/public-gateway.mjs): the API is behind the same address, under /api.
+        `${window.location.origin}/api`
+      : `${window.location.protocol}//${window.location.hostname}:4000`
     : "http://localhost:4000");
 
 const fetchOpts: RequestInit = { credentials: "include" };
 
-/* ── Local admin account ────────────────────────────────────────
- * Offline fallback only: used when the API can't be reached, so the
- * dashboard is still reachable with no backend running. While the API
- * is up it must not apply — the API knows nothing of this session, so
- * every data loader would 401 and bounce back to /login in a loop.
- * Username "admin", password "admin". */
-const LOCAL_USERNAME = "admin";
-const LOCAL_PASSWORD = "admin";
-/** The offline sign-in is for development only: a build that is put in front of people has no built-in login. */
-const OFFLINE_ADMIN_ENABLED = Boolean((import.meta as any).env?.DEV);
-const SESSION_KEY = "cb-auth-session";
-
-function readLocalSession(): AuthUser | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AuthUser;
-    if (parsed && typeof parsed.id === "string" && typeof parsed.email === "string") {
-      return parsed;
-    }
-  } catch {
-    /* corrupt or unavailable storage — treat as no session */
-  }
-  return null;
-}
-
-function writeLocalSession(user: AuthUser | null) {
-  try {
-    if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    else localStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* storage unavailable — session just won't survive a refresh */
-  }
-}
-
-/* The offline admin account has no server to record its agreement to the Privacy Policy, so
- * it keeps it in this browser, for the version of the policy it was given. */
-const LOCAL_PRIVACY_KEY = "cb-privacy-accepted";
-
-function readLocalPrivacy(): boolean {
-  try {
-    return localStorage.getItem(LOCAL_PRIVACY_KEY) === POLICY_UPDATED;
-  } catch {
-    return false;
-  }
+/* An older version of this app could sign in an offline "admin" with no server behind it. Nothing accepts that any
+ * more, so any session or agreement it left in this browser is removed. */
+try {
+  localStorage.removeItem("cb-auth-session");
+  localStorage.removeItem("cb-privacy-accepted");
+} catch {
+  /* no storage here (server render, or blocked): nothing to remove */
 }
 
 export interface AuthUser {
@@ -179,15 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
           return;
         }
-        // API is up but has no session for us — any local session is stale.
-        writeLocalSession(null);
+        // API is up but has no session for us.
         setIsLoading(false);
         return;
       } catch {
-        // Network down — fall through to the local session.
+        // The API cannot be reached: nobody is signed in.
       }
-      const local = OFFLINE_ADMIN_ENABLED ? readLocalSession() : null;
-      if (local) setUser({ ...local, privacyAccepted: readLocalPrivacy() });
       setIsLoading(false);
     })();
   }, []);
@@ -202,21 +160,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
     } catch {
-      // API unreachable — allow the local admin account instead.
-      const username = email.trim().toLowerCase();
-      if (OFFLINE_ADMIN_ENABLED && username === LOCAL_USERNAME && password === LOCAL_PASSWORD) {
-        const adminUser: AuthUser = {
-          id: "admin",
-          email: "admin",
-          fullName: "Farm Administrator",
-          privacyAccepted: readLocalPrivacy(),
-          roles: ["ADMIN"],
-          permissions: [],
-        };
-        writeLocalSession(adminUser);
-        setUser(adminUser);
-        return;
-      }
       throw new Error("login_failed");
     }
 
@@ -297,7 +240,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* swallow — server cookie clearing is best-effort */
     }
-    writeLocalSession(null);
     setUser(null);
   }, []);
 
@@ -318,12 +260,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const acceptPrivacy = useCallback(async () => {
-    // The offline admin has no server: its agreement is kept in this browser.
-    if (user?.id === "admin") {
-      try { localStorage.setItem(LOCAL_PRIVACY_KEY, POLICY_UPDATED); } catch { /* it will ask again next time */ }
-      setUser((prev) => (prev ? { ...prev, privacyAccepted: true } : prev));
-      return;
-    }
     const send = () => fetch(`${API_BASE}/auth/privacy`, { method: "POST", credentials: "include" });
     let res = await send();
     if (res.status === 401) {
@@ -332,7 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (!res.ok) throw new Error("privacy_not_saved");
     setUser((prev) => (prev ? { ...prev, privacyAccepted: true } : prev));
-  }, [user?.id]);
+  }, []);
 
   const updateProfile = useCallback(async (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => {
     const send = () =>
