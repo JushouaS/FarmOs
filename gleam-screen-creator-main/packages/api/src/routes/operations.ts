@@ -281,4 +281,28 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       flockStandardDeviationG,
     });
   });
+
+  /**
+   * GET /operations/sensor-history?days=7
+   * The pen's real temperature and humidity (the DHT22 on the Raspberry Pi, stored by sensor-monitor.ts),
+   * one point per day that has readings: the day's average, lowest and highest, and how many readings it holds.
+   * Days with no readings are left out, never filled in.
+   */
+  app.get("/sensor-history", { preHandler: [requireAuth] }, async (request, reply) => {
+    const asked = Number((request.query as { days?: string }).days);
+    const days = Number.isFinite(asked) ? Math.min(30, Math.max(1, Math.round(asked))) : 7;
+    const rows = await app.sqlRead<{ sensor: string; day: string; avg: number; min: number; max: number; n: number }[]>`
+      SELECT s.sensor_type_code AS sensor,
+             to_char(date_trunc('day', r.recorded_at), 'YYYY-MM-DD') AS day,
+             avg(r.value)::float AS avg, min(r.value)::float AS min, max(r.value)::float AS max, count(*)::int AS n
+      FROM sensor_readings r
+      JOIN sensors s ON s.id = r.sensor_id
+      WHERE s.id IN ('SN-DHT22-T', 'SN-DHT22-H')
+        AND r.recorded_at >= date_trunc('day', now()) - ((${days} - 1) * interval '1 day')
+      GROUP BY s.sensor_type_code, date_trunc('day', r.recorded_at)
+      ORDER BY day ASC`;
+    const pick = (sensor: string) =>
+      rows.filter((r) => r.sensor === sensor).map(({ day, avg, min, max, n }) => ({ day, avg, min, max, n }));
+    return reply.send({ days, temperature: pick("temperature"), humidity: pick("humidity") });
+  });
 }

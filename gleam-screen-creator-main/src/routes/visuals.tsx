@@ -5,12 +5,11 @@ import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
 import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
-import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
-import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { freshReading } from "@/lib/farm/pen-sensors";
-import { visionStreamUrl } from "@/lib/api-client";
-import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay } from "@/lib/farm/sample";
+import { fetchLiveBehavior, visionStreamUrl, type KinectChickens, type LiveBehavior } from "@/lib/api-client";
+import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay, weightCategoryFor } from "@/lib/farm/sample";
 import { localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/visuals")({
@@ -65,7 +64,7 @@ export function VisualsDashboardPage() {
   // The sample flock, moved to the grow-out day set in Settings.
   const overview = Route.useLoaderData() as any;
   const sample = useMemo(() => sampleForDay(overview), [overview]);
-  const { farm, broilers } = sample;
+  const { farm } = sample;
   // The pen's real air from the DHT22, when it has reported in the last few minutes. The page asks again
   // every 30 seconds so the numbers keep up.
   const router = useRouter();
@@ -75,7 +74,6 @@ export function VisualsDashboardPage() {
   }, [router]);
   const penTemperature = freshReading(overview, "temperature");
   const penHumidity = freshReading(overview, "humidity");
-  const penHasLive = penTemperature !== null || penHumidity !== null;
   // When the day starts and the night starts comes from Settings.
   const lighting: LightingHours = overview?.lighting ?? DEFAULT_LIGHTING;
   const [layout, setLayout] = useState<ViewLayout>("dual");
@@ -117,6 +115,23 @@ export function VisualsDashboardPage() {
   }, []);
   const nightModeActive = now ? isNightCycle(now, lighting) : false;
 
+  // What the page shows comes from real sources only: the Kinect weights, the live behavior monitor and the DHT22.
+  const [flock, setFlock] = useState<KinectChickens | null>(null);
+  const [liveBehavior, setLiveBehavior] = useState<LiveBehavior | null>(null);
+  useEffect(() => {
+    let stop = false;
+    const ask = async () => {
+      const answer = await fetchLiveBehavior(nightModeActive);
+      if (!stop) setLiveBehavior(answer);
+    };
+    void ask();
+    const timer = window.setInterval(() => void ask(), 10_000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [nightModeActive]);
+
   // The feeds come through the API (it signs in the viewer and holds the camera service's token), so the
   // camera service itself is not opened to the page. Only its address is kept, for the "not answering"
   // message below. Set after mount: the server render can't know the host.
@@ -137,9 +152,19 @@ export function VisualsDashboardPage() {
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const bBreakdown = behaviorBreakdown(nightModeActive);
-  const wBreakdown = sample.weightBreakdown;
-  const totalBirds = broilers.length;
+  // Birds the Kinect weighed in its newest picture, sorted into under, optimal and over the standard for the day.
+  const weighed =
+    flock?.ok && flock.birds && Date.now() / 1000 - (flock.at ?? 0) < 15 ? flock.birds.filter((b) => b.weightG != null) : [];
+  const weightCounts = { Underweight: 0, Optimal: 0, Overweight: 0 };
+  for (const b of weighed) weightCounts[weightCategoryFor(b.weightG as number, sample.standardG)]++;
+  const weighedAverage = flock?.weight?.meanG ?? (weighed.length ? Math.round(weighed.reduce((n, b) => n + (b.weightG as number), 0) / weighed.length) : 0);
+
+  // What the live monitor sees: birds followed, birds that stayed still, and birds huddled.
+  const monitor = liveBehavior?.running ? liveBehavior : null;
+  const monitorBirds = monitor?.birds ?? 0;
+  const monitorStill = monitor?.flock_inactive ? monitorBirds : (monitor?.inactive?.length ?? 0);
+  const monitorHuddled = monitor?.huddle?.birds ?? 0;
+  const monitorActive = Math.max(0, monitorBirds - monitorStill - monitorHuddled);
 
   const handleFullscreenToggle = () => {
     if (!document.fullscreenElement) {
@@ -330,7 +355,7 @@ export function VisualsDashboardPage() {
                   {/* Video Viewport Container — 16:9 box when the page scrolls,
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
-                    <KinectDepthView fallback={<>
+                    <KinectDepthView onFlock={setFlock} fallback={<>
                     {!kinectError ? (
                       feedOrigin && (
                         <img
@@ -398,13 +423,10 @@ export function VisualsDashboardPage() {
           <aside className="grid gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 sm:grid-cols-2 sm:p-4 lg:flex lg:w-72 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-t-0 lg:border-l lg:p-3">
             <CameraAnalysis lighting={lighting} />
 
-            {/* Behavior State Breakdown Widget */}
+            {/* What the live monitor on the camera computer sees. It is off until LIVE_BEHAVIOR=1 is set there. */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
-                <span className="flex items-center gap-2">
-                  <span className="label-section text-xs tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
-                  <SampleBadge />
-                </span>
+                <span className="label-section text-xs tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
                 <time
                   dateTime={now?.toISOString()}
                   title={tr("Local time. Day runs from {value} until {value2}, night is the rest. It is {value3} now.", { value: clock12(lighting.dayStart), value2: clock12(lighting.nightStart), value3: nightModeActive ? tr("night") : tr("day") })}
@@ -416,116 +438,78 @@ export function VisualsDashboardPage() {
                 </time>
               </div>
 
-              <div className="mt-3.5 space-y-3 text-xs">
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">{tr("Active / Standing")}</span>
-                    <span className="font-mono font-semibold tabular-nums text-[var(--text-primary)]">
-                      {totalBirds - bBreakdown.Inactivity - bBreakdown.Huddling - bBreakdown.Sleeping}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--status-green)] transition-all duration-300"
-                      style={{
-                        width: `${((totalBirds - bBreakdown.Inactivity - bBreakdown.Huddling - bBreakdown.Sleeping) / totalBirds) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">{tr("Inactivity Alert")}</span>
-                    <span className="font-mono font-semibold tabular-nums text-[var(--status-red)]">
-                      {bBreakdown.Inactivity}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--status-red)] transition-all duration-300"
-                      style={{
-                        width: `${(bBreakdown.Inactivity / totalBirds) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">{tr("Huddling Cluster")}</span>
-                    <span className="font-mono font-semibold tabular-nums text-[var(--status-amber)]">
-                      {bBreakdown.Huddling}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--status-amber)] transition-all duration-300"
-                      style={{
-                        width: `${(bBreakdown.Huddling / totalBirds) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {nightModeActive && (
-                  <div>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-[var(--text-secondary)]">{tr("Sleeping Cycle")}</span>
-                      <span className="font-mono font-semibold tabular-nums text-[var(--status-blue)]">
-                        {bBreakdown.Sleeping}
-                      </span>
+              {monitor ? (
+                <div className="mt-3.5 space-y-3 text-xs">
+                  {[
+                    { label: tr("Active / Standing"), n: monitorActive, text: "text-[var(--text-primary)]", bar: "bg-[var(--status-green)]" },
+                    { label: tr("Inactivity Alert"), n: monitorStill, text: "text-[var(--status-red)]", bar: "bg-[var(--status-red)]" },
+                    { label: tr("Huddling Cluster"), n: monitorHuddled, text: "text-[var(--status-amber)]", bar: "bg-[var(--status-amber)]" },
+                  ].map((row) => (
+                    <div key={row.label}>
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className="text-[var(--text-secondary)]">{row.label}</span>
+                        <span className={`font-mono font-semibold tabular-nums ${row.text}`}>{row.n}</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
+                        <div
+                          className={`h-full ${row.bar} transition-all duration-300`}
+                          style={{ width: `${monitorBirds ? (row.n / monitorBirds) * 100 : 0}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                      <div
-                        className="h-full bg-[var(--status-blue)] transition-all duration-300"
-                        style={{
-                          width: `${(bBreakdown.Sleeping / totalBirds) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+                  ))}
+                  <p className="text-xs text-[var(--text-tertiary)]">{tr("{n} birds followed by the live monitor.", { n: monitorBirds })}</p>
+                </div>
+              ) : (
+                <p className="mt-3.5 text-xs leading-relaxed text-[var(--text-tertiary)]">
+                  {tr("Behavior monitoring is off. Turn it on at the camera computer (LIVE_BEHAVIOR=1) to see this.")}
+                </p>
+              )}
             </div>
 
-            {/* Weight Category Distribution */}
+            {/* The birds the Kinect weighed in its newest picture, against the standard weight for the day. */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <span className="label-section text-xs tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                {tr("Weight Classification")} <SampleBadge />
+                {tr("Weight Classification")}
               </span>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-xs font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
-                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                    {wBreakdown.Underweight}
+              {weighed.length > 0 ? (
+                <>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-xs font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Underweight}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(sample.standardG * UNDERWEIGHT_RATIO)}</div>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-xs font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Optimal}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{rangeLabel(sample.standardG * UNDERWEIGHT_RATIO, sample.standardG * HEAVY_RATIO)}</div>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-xs font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Overweight}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(sample.standardG * HEAVY_RATIO)}</div>
+                    </div>
                   </div>
-                  <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(sample.standardG * UNDERWEIGHT_RATIO)}</div>
-                </div>
-
-                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-xs font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
-                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                    {wBreakdown.Optimal}
-                  </div>
-                  <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{rangeLabel(sample.standardG * UNDERWEIGHT_RATIO, sample.standardG * HEAVY_RATIO)}</div>
-                </div>
-
-                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-xs font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
-                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                    {wBreakdown.Overweight}
-                  </div>
-                  <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(sample.standardG * HEAVY_RATIO)}</div>
-                </div>
-              </div>
+                  <p className="mt-2.5 text-xs text-[var(--text-secondary)]">
+                    {tr("{n} birds weighed from the Kinect picture. Average {avg} g.", { n: weighed.length, avg: weighedAverage })}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                    {tr("Rough estimate: one bird can be off by about {pct}%", { pct: flock?.weight?.errorPercent ?? 18 })}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-3 text-xs leading-relaxed text-[var(--text-tertiary)]">
+                  {tr("No weights yet. They appear when the Kinect picture is open and chickens are in view.")}
+                </p>
+              )}
             </div>
 
-            {/* Quick Environment Telemetry */}
+            {/* The pen's air, from the DHT22 on the camera computer. With no recent reading it says so, never a made-up number. */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <span className="label-section text-xs tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                {tr("Pen Sensor Telemetry")} {!penHasLive && <SampleBadge />}
+                {tr("Pen Sensor Telemetry")}
               </span>
 
               <div className="mt-3 space-y-2.5 text-xs">
@@ -534,12 +518,7 @@ export function VisualsDashboardPage() {
                   {penTemperature ? (
                     <PenValue text={`${penTemperature.value.toFixed(1)}°C`} status={penTemperature.status} />
                   ) : (
-                    <span className="flex items-center gap-2">
-                      {penHasLive && <SampleBadge />}
-                      <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                        29.1°C <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
-                      </span>
-                    </span>
+                    <span className="font-mono text-xs text-[var(--text-tertiary)]">{tr("No reading")}</span>
                   )}
                 </div>
                 <div className="flex items-center justify-between gap-2">
@@ -547,22 +526,8 @@ export function VisualsDashboardPage() {
                   {penHumidity ? (
                     <PenValue text={`${Math.round(penHumidity.value)}%`} status={penHumidity.status} />
                   ) : (
-                    <span className="flex items-center gap-2">
-                      {penHasLive && <SampleBadge />}
-                      <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                        63% <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
-                      </span>
-                    </span>
+                    <span className="font-mono text-xs text-[var(--text-tertiary)]">{tr("No reading")}</span>
                   )}
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--text-secondary)] text-xs">{tr("Ammonia (NH3):")}</span>
-                  <span className="flex items-center gap-2">
-                    {penHasLive && <SampleBadge />}
-                    <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                      {tr("9 ppm")} <span className="text-xs text-[var(--status-green)] font-semibold">{tr("(Clean)")}</span>
-                    </span>
-                  </span>
                 </div>
               </div>
             </div>

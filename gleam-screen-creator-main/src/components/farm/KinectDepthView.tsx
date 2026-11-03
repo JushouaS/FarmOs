@@ -62,7 +62,10 @@ const PALETTE = (() => {
   return out;
 })();
 
-export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
+export function KinectDepthView({ fallback, onFlock }: { fallback: ReactNode; onFlock?: (flock: KinectChickens | null) => void }) {
+  // The page that holds this view can show the weights too (Weight Classification), without asking the finder twice.
+  const onFlockRef = useRef(onFlock);
+  onFlockRef.current = onFlock;
   const [live, setLive] = useState(false);
   const [fps, setFps] = useState(0);
   const [turned, setTurned] = useState(false);
@@ -175,6 +178,7 @@ export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
   useEffect(() => {
     if (!live || mode !== "picture") {
       setChickens(null);
+      onFlockRef.current?.(null);
       return;
     }
     let stop = false;
@@ -183,6 +187,7 @@ export function KinectDepthView({ fallback }: { fallback: ReactNode }) {
       const answer = await fetchKinectChickens();
       if (stop) return;
       setChickens(answer);
+      onFlockRef.current?.(answer);
       timer = window.setTimeout(ask, 1500);
     };
     void ask();

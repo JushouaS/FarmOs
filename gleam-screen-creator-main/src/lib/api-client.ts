@@ -446,6 +446,50 @@ export async function fetchKinectChickens(): Promise<KinectChickens> {
   }
 }
 
+/** What the live behavior monitor on the camera computer sees right now (it is off unless LIVE_BEHAVIOR=1 there). */
+export interface LiveBehavior {
+  running: boolean;
+  reason?: string;
+  birds?: number;
+  night?: boolean;
+  inactive?: { id: number; still_seconds: number }[];
+  flock_inactive?: { still_seconds: number } | null;
+  huddle?: { birds: number; fdi: number; seconds: number; warning: boolean } | null;
+}
+
+/** The live monitor's picture. Never throws: a camera computer that is off or has the monitor off comes back as `running: false`. */
+export async function fetchLiveBehavior(night: boolean): Promise<LiveBehavior> {
+  try {
+    return await apiFetch<LiveBehavior>(`/visual/behavior?night=${night ? 1 : 0}`);
+  } catch {
+    return { running: false, reason: "unreachable" };
+  }
+}
+
+export interface SensorDay {
+  /** YYYY-MM-DD, the database's day. */
+  day: string;
+  avg: number;
+  min: number;
+  max: number;
+  n: number;
+}
+
+export interface SensorHistory {
+  days: number;
+  temperature: SensorDay[];
+  humidity: SensorDay[];
+}
+
+/** The DHT22's stored readings, one point per day that has any. Empty lists when there are none or the API is away. */
+export async function fetchSensorHistory(days = 7): Promise<SensorHistory> {
+  try {
+    return await apiFetch<SensorHistory>(`/operations/sensor-history?days=${days}`);
+  } catch {
+    return { days, temperature: [], humidity: [] };
+  }
+}
+
 /** Build the MJPEG stream URL for a given camera (served via Fastify proxy). */
 export function visionStreamUrl(cameraId: string): string {
   return `${API_BASE}/visual/stream/${encodeURIComponent(cameraId)}`;

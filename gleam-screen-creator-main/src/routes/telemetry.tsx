@@ -3,7 +3,7 @@ import { Fragment, useEffect, useId, useMemo, useState, useRef, useLayoutEffect,
 import { AppShell } from "@/components/farm/AppShell";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { getGrowthAnalytics } from "@/lib/farm/repository";
-import { behaviorBreakdown } from "@/lib/farm/dataset";
+import { fetchLiveBehavior, fetchSensorHistory, type LiveBehavior, type SensorDay, type SensorHistory } from "@/lib/api-client";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay, type SampleFlock } from "@/lib/farm/sample";
 import {
   Sparkles,
@@ -1021,169 +1021,6 @@ function FlockWeightDistribution({ sample }: { sample: SampleFlock }) {
   );
 }
 
-/* ── Flock conditions report: feed, behavior and environment together ── */
-interface EnvSensor {
-  title: string;
-  value: number;
-  min: number;
-  max: number;
-  unit: string;
-  insight: { level: InsightLevel; title: string; body: string };
-}
-
-function ConditionsAnalysisSection({
-  day,
-  total,
-  fcr,
-  fcrTarget,
-  adgG,
-  movementIndex,
-  huddlingRisk,
-  aggressionEvents,
-  inactive,
-  huddling,
-  inactPct,
-  sensors,
-}: {
-  day: number;
-  total: number;
-  fcr: number;
-  fcrTarget: number;
-  adgG: number;
-  movementIndex: number;
-  huddlingRisk: number;
-  aggressionEvents: number;
-  inactive: number;
-  huddling: number;
-  inactPct: number;
-  sensors: EnvSensor[];
-}) {
-  const fcrDelta = fcrTarget - fcr;
-  const inRange = sensors.filter((e) => e.value >= e.min && e.value <= e.max);
-  const outOfRange = sensors.filter((e) => e.value < e.min || e.value > e.max);
-
-  // One plain recommendation, put together from whatever is off.
-  const actions: string[] = [];
-  if (huddling > 0) actions.push(tr("check the drinker line and the ventilation where birds are huddling"));
-  if (inactPct > 20) actions.push(tr("walk the house and inspect the inactive birds"));
-  if (fcr > fcrTarget) actions.push(tr("review feed distribution and wastage"));
-  if (outOfRange.length > 0) actions.push(tr("bring {sensors} back into range", { sensors: outOfRange.map((e) => e.title.toLowerCase()).join(tr(" and ")) }));
-  const recommendation =
-    actions.length > 0
-      ? tr("Next round: {actions}.", { actions: actions.join("; ") })
-      : tr("Feed, behavior and the house environment are all on target. Keep the current feed, ventilation and lighting routine.");
-
-  return (
-    <DiagnosticsCard
-      title={tr("Automated Conditions Diagnostics")}
-      description={tr("Run a multi-factor diagnostic across feed efficiency, flock behavior and house environment, and see how the three affect each other.")}
-      chips={[tr("FCR {fcr}", { fcr }), tr("{total} Birds Scanned", { total }), tr("{length} Sensors", { length: sensors.length }), tr("Day {day}", { day })]}
-      buttonLabel={tr("Process & Analyze Conditions")}
-      processingTitle={tr("Processing Feed, Behavior & Environment...")}
-      steps={[
-        tr("Ingesting feed, water and daily-gain records (FCR {fcr})...", { fcr }),
-        tr("Reading behavior telemetry for {total} birds: movement, huddling and aggression...", { total }),
-        tr("Checking temperature, humidity and ammonia against their target bands..."),
-        tr("Cross-checking the three and drafting recommendations..."),
-      ]}
-      reportTitle={tr("Flock Conditions Diagnostic Report")}
-      evaluated={tr("{total} Birds · {length} Sensors Evaluated", { total, length: sensors.length })}
-    >
-      {/* Scorecards: one per area */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-xs">{tr("Feed Efficiency")}</p>
-          <p className="font-mono text-base font-bold mt-0.5" style={{ color: fcr <= fcrTarget ? "var(--status-green)" : "var(--status-red)" }}>{tr("FCR {fcr}", { fcr })}</p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("{Math} {value} the {fcrTarget} target", { Math: Math.abs(fcrDelta).toFixed(2), value: fcrDelta >= 0 ? tr("below") : tr("above"), fcrTarget })}</p>
-        </div>
-
-        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-xs">{tr("Activity")}</p>
-          <p className="font-mono text-base font-bold mt-0.5"
-            style={{ color: inactPct > 30 ? "var(--status-red)" : inactPct > 20 ? "var(--status-amber)" : "var(--status-green)" }}>
-            {(movementIndex * 100).toFixed(1)}%
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Movement index · {inactive} of {total} birds inactive", { inactive, total })}</p>
-        </div>
-
-        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-xs">{tr("Huddling")}</p>
-          <p className="font-mono text-base font-bold mt-0.5" style={{ color: huddling > 0 ? "var(--status-amber)" : "var(--status-green)" }}>
-            {huddling} {huddling === 1 ? tr("Bird") : tr("Birds")}
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{tr("Cluster risk {value}%", { value: (huddlingRisk * 100).toFixed(0) })}</p>
-        </div>
-
-        <div className="rounded-xl p-3 border" style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}>
-          <p className="label-section text-xs">{tr("Environment")}</p>
-          <p className="font-mono text-base font-bold mt-0.5" style={{ color: outOfRange.length === 0 ? "var(--status-green)" : "var(--status-amber)" }}>
-            {inRange.length} / {sensors.length}
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-            {outOfRange.length === 0 ? tr("Sensors in their target band") : tr("{value} out of range", { value: outOfRange.map((e) => e.title).join(", ") })}
-          </p>
-        </div>
-      </div>
-
-      {/* Findings, grouped by area */}
-      <div className="space-y-4">
-        <div className="space-y-3">
-          <p className="label-section text-xs tracking-widest font-bold">{tr("Feed")}</p>
-          <InsightCard level={fcr <= fcrTarget ? "positive" : "warning"}
-            title={tr("FCR {fcr} is {value} {value2} target", { fcr, value: Math.abs(fcrDelta).toFixed(2), value2: fcrDelta >= 0 ? tr("below") : tr("above") })}
-            body={tr("FCR trending downward across 8 consecutive measurements (1.72 to {fcr}), indicating {value} feed efficiency as the flock matures.", { fcr, value: fcrDelta >= 0 ? tr("improving") : tr("slipping") })} />
-          <InsightCard level="positive"
-            title={tr("Daily gain of {adgG} g/day within normal range", { adgG })}
-            body={tr("Consistent with Ross 308 expectations at Day {day}. Feed intake and weight gain ratio suggest a well-balanced diet and healthy gut function.", { day })} />
-          <InsightCard level="info"
-            title={tr("Water intake at 2.4 L/hr is nominal")}
-            body={tr("Water-to-feed ratio is within the expected range. Adequate hydration supports digestion and maintains optimal FCR performance.")} />
-        </div>
-
-        <div className="space-y-3">
-          <p className="label-section text-xs tracking-widest font-bold">{tr("Behavior")}</p>
-          <InsightCard level={inactPct > 30 ? "critical" : "warning"}
-            title={tr("{inactPct}% of birds show reduced daytime activity", { inactPct })}
-            body={tr("{inactive} birds classified as inactive in the current scan. B-019 has been inactive for over 30 minutes and is flagged for manual inspection.", { inactive })} />
-          {huddling > 0 && (
-            <InsightCard level="warning"
-              title={tr("B-013 and B-015 huddling detected, open incident")}
-              body={tr("Cluster density exceeded threshold near the water drinker zone (CAM-01). Huddling has persisted for 80+ minutes. Inspect the drinker and increase ventilation.")} />
-          )}
-          <InsightCard level={aggressionEvents === 0 ? "positive" : "warning"}
-            title={aggressionEvents === 0 ? tr("Zero aggression events detected") : tr("{aggressionEvents} aggression events detected", { aggressionEvents })}
-            body={aggressionEvents === 0
-              ? tr("No pecking or aggressive interactions detected across {total} birds. Pen density and lighting appear well-calibrated for this growth stage.", { total })
-              : tr("Pecking or aggressive interactions were detected. Check stocking density and lighting.")} />
-        </div>
-
-        <div className="space-y-3">
-          <p className="label-section text-xs tracking-widest font-bold">{tr("Environment")}</p>
-          {sensors.map((e) => (
-            <InsightCard key={e.title} level={e.insight.level} title={e.insight.title} body={e.insight.body} />
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-xl p-4 border flex items-start gap-3"
-        style={{ background: "rgba(52, 211, 153, 0.05)", borderColor: "rgba(52, 211, 153, 0.25)" }}>
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-          style={{ background: "rgba(52, 211, 153, 0.2)", color: "var(--brand)" }}>
-          <TrendingUp className="h-3.5 w-3.5" />
-        </span>
-        <div>
-          <p className="text-sm font-semibold leading-snug" style={{ color: "var(--brand)" }}>
-            {tr("Operational Recommendation")}
-          </p>
-          <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-            {recommendation}
-          </p>
-        </div>
-      </div>
-    </DiagnosticsCard>
-  );
-}
-
 /* ── Range Bar ───────────────────────────────────────────────── */
 /* ── Stat Card ───────────────────────────────────────────────── */
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
@@ -1193,27 +1030,6 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
       <p className="font-mono text-lg font-bold leading-none mt-1" style={{ color: accent ?? "var(--cv-accent)" }}>{value}</p>
       {sub && <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{sub}</p>}
     </div>
-  );
-}
-
-/** Several figures in one block, 2 by 2, separated by thin lines (instead of one box each). */
-function FigureGrid({ figures }: { figures: { label: string; value: string; sub?: string; accent?: string }[] }) {
-  return (
-    <dl className="grid h-full grid-cols-2 grid-rows-2">
-      {figures.map((f, i) => (
-        <div
-          key={f.label}
-          className={`flex min-w-0 flex-col justify-center px-5 py-4 ${i % 2 === 0 ? "border-r" : ""} ${i < 2 ? "border-b" : ""}`}
-          style={{ borderColor: "var(--border-subtle)" }}
-        >
-          <dt className="label-section">{f.label}</dt>
-          <dd className="mt-1">
-            <span className="block font-mono text-lg font-bold leading-none" style={{ color: f.accent ?? "var(--cv-accent)" }}>{f.value}</span>
-            {f.sub && <span className="mt-1.5 block text-xs" style={{ color: "var(--text-tertiary)" }}>{f.sub}</span>}
-          </dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 
@@ -1243,7 +1059,7 @@ function Basis({ title, children }: { title: string; children: ReactNode }) {
  * dashed band with its limits on the left, the first and last day underneath, and a readout when a
  * point is hovered or touched.
  */
-function MiniTrend({ values, min, max, color, unit, lastDay }: { values: number[]; min: number; max: number; color: string; unit: string; lastDay: number }) {
+function MiniTrend({ values, labels, min, max, color, unit }: { values: number[]; labels: string[]; min: number; max: number; color: string; unit: string }) {
   const gid = useId().replace(/:/g, "");
   const [hover, setHover] = useState<number | null>(null);
   const n = values.length;
@@ -1255,7 +1071,6 @@ function MiniTrend({ values, min, max, color, unit, lastDay }: { values: number[
   const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join(" ");
   const area = `${line} L${px(n - 1).toFixed(2)},100 L${px(0).toFixed(2)},100 Z`;
   const shown = hover ?? n - 1;
-  const dayOf = (i: number) => lastDay - (n - 1 - i);
   const move = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const t = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
@@ -1314,14 +1129,14 @@ function MiniTrend({ values, min, max, color, unit, lastDay }: { values: number[
                 color,
               }}
             >
-              {tr("Day {day}", { day: dayOf(hover) })} · {values[hover]}{unit}
+              {labels[hover]} · {values[hover]}{unit}
             </span>
           )}
         </div>
       </div>
       <div className="mt-1 flex justify-between pl-[34px] font-mono text-xs" style={{ color: "var(--text-tertiary)" }} aria-hidden="true">
-        <span>{tr("Day {day}", { day: dayOf(0) })}</span>
-        <span>{tr("Day {day}", { day: dayOf(n - 1) })}</span>
+        <span>{labels[0]}</span>
+        <span>{n > 1 ? labels[n - 1] : ""}</span>
       </div>
     </div>
   );
@@ -1370,30 +1185,27 @@ function AnalyticsPage() {
   const curve        = farm.weight.curve;
   const actualSeries = curve.filter((p) => p.actualG > 0).map((p) => ({ x: p.day, y: p.actualG }));
   const targetSeries = curve.map((p) => ({ x: p.day, y: p.standardG }));
-  const fcrSeries    = farm.feed.series.map((v, i) => ({ x: i + 1, y: v }));
-  const tempHistory  = [28.4, 28.9, 29.1, 29.5, 29.1, 28.8, 29.1].map((v, i) => ({ x: i + 1, y: v }));
-  const humidHistory = [61, 62, 63, 64, 63, 62, 63].map((v, i) => ({ x: i + 1, y: v }));
-  const nh3History   = [8, 9, 9, 10, 9, 9, 9].map((v, i) => ({ x: i + 1, y: v }));
+  // The pen's air, from the DHT22 on the camera computer (stored once a minute), and the live behavior monitor.
+  const [history, setHistory] = useState<SensorHistory | null>(null);
+  const [monitor, setMonitor] = useState<LiveBehavior | null>(null);
+  useEffect(() => {
+    let stop = false;
+    void fetchSensorHistory(7).then((h) => !stop && setHistory(h));
+    void fetchLiveBehavior(false).then((b) => !stop && setMonitor(b));
+    return () => {
+      stop = true;
+    };
+  }, []);
+  const dayLabel = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(localeTag(), { month: "short", day: "numeric" });
   const envSensors = [
-    {
-      title: tr("Temperature"), series: tempHistory, value: 29.1, min: 26, max: 35, unit: "°C",
-      color: "var(--sensor-temp)",
-      insight: { level: "positive" as InsightLevel, title: tr("Temperature within optimal range (26–35°C)"),
-        body: tr("Stable over 7 days with a minor peak of 29.5°C on Day 4. No corrective action required. Continue monitoring as ambient temperatures rise mid-afternoon.") },
-    },
-    {
-      title: tr("Humidity"), series: humidHistory, value: 63, min: 50, max: 70, unit: "%",
-      color: "var(--sensor-humidity)",
-      insight: { level: "positive" as InsightLevel, title: tr("Humidity steady at 63%, nominal"),
-        body: tr("Remained within the 50–70% target band. Slight upward creep from 61% to 63% is acceptable and correlates with increased bird respiration as body mass grows.") },
-    },
-    {
-      title: tr("Ammonia (NH3)"), series: nh3History, value: 9, min: 0, max: 25, unit: " ppm",
-      color: "var(--sensor-nh3)",
-      insight: { level: "info" as InsightLevel, title: tr("NH3 at 9 ppm, well below the 25 ppm alert threshold"),
-        body: tr("Levels are low and stable. A one-day spike to 10 ppm self-resolved, likely due to litter disturbance. Litter moisture and ventilation management are effective.") },
-    },
+    { title: tr("Temperature"), days: history?.temperature ?? [], min: 20, max: 32, unit: "°C", digits: 1, color: "var(--sensor-temp)" },
+    { title: tr("Humidity"), days: history?.humidity ?? [], min: 50, max: 70, unit: "%", digits: 0, color: "var(--sensor-humidity)" },
   ];
+  const monitorOn = monitor?.running ? monitor : null;
+  const monitorBirds = monitorOn?.birds ?? 0;
+  const monitorStill = monitorOn?.flock_inactive ? monitorBirds : (monitorOn?.inactive?.length ?? 0);
+  const monitorHuddled = monitorOn?.huddle?.birds ?? 0;
+  const monitorActive = Math.max(0, monitorBirds - monitorStill - monitorHuddled);
 
   // To Date: the start day up to today (at least a week wide, so the first day still has a line).
   // Full Cycle: the start day to the last day, with the target running ahead of the flock.
@@ -1406,18 +1218,12 @@ function AnalyticsPage() {
   const signedVariance = `${farm.weight.variancePercent >= 0 ? "+" : ""}${farm.weight.variancePercent}%`;
   const varianceColor = farm.weight.variancePercent >= 0 ? "var(--status-green)" : farm.weight.variancePercent > -5 ? "var(--status-amber)" : "var(--status-red)";
 
-  const bd       = behaviorBreakdown(false);
   const wd       = sample.weightBreakdown;
   const total    = broilers.length;
-  const inactPct = Math.round(((bd.Inactivity + bd.Huddling) / total) * 100);
   const optPct   = Math.round((wd.Optimal / total) * 100);
   const avgW     = farm.weight.actualAvgG;
   const stdW     = farm.weight.standardG;
   const wDelta   = avgW - stdW;
-  const fcrDelta = farm.feed.fcrTarget - farm.feed.fcr;
-  // The FCR trend is drawn between the values it really takes, so the change is visible.
-  const fcrFit = fitRange([...farm.feed.series, farm.feed.fcrTarget], 0.05);
-  const fcrFirst = farm.feed.series[0];
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "growth",     label: tr("Weight Growth")   },
@@ -1426,7 +1232,7 @@ function AnalyticsPage() {
 
   return (
     <AppShell>
-      <SampleNotice>{tr("These charts and figures are built-in sample data for Day {day}, not the live flock. The Dashboard's Growth card shows the live weight and cycle day.", { day: farm.cycle.day })}</SampleNotice>
+      {tab === "growth" && <SampleNotice>{tr("These charts and figures are built-in sample data for Day {day}, not the live flock. The Dashboard's Growth card shows the live weight and cycle day.", { day: farm.cycle.day })}</SampleNotice>}
 
       {/* Header */}
       <div className="mb-6">
@@ -1627,156 +1433,101 @@ function AnalyticsPage() {
         </div>
       )}
 
-      {/* ── FLOCK CONDITIONS: feed, behavior and environment together ── */}
+      {/* ── FLOCK CONDITIONS: only what is measured. Feed and ammonia have no sensor, so they are not shown. ── */}
       {tab === "conditions" && (
         <div className="space-y-6">
-          {/* Feed & Water: the four figures as one block, and the FCR trend beside them */}
-          <section aria-labelledby="cond-feed" className="space-y-3">
-            <h2 id="cond-feed" className="label-section text-xs tracking-widest font-bold">{tr("Feed & Water")}</h2>
-            <div className="cb-card overflow-hidden">
-              <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-                <div className="border-b lg:border-b-0 lg:border-r" style={{ borderColor: "var(--border-subtle)" }}>
-                  <FigureGrid figures={[
-                    { label: tr("Current FCR"), value: String(farm.feed.fcr), sub: tr("Target: {fcrTarget}", { fcrTarget: farm.feed.fcrTarget }),
-                      accent: farm.feed.fcr <= farm.feed.fcrTarget ? "var(--status-green)" : "var(--status-red)" },
-                    { label: tr("vs Target"), value: `${fcrDelta >= 0 ? "-" : "+"}${Math.abs(fcrDelta).toFixed(2)}`,
-                      sub: fcrDelta >= 0 ? tr("Below FCR target") : tr("Above FCR target"),
-                      accent: fcrDelta >= 0 ? "var(--status-green)" : "var(--status-red)" },
-                    { label: tr("Daily Gain"), value: tr("{adgG} g/day", { adgG: farm.feed.adgG }), sub: tr("Avg daily weight gain") },
-                    { label: tr("Feed Consumed"), value: `${farm.feed.cycleConsumedKg} kg`, sub: tr("Cycle total to date") },
-                  ]} />
-                </div>
-                <div className="p-5">
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{tr("FCR Trend, Last 8 Measurements")}</h3>
-                      <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
-                        {fcrFirst !== undefined
-                          ? tr("{from} → {to} over the last {n} measurements. Lower is better.", { from: fcrFirst.toFixed(2), to: farm.feed.fcr.toFixed(2), n: farm.feed.series.length })
-                          : tr("Lower is better.")}
-                      </p>
-                    </div>
-                    <ChartLegend items={[
-                      { color: "var(--brand)", label: tr("FCR") },
-                      { color: "var(--status-amber)", label: tr("Target {fcrTarget}", { fcrTarget: farm.feed.fcrTarget }), dashed: true },
-                    ]} />
-                  </div>
-                  <AxisLineChart series={fcrSeries}
-                    targets={fcrSeries.map((_, i) => ({ x: i + 1, y: farm.feed.fcrTarget }))}
-                    color="var(--brand)" targetColor="var(--status-amber)"
-                    xLabel="Scan" yLabel="FCR" yTickCount={fcrFit.ticks} domainY={fcrFit.domain} height={170} targetLabel="Target" />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Behavior: the activity classification and the four figures in one card */}
           <section aria-labelledby="cond-behavior" className="space-y-3">
             <h2 id="cond-behavior" className="label-section text-xs tracking-widest font-bold">{tr("Behavior")}</h2>
-            <div className="cb-card overflow-hidden">
-              <div className="grid md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                <div className="flex flex-col items-center gap-3 border-b p-5 md:border-b-0 md:border-r" style={{ borderColor: "var(--border-subtle)" }}>
-                  <h3 className="self-start text-base font-bold" style={{ color: "var(--text-primary)" }}>
-                    {tr("Activity Classification, Current Scan")}
-                  </h3>
-                  <DonutChart segments={[
-                    { label: tr("Active"),   value: bd.Active,     color: "var(--status-green)" },
-                    { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
-                    { label: tr("Huddling"), value: bd.Huddling,   color: "var(--status-amber)" },
-                  ]} />
+            <div className="cb-card p-5">
+              {monitorOn ? (
+                <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-8">
+                  <div className="flex w-full max-w-[300px] flex-col items-center gap-3">
+                    <h3 className="self-start text-base font-bold" style={{ color: "var(--text-primary)" }}>
+                      {tr("Activity Classification, Current Scan")}
+                    </h3>
+                    <DonutChart segments={[
+                      { label: tr("Active"),   value: monitorActive, color: "var(--status-green)" },
+                      { label: tr("Inactive"), value: monitorStill,  color: "var(--status-red)" },
+                      { label: tr("Huddling"), value: monitorHuddled, color: "var(--status-amber)" },
+                    ]} />
+                    <p className="text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      {tr("Point at a segment, or tap it, for the breakdown.")}
+                    </p>
+                  </div>
                   <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
                     {[
-                      { label: tr("Active"),   value: bd.Active,     color: "var(--status-green)" },
-                      { label: tr("Inactive"), value: bd.Inactivity, color: "var(--status-red)" },
-                      { label: tr("Huddling"), value: bd.Huddling,   color: "var(--status-amber)" },
+                      { label: tr("Active"),   value: monitorActive, color: "var(--status-green)" },
+                      { label: tr("Inactive"), value: monitorStill,  color: "var(--status-red)" },
+                      { label: tr("Huddling"), value: monitorHuddled, color: "var(--status-amber)" },
                     ].map((row) => (
                       <li key={row.label} className="flex items-center gap-1.5">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} aria-hidden="true" />
                         {row.label} {row.value}
                       </li>
                     ))}
+                    <li className="basis-full text-center" style={{ color: "var(--text-tertiary)" }}>{tr("{n} birds followed by the live monitor.", { n: monitorBirds })}</li>
                   </ul>
-                  <p className="text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    {tr("Point at a segment, or tap it, for the breakdown.")}
-                  </p>
                 </div>
-                <div className="grid h-full grid-cols-1 sm:grid-cols-2 sm:grid-rows-2">
-                  {/* Movement and huddling: the two behavior figures together */}
-                  <div className="flex min-w-0 flex-col justify-center gap-3 border-b px-5 py-4 sm:border-r" style={{ borderColor: "var(--border-subtle)" }}>
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="label-section">{tr("Movement Index")}</p>
-                        <Basis title={tr("Movement Index")}>
-                          <p>{tr("The share of the birds that moved during the scan. Each bird is followed from picture to picture, and it counts as moving when it strays more than about a third of its own body length.")}</p>
-                          <p>{tr("91 of every 100 birds moved means an index of 91%. The 88% baseline is a reference level set in the sample data; it should become this flock's own usual level once real readings are collected.")}</p>
-                          <p className="text-[var(--text-tertiary)]">{tr("The number on this page is built-in sample data. It is not connected to the live camera yet.")}</p>
-                        </Basis>
-                      </div>
-                      <p className="mt-1 font-mono text-lg font-bold leading-none" style={{ color: "var(--status-green)" }}>{(farm.behavior.movementIndex * 100).toFixed(1)}%</p>
-                      <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("Above 88% baseline")}</p>
-                    </div>
-                    <div className="border-t pt-3" style={{ borderColor: "var(--border-subtle)" }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="label-section">{tr("Huddling Risk")}</p>
-                        <Basis title={tr("Huddling Risk")}>
-                          <p>{tr("The share of the birds packed into a huddle: a group of 5 or more touching birds that stays together. A bird in a clump that forms and breaks up again does not count.")}</p>
-                          <p>{tr("8 of every 100 birds in a huddle means a risk of 8%. From 35% it raises a Huddling alert.")}</p>
-                          <p className="text-[var(--text-tertiary)]">{tr("The number on this page is built-in sample data. It is not connected to the live camera yet.")}</p>
-                        </Basis>
-                      </div>
-                      <p className="mt-1 font-mono text-lg font-bold leading-none" style={{ color: "var(--status-green)" }}>{(farm.behavior.huddlingRisk * 100).toFixed(0)}%</p>
-                      <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("Low cluster density")}</p>
-                    </div>
-                  </div>
-
-                  {/* The house environment: one box for each of the three sensors */}
-                  {envSensors.map((env, i) => {
-                    const ok = env.value >= env.min && env.value <= env.max;
-                    const tone = ok ? "var(--status-green)" : "var(--status-red)";                    return (
-                      <div
-                        key={env.title}
-                        className={`flex min-w-0 flex-col justify-center gap-2 px-5 py-4 ${["border-b", "border-b sm:border-b-0 sm:border-r", ""][i]}`}
-                        style={{ borderColor: "var(--border-subtle)" }}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="label-section">{env.title}</p>
-                          <Basis title={env.title}>
-                            <p>{tr("The latest reading from the house sensor. The shaded band on the line is the acceptable range ({min}–{max}{unit}); the line shows the last 7 days.", { min: env.min, max: env.max, unit: env.unit })}</p>
-                            <p>{ok ? tr("The reading is inside the range.") : tr("The reading is outside the range.")}</p>
-                            <p className="text-[var(--text-tertiary)]">{tr("The readings on this page are built-in sample data until the house sensors are connected.")}</p>
-                          </Basis>
-                        </div>
-                        <p className="font-mono text-lg font-bold leading-none" style={{ color: env.color }}>{env.value}{env.unit}</p>
-                        <MiniTrend values={env.series.map((pt) => pt.y)} min={env.min} max={env.max} color={env.color} unit={env.unit} lastDay={farm.cycle.day} />
-                        <p className="flex flex-wrap items-center gap-x-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          <span className="inline-flex items-center gap-1 font-semibold" style={{ color: tone }}>
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden="true" />
-                            {ok ? tr("Within range") : tr("Out of range")}
-                          </span>
-                          <span>· {tr("Optimal: {min}-{max}{unit}", { min: env.min, max: env.max, unit: env.unit })}</span>
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                  {tr("Behavior monitoring is off. Turn it on at the camera computer (LIVE_BEHAVIOR=1) to see this.")}
+                </p>
+              )}
             </div>
           </section>
 
-          <ConditionsAnalysisSection
-            day={farm.cycle.day}
-            total={total}
-            fcr={farm.feed.fcr}
-            fcrTarget={farm.feed.fcrTarget}
-            adgG={farm.feed.adgG}
-            movementIndex={farm.behavior.movementIndex}
-            huddlingRisk={farm.behavior.huddlingRisk}
-            aggressionEvents={farm.behavior.aggressionEvents}
-            inactive={bd.Inactivity}
-            huddling={bd.Huddling}
-            inactPct={inactPct}
-            sensors={envSensors}
-          />
+          <section aria-labelledby="cond-env" className="space-y-3">
+            <h2 id="cond-env" className="label-section text-xs tracking-widest font-bold">{tr("Environment")}</h2>
+            <div className="cb-card overflow-hidden">
+              <div className="grid sm:grid-cols-2">
+                {envSensors.map((env, i) => {
+                  const last: SensorDay | undefined = env.days[env.days.length - 1];
+                  const round = (v: number) => Number(v.toFixed(env.digits));
+                  const ok = last ? last.avg >= env.min && last.avg <= env.max : true;
+                  const tone = ok ? "var(--status-green)" : "var(--status-red)";
+                  return (
+                    <div
+                      key={env.title}
+                      className={`flex min-w-0 flex-col justify-center gap-2 px-5 py-4 ${i === 0 ? "border-b sm:border-b-0 sm:border-r" : ""}`}
+                      style={{ borderColor: "var(--border-subtle)" }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="label-section">{env.title}</p>
+                        <Basis title={env.title}>
+                          <p>{tr("The average of the readings the house sensor stored on each day. The shaded band on the line is the acceptable range ({min}–{max}{unit}); the line shows the days that have readings.", { min: env.min, max: env.max, unit: env.unit })}</p>
+                          {last && <p>{ok ? tr("The reading is inside the range.") : tr("The reading is outside the range.")}</p>}
+                        </Basis>
+                      </div>
+                      {last ? (
+                        <>
+                          <p className="font-mono text-lg font-bold leading-none" style={{ color: env.color }}>{round(last.avg)}{env.unit}</p>
+                          <MiniTrend
+                            values={env.days.map((d) => round(d.avg))}
+                            labels={env.days.map((d) => dayLabel(d.day))}
+                            min={env.min} max={env.max} color={env.color} unit={env.unit}
+                          />
+                          <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            {tr("Average on {date} · lowest {lo}{unit}, highest {hi}{unit}", { date: dayLabel(last.day), lo: round(last.min), hi: round(last.max), unit: env.unit })}
+                          </p>
+                          <p className="flex flex-wrap items-center gap-x-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            <span className="inline-flex items-center gap-1 font-semibold" style={{ color: tone }}>
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden="true" />
+                              {ok ? tr("Within range") : tr("Out of range")}
+                            </span>
+                            <span>· {tr("Optimal: {min}-{max}{unit}", { min: env.min, max: env.max, unit: env.unit })}</span>
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                          {tr("No readings yet. The sensor on the camera computer saves one every minute once it is connected.")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
         </div>
       )}
     </AppShell>
