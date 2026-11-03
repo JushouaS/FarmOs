@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
+import { useState, useEffect, useRef, createContext, useContext, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { SideNav } from "./SideNav";
 import { AccountMenu } from "./AccountMenu";
@@ -178,6 +178,39 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
     return false;
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+  // On a phone or tablet the menu is a drawer that waits off the left edge. Until it is opened, nobody should be able to
+  // reach it: keyboard focus would otherwise walk through eight controls that cannot be seen, and a screen reader would
+  // read them out. `desktop` starts true so the server and the first browser render agree.
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const drawerAway = !desktop && !mobileOpen;
+  // An open drawer takes the keyboard: focus moves into it, the page behind cannot be reached while it is open, and
+  // closing it puts focus back on the button that opened it.
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (mobileOpen) {
+      opener.current = document.activeElement as HTMLElement | null;
+      const frame = requestAnimationFrame(() => {
+        // The first control that can be seen: the drawer also holds a collapse button that only shows on a wide screen.
+        const controls = document.getElementById("app-sidenav")?.querySelectorAll<HTMLElement>("button, a[href]") ?? [];
+        for (const control of controls) {
+          if (control.getClientRects().length > 0) {
+            control.focus();
+            break;
+          }
+        }
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    opener.current?.focus?.();
+    opener.current = null;
+  }, [mobileOpen]);
 
   // While the drawer is open: Escape closes it (R-32) and the page behind
   // it stops scrolling, so a swipe on the drawer doesn't move the page.
@@ -233,6 +266,8 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
         {/* Sidebar — hidden on mobile by default, slide-in on mobileOpen */}
         <div
           id="app-sidenav"
+          inert={drawerAway}
+          aria-hidden={drawerAway || undefined}
           className={`
             fixed left-0 top-0 z-40 h-full transition-[width,transform] duration-200
             ${sidebarW}
@@ -249,7 +284,7 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
         </div>
 
         {/* Main layout container */}
-        <div className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
+        <div inert={mobileOpen && !desktop} className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
           {bare ? (
             <main className="flex flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:overflow-hidden lg:pb-0">
               {children}

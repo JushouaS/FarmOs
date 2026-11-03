@@ -331,9 +331,9 @@ export function VisualsDashboardPage() {
                             <line x1="12" y1="16" x2="12.01" y2="16" />
                           </svg>
                         </div>
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                           {tr("Vision service not reachable")}
-                        </h3>
+                        </h2>
                         {/* Only shown when the service itself is down; with the
                             service up but the camera off it streams a placeholder. */}
                         <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("Nothing is answering at {feedHost}. Start cerebroil-stream, then retry.", { feedHost })}</p>
@@ -380,7 +380,7 @@ export function VisualsDashboardPage() {
                             <polyline points="2 12 12 17 22 12" />
                           </svg>
                         </div>
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{tr("Kinect is not connected")}</h3>
+                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">{tr("Kinect is not connected")}</h2>
                         <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
                           {tr("The Kinect picture and the bird weights appear when the Kinect bridge is running on the computer it is plugged into. This page keeps trying.")}
                         </p>

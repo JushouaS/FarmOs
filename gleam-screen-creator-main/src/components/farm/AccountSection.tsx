@@ -209,7 +209,7 @@ function PasswordBlock() {
       <Block>
         <Label>{tr("Password")}</Label>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{tr("Changing it signs you out everywhere.")}</p>
-        <button type="button" onClick={() => setOpen(true)} className="tap mt-3 text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>
+        <button type="button" onClick={() => setOpen(true)} className="tap mt-3 inline-flex min-h-6 items-center text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>
           {tr("Change password")}
         </button>
       </Block>

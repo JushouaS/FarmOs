@@ -391,7 +391,7 @@ function AlertsPage() {
               onClick={() => setShowRead((v) => !v)}
               aria-expanded={showRead}
               aria-controls="alerts-read-list"
-              className="tap mb-2 flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              className="tap mb-2 flex min-h-6 items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             >
               <ChevronDown
                 className={`h-4 w-4 transition-transform ${showRead ? "" : "-rotate-90"}`}

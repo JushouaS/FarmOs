@@ -243,9 +243,9 @@ function NotificationFeed({
             {/* Content */}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h3 className={`text-sm ${isUnread ? "font-semibold text-on-surface" : "text-on-surface-variant"}`}>
+                <h2 className={`text-sm ${isUnread ? "font-semibold text-on-surface" : "text-on-surface-variant"}`}>
                   {notif.title}
-                </h3>
+                </h2>
                 <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-xs text-on-surface-variant">
                   {channelLabel}
                 </span>
