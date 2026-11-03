@@ -27,6 +27,7 @@ import { registerReportRoutes } from "./routes/reports.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
+import { startBehaviorMonitor } from "./behavior-monitor.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 
 /** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
@@ -98,6 +99,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerNotificationRoutes, { prefix: "/notifications" });
   await app.register(registerFeedbackRoutes, { prefix: "/feedback" });
   await app.register(registerSettingsRoutes, { prefix: "/settings" });
+
+  startBehaviorMonitor(app);
 
   return app;
 }

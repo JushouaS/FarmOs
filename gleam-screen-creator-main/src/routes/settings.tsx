@@ -5,7 +5,17 @@ import { AccountSection } from "@/components/farm/AccountSection";
 import { FlockSizeSection } from "@/components/farm/FlockSizeSection";
 import { LightingSection } from "@/components/farm/LightingSection";
 import { Block, Hint, MonoVal, Row, SaveRow, Section, Toggle, useSaver } from "@/components/farm/SettingsParts";
-import { ApiError, saveCycleStartDay, saveNotificationPreferences, type NotificationPreference } from "@/lib/api-client";
+import {
+  ApiError,
+  fetchNotificationChannels,
+  saveCycleStartDay,
+  saveNotificationPreferences,
+  sendTestNotification,
+  type NotificationChannels,
+  type NotificationPreference,
+  type TestNotificationResult,
+} from "@/lib/api-client";
+import { PushError, disablePush, enablePush, pushSupported } from "@/lib/push";
 import { useAuth } from "@/lib/auth-context";
 import { DEFAULT_LIGHTING } from "@/lib/farm/dataset";
 import { getNotificationPreferences, getOperationsOverview } from "@/lib/farm/repository";
@@ -131,8 +141,9 @@ function CycleDaySection({ cycle }: { cycle: any }) {
 }
 
 /* Email and push preferences, stored per user (notification_preferences): which
- * channels, from which severity up, and the quiet hours. These save the choice;
- * sending email or push is not set up yet, and the card says so. */
+ * channels, from which severity up, and the quiet hours. Every alert (the camera's
+ * detection, the mortality log, ...) is sent by these choices (api: notify.ts).
+ * The card asks the server which channels are set up and says so when one is not. */
 const CHANNELS = [
   { channel: "email", label: T("Email Alerts"), sub: T("Alerts at your chosen level, by email") },
   { channel: "push", label: T("Push Notifications"), sub: T("Browser push at your chosen level") },
@@ -151,6 +162,18 @@ const levelOf = (severity: string | undefined): Level =>
 
 const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : "");
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** One sentence about what a test notice did on each channel. */
+function describeTest(result: TestNotificationResult): string {
+  const part = (name: string, r: TestNotificationResult["email"]): string => {
+    if (r.status === "sent") return tr("{name}: sent.", { name });
+    if (r.status === "skipped") return tr("{name}: turned off.", { name });
+    if (r.reason === "email_not_configured" || r.reason === "push_not_configured") return tr("{name}: not set up on this server.", { name });
+    if (r.reason === "no_browser_allowed") return tr("{name}: no browser has allowed it yet. Turn it on and save.", { name });
+    return tr("{name}: could not be sent ({reason}).", { name, reason: r.reason ?? "?" });
+  };
+  return [tr("In the app: sent."), part(tr("Email"), result.email), part(tr("Push"), result.push)].join(" ");
+}
 
 function NotificationsSection({ stored }: { stored: NotificationPreference[] | null }) {
   const router = useRouter();
@@ -175,13 +198,39 @@ function NotificationsSection({ stored }: { stored: NotificationPreference[] | n
   const dirty = JSON.stringify(on) !== key;
   const quietValid = !on.quietOn || (HHMM.test(on.quietStart) && HHMM.test(on.quietEnd) && on.quietStart !== on.quietEnd);
   const unavailable = stored === null;
+  const [channels, setChannels] = useState<NotificationChannels | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testNote, setTestNote] = useState<string | null>(null);
+  useEffect(() => {
+    fetchNotificationChannels().then(setChannels).catch(() => setChannels(null));
+  }, []);
   const change = (patch: Partial<typeof on>) => {
+    setTestNote(null);
     saver.setNote(null);
     setOn((p) => ({ ...p, ...patch }));
   };
 
   const save = async () => {
     if (!dirty || !quietValid || stored === null) return;
+    // Push needs this browser's permission, which can only be asked for from a click, so it is done here.
+    try {
+      if (on.push) await enablePush();
+      else await disablePush();
+    } catch (err) {
+      const problem = err instanceof PushError ? err.problem : "failed";
+      saver.setNote({
+        ok: false,
+        text:
+          problem === "unsupported"
+            ? tr("This browser cannot receive push notifications.")
+            : problem === "denied"
+              ? tr("Push was not allowed. Allow notifications for this site in the browser, then save again.")
+              : problem === "not_configured"
+                ? tr("Push is not set up on this server yet.")
+                : tr("Could not turn push on in this browser."),
+      });
+      return;
+    }
     const ok = await saver.run(() => {
       // The API replaces the whole list, so the other channels are sent back as they are.
       const rows: NotificationPreference[] = [
@@ -199,12 +248,44 @@ function NotificationsSection({ stored }: { stored: NotificationPreference[] | n
     if (ok) await router.invalidate();
   };
 
+  const sendTest = async () => {
+    if (testing) return;
+    setTesting(true);
+    setTestNote(null);
+    try {
+      setTestNote(describeTest(await sendTestNotification()));
+    } catch {
+      setTestNote(tr("Could not send the test. Check the connection and try again."));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // What to tell the person about a channel that is switched on but cannot send.
+  const channelProblem = (channel: "email" | "push"): string | null => {
+    if (channels === null || !on[channel]) return null;
+    if (!channels[channel].configured) {
+      return channel === "email"
+        ? tr("Email is not set up on this server yet. Ask whoever runs the server to add the mail settings.")
+        : tr("Push is not set up on this server yet. Ask whoever runs the server to add the push keys.");
+    }
+    if (channel === "push" && !pushSupported()) return tr("This browser cannot receive push notifications.");
+    return null;
+  };
+
   return (
     <Section title={tr("Notifications")}>
       {CHANNELS.map(({ channel, label, sub }) => (
-        <Row key={channel} label={tr(label)} sub={tr(sub)}>
-          <Toggle label={tr(label)} checked={on[channel]} disabled={unavailable} onChange={(v) => change({ [channel]: v })} />
-        </Row>
+        <div key={channel}>
+          <Row label={tr(label)} sub={tr(sub)}>
+            <Toggle label={tr(label)} checked={on[channel]} disabled={unavailable} onChange={(v) => change({ [channel]: v })} />
+          </Row>
+          {channelProblem(channel) && (
+            <Block>
+              <Hint tone="error">{channelProblem(channel)}</Hint>
+            </Block>
+          )}
+        </div>
       ))}
       <Block>
         <label htmlFor="alert-level" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -250,9 +331,25 @@ function NotificationsSection({ stored }: { stored: NotificationPreference[] | n
         <Hint tone={unavailable ? "error" : undefined}>
           {unavailable
             ? tr("Could not load your saved preferences. Refresh the page to try again.")
-            : tr("Your choices are saved to your account. Sending email and push is not set up yet, so no messages go out.")}
+            : tr("Your choices are saved to your account. Every alert is also listed on the Notifications page.")}
         </Hint>
         <SaveRow onSave={save} busy={saver.busy} disabled={!dirty || !quietValid || unavailable} note={saver.note} />
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={sendTest}
+            disabled={testing || dirty || unavailable}
+            className="tap rounded-full border border-[var(--border-default)] bg-[var(--surface-raised)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--brand)] disabled:opacity-50"
+          >
+            {testing ? tr("Sending…") : tr("Send a test")}
+          </button>
+          {dirty && !unavailable && <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("Save your changes first.")}</span>}
+        </div>
+        {testNote && (
+          <p role="status" className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+            {testNote}
+          </p>
+        )}
       </Block>
     </Section>
   );

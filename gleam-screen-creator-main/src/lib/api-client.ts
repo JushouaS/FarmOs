@@ -222,6 +222,40 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
   return apiFetch<NotificationPreference[]>("/notifications/preferences");
 }
 
+/** Which delivery channels this server can send on (email needs mail settings, push needs keys). */
+export interface NotificationChannels {
+  email: { configured: boolean };
+  push: { configured: boolean };
+}
+
+export async function fetchNotificationChannels(): Promise<NotificationChannels> {
+  return apiFetch<NotificationChannels>("/notifications/channels");
+}
+
+/** What happened to a test notice, per channel. */
+export interface TestNotificationResult {
+  in_app: { status: "sent" | "skipped" | "failed"; reason?: string };
+  email: { status: "sent" | "skipped" | "failed"; reason?: string };
+  push: { status: "sent" | "skipped" | "failed"; reason?: string };
+}
+
+/** Sends the signed-in person a test notice by the channels they turned on. */
+export async function sendTestNotification(): Promise<TestNotificationResult> {
+  return apiFetch<TestNotificationResult>("/notifications/test", { method: "POST", body: "{}" });
+}
+
+export async function fetchPushKey(): Promise<{ publicKey: string | null }> {
+  return apiFetch<{ publicKey: string | null }>("/notifications/push/key");
+}
+
+export async function subscribePush(subscription: PushSubscriptionJSON): Promise<{ subscribed: boolean }> {
+  return apiFetch("/notifications/push/subscribe", { method: "POST", body: JSON.stringify(subscription) });
+}
+
+export async function unsubscribePush(endpoint: string): Promise<{ subscribed: boolean }> {
+  return apiFetch("/notifications/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) });
+}
+
 export async function saveNotificationPreferences(
   prefs: NotificationPreference[],
 ): Promise<{ updated: boolean; count: number }> {
@@ -368,6 +402,98 @@ export interface CameraScan extends AnalysisResult {
 }
 
 /** Several analysis passes about a second apart, reduced to one result. Takes about 3 seconds. */
+/** A bird's state in one frame: 0 moving, 1 resting (night), 2 inactive (alone, by day), 3 huddling, 4 inactivity (the whole flock, by day). */
+export type BirdState = 0 | 1 | 2 | 3 | 4;
+
+/** What the trained detector found in an uploaded video, frame by frame.
+ *  Boxes are [x, y, w, h, confidence, class, bird number, state] in video pixels
+ *  (the last two are missing when the camera computer is an older version). */
+export interface VideoDetection {
+  model: string;
+  names: Record<string, string>;
+  width: number;
+  height: number;
+  duration: number | null;
+  analyzed_seconds: number;
+  sample_fps: number;
+  frames: { t: number; boxes: number[][]; fdi?: number }[];
+  behavior?: {
+    birds_followed: number;
+    inactive_birds: { id: number; from: number; to: number }[];
+    huddles: { start: number; end: number; birds: number; fdi: number }[];
+    fdi_peak: number;
+    fdi_warning: boolean;
+    /** Average share of the flock that was moving, or null when the clip was too short to tell. */
+    flock_moving: number | null;
+    /** Share of the clip in which most of the flock was still, or null when it was too short to tell. */
+    flock_still_share: number | null;
+    params: { inactive_seconds: number; huddle_seconds: number; huddle_min_birds: number; fdi_warning: number; night?: boolean };
+  };
+  summary: { frames: number; frames_with_detections: number; max_per_frame: number; mean_per_frame: number };
+}
+
+/** Largest video the "Test video" button accepts (the API and the camera service enforce it too). */
+export const DEMO_VIDEO_MAX_MB = 60;
+
+/** Sends a video file to be checked by the trained detector. Nothing is stored.
+ *  `night`: the clip was filmed with the lights off, so still birds count as resting. */
+export async function detectVideo(file: File, night = false): Promise<VideoDetection> {
+  return apiFetch<VideoDetection>(`/visual/demo-detect${night ? "?night=1" : ""}`, {
+    method: "POST",
+    body: file,
+    headers: { "Content-Type": file.type.startsWith("video/") ? file.type : "application/octet-stream" },
+  });
+}
+
+/** A weight a person measured for one bird on one grow-out day (Flock Tracking). */
+export interface ActualWeight {
+  birdId: string;
+  day: number;
+  actualG: number;
+  /** What the page estimated for the bird when the weight was entered. */
+  estimatedG: number | null;
+  recordedAt: string;
+}
+
+export async function fetchActualWeights(day: number): Promise<ActualWeight[]> {
+  return apiFetch<ActualWeight[]>(`/growth/actual-weights?day=${encodeURIComponent(day)}`);
+}
+
+/** Each bird's latest weight from before a day (for the gain since then). */
+export async function fetchPreviousWeights(day: number): Promise<{ birdId: string; day: number; actualG: number }[]> {
+  return apiFetch(`/growth/actual-weights/previous?day=${encodeURIComponent(day)}`);
+}
+
+export async function saveActualWeight(input: { birdId: string; day: number; actualG: number; estimatedG: number }): Promise<unknown> {
+  return apiFetch("/growth/actual-weights", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export async function deleteActualWeight(birdId: string, day: number): Promise<unknown> {
+  // The API rejects an empty JSON body, so one is sent.
+  return apiFetch(`/growth/actual-weights?birdId=${encodeURIComponent(birdId)}&day=${encodeURIComponent(day)}`, { method: "DELETE", body: "{}" });
+}
+
+/** Re-encodes a video the browser cannot play as it is (MKV, AVI, a clip cut short) as a small MP4. */
+export async function convertVideo(file: File): Promise<File> {
+  const send = () =>
+    fetch(`${API_BASE}/visual/demo-convert`, {
+      method: "POST",
+      credentials: "include",
+      body: file,
+      headers: { "Content-Type": file.type.startsWith("video/") ? file.type : "application/octet-stream" },
+    });
+  let res = await send();
+  if (res.status === 401) {
+    await renewSession();
+    res = await send();
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new ApiError(res.status, typeof body.error === "string" ? body.error : res.statusText);
+  }
+  return new File([await res.blob()], file.name.replace(/\.[^.]+$/, "") + ".mp4", { type: "video/mp4" });
+}
+
 export async function scanCamera(cameraId: string): Promise<CameraScan> {
   // apiFetch sends a JSON content type, and the API rejects an empty JSON body.
   return apiFetch<CameraScan>(`/visual/scan/${encodeURIComponent(cameraId)}`, { method: "POST", body: "{}" });

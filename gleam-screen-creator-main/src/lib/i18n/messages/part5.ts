@@ -133,10 +133,6 @@ export const part5: Messages = {
     "Wala napadala ang imong mga tubag. Susiha ang koneksyon ug sulayi pag-usab.",
   ],
   "Your answers help us make the system easier to use.": ["Tinutulungan kami ng iyong mga sagot na gawing mas madaling gamitin ang sistema.", "Ang imong mga tubag motabang kanamo nga himoong mas sayon gamiton ang sistema."],
-  "Your choices are saved to your account. Sending email and push is not set up yet, so no messages go out.": [
-    "Nai-save ang mga pinili mo sa iyong account. Hindi pa naka-set up ang pagpapadala ng email at push, kaya walang mensaheng lalabas.",
-    "Natipigan ang imong mga gipili sa imong account. Wala pa na-set up ang pagpadala og email ug push, busa walay mensahe nga mogawas.",
-  ],
   "Your current password is not right.": ["Mali ang kasalukuyan mong password.", "Sayop ang imong karon nga password."],
   "Your email client is opening… we'll respond soon!": ["Binubuksan ang iyong email… tutugon kami agad!", "Gibuksan ang imong email… motubag mi sa dili madugay!"],
   "Your flock is generally healthy. Average weight is increasing normally and environmental conditions are within the recommended range. Monitor the 2 inactive birds closely and ensure ventilation is adequate.": [

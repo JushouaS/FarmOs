@@ -4,6 +4,7 @@ import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
+import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
 import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
 import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
@@ -68,7 +69,10 @@ export function VisualsDashboardPage() {
   // guessed src would mismatch on hydration.
   const [feedOrigin, setFeedOrigin] = useState<string | null>(null);
   useEffect(() => {
-    setFeedOrigin(`${window.location.protocol}//${window.location.hostname}:5000`);
+    // VITE_VISION_ORIGIN points the page at a camera service on another machine
+    // (the Raspberry Pi), for example http://192.168.1.20:5000.
+    const configured = import.meta.env.VITE_VISION_ORIGIN as string | undefined;
+    setFeedOrigin(configured?.trim().replace(/\/+$/, "") || `${window.location.protocol}//${window.location.hostname}:5000`);
   }, []);
   const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "port 5000";
 
@@ -165,6 +169,9 @@ export function VisualsDashboardPage() {
                 <span className="hidden sm:inline">{tr("Kinect 3D")}</span>
               </button>
             </div>
+
+            {/* Try the trained detector on an uploaded video */}
+            <VideoDetectDialog lighting={lighting} />
 
             {/* Fullscreen Trigger Button */}
             <button

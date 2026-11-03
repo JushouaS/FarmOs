@@ -1,0 +1,93 @@
+"""
+live_behavior.py: follows the birds on the live camera and tells which are
+inactive or huddling.
+
+Every LIVE_SAMPLE_SECONDS it takes the newest frame, runs the trained detector
+on it (demo_detect.py) and feeds the boxes to behavior.Engine. The API asks for
+the current picture at /behavior/status and raises alerts from it
+(packages/api/src/behavior-monitor.ts).
+
+Switched on with LIVE_BEHAVIOR=1 in .env, because it keeps the computer busy
+(about one detector run every few seconds). The times are real ones:
+LIVE_INACTIVE_SECONDS (default 30 minutes) is how long a bird must stay still, and
+LIVE_HUDDLE_SECONDS (default 10 minutes) how long a huddle must last.
+"""
+from __future__ import annotations
+
+import os
+import threading
+import time
+from typing import Any, Callable
+
+import cv2
+import numpy as np
+
+import behavior
+import demo_detect
+
+SAMPLE_SECONDS = float(os.getenv("LIVE_SAMPLE_SECONDS", "3"))
+INACTIVE_SECONDS = float(os.getenv("LIVE_INACTIVE_SECONDS", "1800"))
+HUDDLE_SECONDS = float(os.getenv("LIVE_HUDDLE_SECONDS", "600"))
+
+
+class LiveBehavior:
+    def __init__(self, get_frame: Callable[[], bytes | None]) -> None:
+        self._get_frame = get_frame
+        self._engine = behavior.Engine(
+            inactive_seconds=INACTIVE_SECONDS,
+            huddle_seconds=HUDDLE_SECONDS,
+            keep_all=False,   # a live feed never ends, so finished birds are not kept
+        )
+        self._lock = threading.Lock()
+        self._last_at: float | None = None
+        self._error: str | None = None
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True, name="live-behavior").start()
+
+    def _run(self) -> None:
+        print(f"[behavior] live monitoring on: a frame every {SAMPLE_SECONDS:g} s, "
+              f"inactive after {INACTIVE_SECONDS / 60:g} min, huddle after {HUDDLE_SECONDS / 60:g} min.")
+        while True:
+            started = time.time()
+            try:
+                self.step()
+            except demo_detect.ModelNotInstalled:
+                if self._error != "model_not_installed":
+                    print("[behavior] the detector model is not installed (models/detector.onnx); live monitoring waits.")
+                self._error = "model_not_installed"
+                time.sleep(60)
+            except Exception as exc:  # keep going: one bad frame must not stop the monitoring
+                self._error = f"{type(exc).__name__}: {exc}"[:200]
+            time.sleep(max(0.5, SAMPLE_SECONDS - (time.time() - started)))
+
+    def step(self) -> bool:
+        """One look at the newest frame. Returns False when there was nothing to look at."""
+        data = self._get_frame()
+        if not data:
+            self._error = "no_frame"
+            return False
+        frame = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            self._error = "bad_frame"
+            return False
+        boxes = demo_detect.detect_frame(frame)
+        if boxes is None:            # the detector is busy with an uploaded video
+            return False
+        height, width = frame.shape[:2]
+        with self._lock:
+            self._engine.update(time.time(), [b[:4] for b in boxes], float(width * height))
+            self._last_at = time.time()
+        self._error = None
+        return True
+
+    def status(self, night: bool) -> dict[str, Any]:
+        """What the API asks for. `night` is whether the lights are off now (the API knows the lighting hours)."""
+        with self._lock:
+            report = self._engine.status(night)
+            last = self._last_at
+        report["running"] = last is not None
+        report["age_seconds"] = round(time.time() - last, 1) if last is not None else None
+        if self._error:
+            report["error"] = self._error
+        return report

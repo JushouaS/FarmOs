@@ -328,6 +328,156 @@ What the pieces do:
 The message **"Vision service not reachable. Nothing is answering at localhost:5000"** simply means
 Window 3 is not running, or it crashed. Start it again with `python app.py`.
 
+### Camera plugged into a Raspberry Pi instead of the laptop (optional)
+
+The camera service (`cerebroil-stream`) can run on a Raspberry Pi that has the Dahua camera on its
+Ethernet cable. The laptop then only needs to reach the Pi over Wi-Fi. The Pi is **not** a router, so
+no IP forwarding is needed.
+
+Check first: the laptop and the Pi must be able to see each other. School or campus Wi-Fi often
+blocks that. A phone hotspot or a small router works.
+
+**On the Pi** (over SSH):
+
+1. Give the Ethernet port an address on the camera's network, so it survives a reboot (current Pi OS).
+   Do this only if your SSH session is over Wi-Fi, not over this cable:
+
+   ```
+   sudo nmcli con add type ethernet ifname eth0 con-name camera ipv4.method manual ipv4.addresses 192.168.0.51/24 ipv6.method ignore
+   sudo nmcli con up camera
+   ping -c 3 192.168.0.101
+   ```
+
+2. Copy the `cerebroil-stream` folder to the Pi, including its `.env`. Run this **on the laptop**,
+   with your Pi's user name and Wi-Fi address filled in:
+
+   ```
+   scp -r cerebroil-stream YOUR-PI-USER@PI-WIFI-ADDRESS:~/
+   ```
+
+3. On the Pi, run the setup script. It installs the packages and a service that starts at boot:
+
+   ```
+   cd ~/cerebroil-stream
+   bash setup-pi.sh
+   ```
+
+   It ends by printing the Pi's address. Open `http://PI-WIFI-ADDRESS:5000/video_feed/dahua` in the
+   laptop browser to check the video.
+
+**On the laptop**, point the website and the API at the Pi, then restart both (Windows 2 and 4):
+
+- Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000`
+- `packages\api\.env`: `VISION_SERVICE_URL=http://PI-WIFI-ADDRESS:5000`
+- `VISION_SERVICE_TOKEN` must be the same in `packages\api\.env` and in the Pi's `cerebroil-stream/.env`.
+
+Remove those two lines to go back to the camera service on the laptop.
+
+### Test video: the trained model on an uploaded clip (optional)
+
+The small film button in the **Live Camera** header opens "Test video". You pick a clip from the
+device, the camera service runs the trained detector over it, and the clip plays back with the boxes
+drawn over it. Nothing is saved and the live camera is not touched.
+
+The model file is not in the repository. On the machine that runs `cerebroil-stream` (the laptop, or
+the Pi) put the YOLO ONNX export at `cerebroil-stream/models/detector.onnx`, or set
+`DETECTOR_MODEL_PATH` in `cerebroil-stream/.env`. Install the new packages (`onnxruntime` and
+`imageio-ffmpeg`) once there:
+
+```
+pip install -r requirements.txt            (laptop)
+.venv/bin/pip install -r requirements.txt  (Raspberry Pi)
+```
+
+Limits: the first 30 seconds are checked, about 4 frames per second (`DEMO_MAX_SECONDS` and
+`DEMO_SAMPLE_FPS` change that). A Raspberry Pi needs roughly a second per checked frame, so a 30
+second clip can take a minute or two. Without the model file the dialog says the detector is not
+installed.
+
+What the result shows (code: `cerebroil-stream/behavior.py`): each detected bird is followed from
+frame to frame and its box is colored by what it is doing.
+
+The dialog has a **Recorded during: Day / Night** choice (it is guessed from the time in a file name
+like `..._0600_to_0700.mkv` and the lighting hours in Settings, and you can change it). What a still
+bird means depends on it:
+
+- **Moving** (green): the bird is walking about.
+- **Resting** (violet): still **at night**. This is normal sleep and is never flagged.
+- **Inactive** (amber): by day, a bird that stayed within about a third of its own body size for the
+  test time while at least a fifth of the flock was moving. This is the bird to go and look at.
+- **Inactivity** (red): by day, when most of the flock is still too. No single bird stands out, so
+  check the house (heat, cold, lighting, illness).
+- **Huddling** (blue): a group of 5 or more touching birds, much denser than the flock as a whole,
+  that stays together for the test time. A uniformly crowded house is not a huddle. The summary gives
+  the share of birds in huddles (FDI) and warns above 35%.
+
+The times are short on purpose so a short clip can show them: 10 seconds for inactive, 6 seconds
+for a huddle (`BEHAVIOR_INACTIVE_SECONDS`, `BEHAVIOR_HUDDLE_SECONDS`, `BEHAVIOR_HUDDLE_MIN_BIRDS` in
+`cerebroil-stream/.env`). For a real house they should be minutes to an hour. It does not know
+about feeder and drinker areas, lights-off hours or temperature yet, so treat a flag as "go and look",
+not as a diagnosis. It was tested on simulated flocks; check it on your own footage before trusting
+the numbers.
+
+Big and odd files:
+
+- **MKV, AVI and similar** are converted automatically to a small MP4 first (browsers cannot play
+  them, and the converted clip is also quicker to check). This uses `imageio-ffmpeg`, which brings its
+  own ffmpeg, so there is nothing else to install: `pip install -r requirements.txt` on the machine
+  that runs `cerebroil-stream`.
+- **A file over 60 MB** can still be chosen. The page cuts it to exactly the first 60 MB in the
+  browser and only sends that part. This works for MKV, WebM and MP4s that keep their index at the
+  start. An MP4 with the index at the end (many camera and phone recordings) cannot be cut this way,
+  and the dialog says so. Use an MKV or a smaller clip for those.
+
+### Alerts and notifications
+
+Every alert (a mortality spike, a bird the camera finds inactive, a huddle) is sent to each person the
+way **Settings > Notifications** says: always on the Notifications page, and by **email** and
+**browser push** when they are switched on, at or above the level chosen, and outside quiet hours
+(critical alerts ignore quiet hours). The card shows which channels this server can actually send
+on, and **Send a test** sends the signed-in person a test notice.
+
+- **Email** needs mail settings in `packages\api\.env` (`SMTP_HOST`, `SMTP_FROM`, and `SMTP_USER` /
+  `SMTP_PASS` if the mail server asks for a login; see `.env.example`). Without them the card says
+  email is not set up and nothing is sent. A failed send is written to the `notifications` table with
+  its reason.
+- **Push** needs a key pair: run `npm run vapid` in `packages\api` and paste the two keys into `.env`.
+  Each person then turns Push on in Settings and allows notifications in the browser when it asks.
+  It works on `localhost` and on https, and the browser must not have blocked notifications for the site.
+- Restart the API after changing `.env`. Run `npm run db:migrate` once (it adds the table for push).
+
+**Alerts from the camera.** With the trained model installed on the camera computer (see "Test video"),
+set `LIVE_BEHAVIOR=1` in `cerebroil-stream\.env` and restart it. It then follows the birds on the live
+camera and the API (checking every 30 seconds) raises:
+
+- **Inactive Bird**: birds that have not moved for 30 minutes while the rest of the flock moves (by day).
+- **Flock Inactivity**: most of the flock still for 30 minutes during the day.
+- **Huddling Detected**: 35% or more of the birds huddled together for 10 minutes.
+
+At night (the lights-off hours in Settings) still birds are sleeping, so no inactivity alert is raised.
+The same kind of alert is not raised again for an hour. The times are `LIVE_INACTIVE_SECONDS` and
+`LIVE_HUDDLE_SECONDS`. Like the Test video check, these are flags to go and look, not a diagnosis, and
+the numbers should be checked on your own flock.
+
+### Actual weights in Flock Tracking
+
+On **Flock Tracking**, type a bird's real weight in kilograms, with up to 3 decimals (like `0.946`),
+into its **Actual Weight** box and press Enter. It is saved (per bird, per grow-out day, with the estimate
+shown at that moment) and the page shows the
+difference from the estimate: green within 5%, amber within 10%, red beyond. The summary shows how many
+birds were weighed today and the average difference, so you can see how good the weight estimate is.
+There is no submit button: the weight saves when you press Enter or click away, and a "Saved" note appears.
+Once a bird has a weight, the "vs Standard" figure uses it instead of the estimate. Clear the box to remove a weight. Run `npm run db:migrate` once (it adds the table).
+
+**Every day is new data.** The boxes belong to the grow-out day (it counts up at midnight), so a new day
+starts with empty boxes and the earlier days stay saved. **Gain** on each bird shows how much it gained
+since the last day it was weighed. (The Dashboard's Growth card shows the pen's average weight by day
+against the standard.)
+
+A weight is kept per bird and per grow-out day, so if someone changes the day in Settings to a day that
+already has weights, those weights show again. Typing a new value for the same bird and day replaces the
+old one, so the table never holds more than one row per bird per day.
+
 ### Live 3D depth from the Kinect (optional, Window 5)
 
 A browser cannot talk to the Kinect, so a small Windows program streams its depth picture to the

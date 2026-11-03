@@ -5,7 +5,7 @@ import { AppShell } from "@/components/farm/AppShell";
 import { getAlerts, acknowledgeAlertFn } from "@/lib/farm/repository";
 import { removeUnacknowledgedAlert } from "@/lib/alert-store";
 import { T, localeTag, tr } from "@/lib/i18n";
-import { alertKindLabel } from "@/lib/farm/alert-text";
+import { alertKindLabel, alertMessage } from "@/lib/farm/alert-text";
 
 export const Route = createFileRoute("/alerts")({
   head: () => ({ meta: [{ title: tr("Alerts — Cerebroil") }] }),
@@ -18,6 +18,18 @@ const HELP: Record<string, { why: string; action: string }> = {
   "Inactive Bird": {
     why: T("Minimal movement detected for > 30 min. Could indicate heat stress, injury, or illness."),
     action: T("Open Live Camera (CAM-01), inspect the flagged bird ID, and check for physical signs."),
+  },
+  "Flock Inactivity": {
+    why: T("Most of the flock has been still for a long time during the day. Heat, cold, poor light or illness can cause this."),
+    action: T("Check the temperature, the lights, and that every drinker and feeder works. Walk the house."),
+  },
+  "Huddling Detected": {
+    why: T("A large share of the birds are packed together. Cold, drafts or a fright make birds huddle, and the ones underneath can be hurt."),
+    action: T("Check the temperature and look for drafts. Walk the house gently to spread the birds."),
+  },
+  "Mortality Spike": {
+    why: T("More birds died today than the day before."),
+    action: T("Check for sick birds, the temperature, the ventilation and the water. Ask your veterinarian if it continues."),
   },
   "High Temperature": {
     why: T("SN-241-H1 exceeded 31°C. Broilers reduce feed intake above 32°C."),
@@ -99,7 +111,7 @@ function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps
         {/* Message */}
         <div className="md:col-span-4">
           <p className="text-xs line-clamp-3 md:line-clamp-2" style={{ color: "var(--text-secondary)" }}>
-            {tr(a.message)}
+            {alertMessage(a.message)}
           </p>
         </div>
 
