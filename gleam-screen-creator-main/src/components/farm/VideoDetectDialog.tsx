@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { AlertTriangle, CheckCircle2, Film, Loader2, Maximize2, Minimize2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Film, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -142,15 +142,31 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
   );
   weightsRef.current = weights;
 
+  // The video's own full screen button (beside the volume) is the one to use. On its own it would make only the video
+  // full screen, and the boxes and weights drawn over it would be lost, so the request is moved to the box that holds
+  // both. Pressing the button again while the box is full screen leaves full screen.
+  const lastFullscreen = useRef<Element | null>(null);
   useEffect(() => {
-    const onChange = () => setFullscreen(document.fullscreenElement != null && document.fullscreenElement === stageRef.current);
+    const onChange = () => {
+      const now = document.fullscreenElement;
+      const before = lastFullscreen.current;
+      lastFullscreen.current = now;
+      const video = videoRef.current;
+      if (now && now === video) {
+        if (before && before === stageRef.current) void document.exitFullscreen().catch(() => {});
+        else {
+          // If the box cannot go full screen, the video goes (without the readings) rather than nothing happening.
+          void document
+            .exitFullscreen()
+            .then(() => stageRef.current?.requestFullscreen())
+            .catch(() => video.requestFullscreen().catch(() => {}));
+        }
+      }
+      setFullscreen(now != null && now === stageRef.current);
+    };
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
-    else void stageRef.current?.requestFullscreen().catch(() => {});
-  };
 
   // Draw the boxes of the sampled frame that matches the video's current time.
   useEffect(() => {
@@ -473,7 +489,6 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
               ref={videoRef}
               src={url}
               controls
-              controlsList="nofullscreen"
               disablePictureInPicture
               playsInline
               muted
@@ -489,15 +504,6 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
               }}
             />
             {result && <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 h-full w-full" />}
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              aria-label={fullscreen ? tr("Exit full screen") : tr("Full screen")}
-              title={fullscreen ? tr("Exit full screen") : tr("Full screen")}
-              className="tap absolute right-2 top-2 rounded-md bg-black/70 p-1.5 text-white/85 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
-            >
-              {fullscreen ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
-            </button>
           </div>
         )}
 
