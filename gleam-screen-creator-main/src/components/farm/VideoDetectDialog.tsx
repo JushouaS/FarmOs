@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Film, Loader2, Maximize2, Minimize2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Film, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ApiError, DEMO_VIDEO_MAX_MB, convertVideo, detectVideo, type VideoDetection } from "@/lib/api-client";
 import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import { VIDEO_WEIGHT_ERROR_PERCENT, estimateVideoWeights, type VideoWeights } from "@/lib/farm/video-weight";
@@ -95,6 +105,14 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
   const [stage, setStage] = useState<"converting" | "checking" | null>(null);
   const [cutFrom, setCutFrom] = useState<number | null>(null); // size of the original when it was over the limit
   const [needsConvert, setNeedsConvert] = useState(false);
+  // What was chosen, as it was (the file in state changes when it is cut or converted), and how long it plays.
+  const [original, setOriginal] = useState<{ name: string; bytes: number } | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
+  const [lengthFailed, setLengthFailed] = useState(false);
+  // Asked once per file: "this is not ideal, use it anyway?"
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const acknowledged = useRef(false);
+  const converted = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VideoDetection | null>(null);
   // Birds in the frame on screen: [all, inactive, huddling]
@@ -224,6 +242,12 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
     setStage(null);
     setCutFrom(null);
     setNeedsConvert(false);
+    setOriginal(null);
+    setDuration(null);
+    setLengthFailed(false);
+    setConfirmOpen(false);
+    acknowledged.current = false;
+    converted.current = false;
     setNight(false);
     setError(null);
     setResult(null);
@@ -251,6 +275,11 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
     setInFrame([0, 0, 0]);
     setError(null);
     setNight(guessNight(picked.name, lighting));
+    setOriginal({ name: picked.name, bytes: picked.size });
+    setDuration(null);
+    setLengthFailed(false);
+    acknowledged.current = false;
+    converted.current = false;
     // A file over the limit is cut to exactly the limit, so only that part is uploaded.
     const tooBig = picked.size > MAX_BYTES;
     setCutFrom(tooBig ? picked.size : null);
@@ -265,11 +294,12 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
     setResult(null);
     try {
       let current = file;
-      let converted = false;
+      let didConvert = false;
       const convert = async () => {
         setStage("converting");
         current = await convertVideo(file);
-        converted = true;
+        didConvert = true;
+        converted.current = true;
         setFile(current);
         setNeedsConvert(false);
       };
@@ -279,7 +309,7 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
         setResult(await detectVideo(current, night));
       } catch (err) {
         // The camera computer may not be able to decode this codec (H.265, VP9, ...): convert once and try again.
-        if (converted || !(err instanceof ApiError) || err.message !== "unreadable_video") throw err;
+        if (didConvert || !(err instanceof ApiError) || err.message !== "unreadable_video") throw err;
         await convert();
         setStage("checking");
         setResult(await detectVideo(current, night));
@@ -290,6 +320,41 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
       setBusy(false);
       setStage(null);
     }
+  };
+
+  // What is not ideal about the file that was chosen. A good file (MP4 or WebM, under the size limit, no longer than
+  // the part that is checked) has none, and then nothing is asked.
+  const ext = original ? (original.name.match(/\.([A-Za-z0-9]+)$/)?.[1] ?? "").toUpperCase() : "";
+  const sizeMb = original ? Math.max(1, Math.round(original.bytes / 1048576)) : 0;
+  const longClip = duration != null && duration > ANALYZED_SECONDS + 0.5;
+  const checklist = original
+    ? [
+        PLAYABLE.test(original.name)
+          ? { ok: true, text: tr("Format: {ext}", { ext }) }
+          : { ok: false, text: tr("Format: {ext}. It is converted first, which adds time on the camera computer.", { ext: ext || "?" }) },
+        original.bytes <= MAX_BYTES
+          ? { ok: true, text: tr("Size: {size} MB", { size: sizeMb }) }
+          : { ok: false, text: tr("Size: {size} MB. Only the first {mb} MB are used, and an MP4 whose index is at the end cannot be cut that way and will fail.", { size: sizeMb, mb: DEMO_VIDEO_MAX_MB }) },
+        duration == null
+          ? {
+              ok: true,
+              text: lengthFailed
+                ? tr("Length: could not be read from the file")
+                : PLAYABLE.test(original.name)
+                  ? tr("Length: reading it…")
+                  : tr("Length: not known until it is converted"),
+            }
+          : longClip
+            ? { ok: false, text: tr("Length: {n} seconds. Only the first {seconds} seconds are checked.", { n: Math.round(duration), seconds: ANALYZED_SECONDS }) }
+            : { ok: true, text: tr("Length: {n} seconds", { n: Math.max(1, Math.round(duration)) }) },
+      ]
+    : [];
+  const issues = checklist.filter((row) => !row.ok).map((row) => row.text);
+
+  /** "Check video": a file that is not ideal gets one question first, with the cost and a way back. */
+  const requestCheck = () => {
+    if (issues.length > 0 && !acknowledged.current) setConfirmOpen(true);
+    else void check();
   };
 
   const className = result ? result.names["0"] ?? "item" : "";
@@ -317,6 +382,9 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
           <DialogDescription>
             {tr("Choose a short video clip. The trained model checks it and marks what it finds. Nothing is saved.")}
           </DialogDescription>
+          <p className="text-sm text-[var(--text-secondary)]">
+            {tr("Best: an MP4 or WebM clip under {mb} MB and {seconds} seconds or shorter. Other files still work, but take longer.", { mb: DEMO_VIDEO_MAX_MB, seconds: ANALYZED_SECONDS })}
+          </p>
         </DialogHeader>
 
         <input ref={inputRef} type="file" accept="video/*,.mkv,.avi" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={onPick} />
@@ -332,7 +400,7 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
           </button>
           <button
             type="button"
-            onClick={check}
+            onClick={requestCheck}
             disabled={!file || busy}
             className="tap inline-flex items-center gap-2 rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
@@ -369,13 +437,19 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
           ))}
         </div>
 
-        {cutFrom != null && (
-          <p className="text-xs text-[var(--text-tertiary)]">
-            {tr("This file is {size} MB. Only the first {mb} MB are used.", { size: Math.round(cutFrom / 1048576), mb: DEMO_VIDEO_MAX_MB })}
-          </p>
-        )}
-        {needsConvert && !busy && !result && (
-          <p className="text-xs text-[var(--text-tertiary)]">{tr("This video is converted first so it can play here.")}</p>
+        {original && !result && (
+          <ul aria-label={tr("What was chosen")} className="space-y-1 text-xs">
+            {checklist.map((row) => (
+              <li key={row.text} className="flex items-start gap-1.5" style={{ color: row.ok ? "var(--text-secondary)" : "var(--status-amber-text)" }}>
+                {row.ok ? (
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--status-green)]" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                )}
+                <span>{row.text}</span>
+              </li>
+            ))}
+          </ul>
         )}
         {busy && (
           <p role="status" className="text-sm text-[var(--text-secondary)]">
@@ -404,7 +478,15 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
               playsInline
               muted
               className={fullscreen ? "block h-full w-full object-contain" : "block max-h-[50vh] w-full"}
-              onError={() => setNeedsConvert(true)}
+              onLoadedMetadata={(e) => {
+                // How long the file the person chose plays (a converted copy is shorter, so it does not count).
+                const seconds = e.currentTarget.duration;
+                if (!converted.current && Number.isFinite(seconds)) setDuration(seconds);
+              }}
+              onError={() => {
+                if (!converted.current) setLengthFailed(true);
+                setNeedsConvert(true);
+              }}
             />
             {result && <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 h-full w-full" />}
             <button
@@ -519,6 +601,34 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 100
             </p>
           </div>
         )}
+
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{tr("This video is not ideal")}</AlertDialogTitle>
+              <AlertDialogDescription>{tr("It can still be checked, but:")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--text-secondary)]">
+              {issues.map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+            <p className="text-sm text-[var(--text-secondary)]">
+              {tr("This can take a few minutes on the camera computer. For a quick check, use an MP4 or WebM clip under {mb} MB and {seconds} seconds or shorter.", { mb: DEMO_VIDEO_MAX_MB, seconds: ANALYZED_SECONDS })}
+            </p>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => inputRef.current?.click()}>{tr("Choose another video")}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  acknowledged.current = true;
+                  void check();
+                }}
+              >
+                {tr("Use it anyway")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
