@@ -754,7 +754,8 @@ function flockUniformity(flock: FlockWeights) {
       : pct >= 75
         ? { letter: "B", label: tr("Moderate Consistency"), color: "var(--status-amber)" }
         : { letter: "C", label: tr("Low Consistency"), color: "var(--status-red)" };
-  return { median, lower, upper, within, pct, ...grade };
+  // A share of three birds says nothing: from five weighed birds it is shown.
+  return { median, lower, upper, within, pct, enough: flock.birds.length >= 5, ...grade };
 }
 
 function UniformityChip({ flock }: { flock: FlockWeights }) {
@@ -852,7 +853,9 @@ function FlockWeightDistribution({ flock }: { flock: FlockWeights }) {
         {stat(tr("Lightest weighed"), `${minWeight} g`, "var(--status-amber)", lightest.id, "var(--status-red)", tr("Lightest bird"))}
         {stat(tr("Flock Median"), `${u.median} g`, "var(--brand)", `${medianDelta >= 0 ? "+" : ""}${medianDelta} g`, "var(--brand)", tr("Ross 308 standard: {std} g", { std: stdG.toLocaleString() }))}
         {stat(tr("Heaviest weighed"), `${maxWeight} g`, "var(--status-blue)", heaviest.id, "var(--status-blue)", tr("Heaviest bird"))}
-        {stat(tr("Flock Uniformity"), `${u.pct}%`, u.color, tr("Grade {letter}", { letter: u.letter }), u.color, tr("{within}/{total} within ±10% of median", { within: u.within, total: totalBirds }))}
+        {u.enough
+          ? stat(tr("Flock Uniformity"), `${u.pct}%`, u.color, tr("Grade {letter}", { letter: u.letter }), u.color, tr("{within}/{total} within ±10% of median", { within: u.within, total: totalBirds }))
+          : stat(tr("Flock Uniformity"), "—", "var(--text-tertiary)", tr("Needs 5 birds"), "var(--text-tertiary)", tr("Weigh at least 5 birds to see how even they are"))}
       </div>
 
       <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
@@ -933,6 +936,7 @@ function FlockWeightDistribution({ flock }: { flock: FlockWeights }) {
           className="flex flex-col gap-5 rounded-xl border p-5 lg:col-span-5"
           style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}
         >
+          {u.enough ? (
           <div>
             <div className="mb-3 flex items-center justify-between">
               <span className="label-section text-xs">{tr("Uniformity Index")}</span>
@@ -956,6 +960,12 @@ function FlockWeightDistribution({ flock }: { flock: FlockWeights }) {
               {tr("Ross 308 threshold: >85% (marked) for uniform processing line yield.")}
             </p>
           </div>
+          ) : (
+            <div>
+              <span className="label-section text-xs">{tr("Uniformity Index")}</span>
+              <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("Weigh at least 5 birds to see how even they are")}</p>
+            </div>
+          )}
 
           <div className="space-y-2.5 border-t pt-4" style={{ borderColor: "var(--border-subtle)" }}>
             {cohorts.map((c) => (
@@ -1293,7 +1303,7 @@ function AnalyticsPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{variancePercent !== null ? tr("{Math}% {value} standard", { Math: Math.abs(variancePercent), value: variancePercent >= 0 ? tr("above") : tr("below") }) : tr("Needs a weighed bird")}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{variancePercent !== null ? tr("{Math}% {value} standard", { Math: Math.abs(variancePercent).toFixed(1), value: variancePercent >= 0 ? tr("above") : tr("below") }) : tr("Needs a weighed bird")}</p>
               </div>
 
               <div className="rounded-xl p-3 border transition-all duration-150"

@@ -54,4 +54,9 @@ export const part26: Messages = {
     "Wala pa gitakda ang gidaghanon sa panon niini nga kulungan, busa walay ililista nga manok. Ang administrator makatakda niini sa Settings.",
   ],
   "Day {day} of {endDay}: no bird weights typed in yet": ["Day {day} ng {endDay}: wala pang naitalang timbang ng manok", "Day {day} sa {endDay}: wala pay nabutang nga gibug-aton sa manok"],
+  "Needs 5 birds": ["Kailangan ng 5 manok", "Kinahanglan og 5 ka manok"],
+  "Weigh at least 5 birds to see how even they are": ["Magtimbang ng hindi bababa sa 5 manok para makita kung gaano sila kapantay", "Timbanga ang labing menos 5 ka manok aron makita kung unsa sila ka patas"],
+  "Camera computer not answering": ["Hindi sumasagot ang computer ng camera", "Wala motubag ang kompyuter sa camera"],
+  "Pen 1 not connected": ["Hindi nakakonekta ang Pen 1", "Wala konektado ang Pen 1"],
+  "Checking the camera computer": ["Sinusuri ang computer ng camera", "Gisusi ang kompyuter sa camera"],
 };

@@ -119,7 +119,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     // measurement the figures are null and the pages say so.
     const lw = latestMeasured(stored, day);
     const measuredRow = lw ? storedRows.find((r) => Number(r.day) === lw.day) : undefined;
-    const variancePercent = lw && lw.standardG ? ((lw.actualG - lw.standardG) / lw.standardG) * 100 : null;
+    const variancePercent = lw && lw.standardG ? Number((((lw.actualG - lw.standardG) / lw.standardG) * 100).toFixed(1)) : null;
     const estimationConfidencePercent =
       measuredRow?.estimationConfidence != null ? Number(measuredRow.estimationConfidence) * 100 : null;
     const weight = {
