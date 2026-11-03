@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "bun test src",
+    "test:gateway": "node --test scripts/public-gateway.node-test.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

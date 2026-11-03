@@ -1,0 +1,94 @@
+# Checks every push and pull request: the website, the API (with a real PostgreSQL), the public-link gateway and the
+# behavior engine. It has not been run on GitHub yet; the commands are the ones that pass on the developer's computer.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gleam-screen-creator-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Tests
+        run: bun test src
+      - name: Build
+        run: bunx vite build
+        env:
+          NITRO_PRESET: node-server
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gleam-screen-creator-main/packages/api
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cerebroil
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_DB: cerebroil
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cerebroil"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://cerebroil:ci-password@127.0.0.1:5432/cerebroil
+      JWT_SECRET: ci-only-secret-at-least-thirty-two-characters-long
+      VISION_SERVICE_TOKEN: ci-only-token
+      NODE_ENV: development
+      SENSOR_MONITOR: "off"
+      BEHAVIOR_MONITOR: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+        working-directory: gleam-screen-creator-main
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Migrate the database and make the administrator the tests sign in as
+        run: |
+          bun run db:migrate
+          npx tsx scripts/seed-admin.ts > /dev/null
+      - name: Tests
+        run: bun test --timeout 30000
+      - name: Test that needs Node (a closed connection)
+        run: npm run test:node
+
+  gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gleam-screen-creator-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run test:gateway
+
+  behavior-engine:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cerebroil-stream
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest test_behavior

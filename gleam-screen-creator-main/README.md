@@ -25,6 +25,10 @@ bun run dev                                                  # website on :8080 
 cd packages/api && bun run test                               # API tests (need the database; use a development one)
 ```
 
+Other tests: `bun run test` (website logic), `npm run test:gateway` (public link), `npm run test:node` in `packages/api` (video
+lock) and `python -m unittest test_behavior` in `../cerebroil-stream` (behavior engine). `../docs/` holds the security review and
+the steps for checking the weights, counts and alerts against the real flock (`validation.md`).
+
 Back up the database and the trained models with `powershell -ExecutionPolicy Bypass -File scripts/backup-db.ps1`.
 
 ## Lovable
