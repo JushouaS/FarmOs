@@ -567,6 +567,14 @@ export async function analyzeFrame(cameraId: string): Promise<AnalysisResult> {
   });
 }
 
+/**
+ * Where a page that is not on the Kinect's own PC opens the depth stream: the API relays it, because the bridge
+ * itself only listens on that PC. The API checks the signed-in session, so no ticket is needed here.
+ */
+export function kinectRelayUrl(): string {
+  return `${API_BASE.replace(/^http/, "ws")}/visual/kinect-ws`;
+}
+
 /** A short-lived ticket for the Kinect depth stream, or null when the bridge asks for none. */
 export async function fetchKinectTicket(): Promise<string | null> {
   const res = await apiFetch<{ ticket: string | null }>("/visual/kinect-ticket");

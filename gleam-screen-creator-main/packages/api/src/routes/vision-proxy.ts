@@ -237,6 +237,12 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
     return reply.send({ ticket: `${expiry}.${createHmac("sha256", key).update(expiry).digest("hex")}` });
   });
 
+  // The sign-in check the Kinect relay runs on its WebSocket upgrade (kinect-relay.ts); a plain 200 for a signed-in user.
+  app.get("/kinect-ws-check", { preHandler: [requireAuth] }, async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    return reply.send({ ok: true });
+  });
+
   // -----------------------------------------------------------------------
   // GET /visual/kinect-chickens — the newest outlines of the chickens on the
   // Kinect picture, from kinect_seg.py. Asking keeps that program working for

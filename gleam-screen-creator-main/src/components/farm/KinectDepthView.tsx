@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { fetchKinectChickens, fetchKinectTicket, type KinectChickens } from "@/lib/api-client";
+import { fetchKinectChickens, fetchKinectTicket, kinectRelayUrl, type KinectChickens } from "@/lib/api-client";
 import { tr } from "@/lib/i18n";
 
 /* Live view of the Kinect: the normal colour picture, or the depth as a 3D view.
@@ -90,12 +90,17 @@ export function KinectDepthView({ fallback, onFlock }: { fallback: ReactNode; on
     let count = 0;
 
     const connect = async () => {
-      // The bridge may want a ticket, which the API gives to signed-in viewers.
+      // On the Kinect's own PC the bridge is opened directly. It may want a ticket, which the API gives to signed-in viewers.
+      // Any other device on the network goes through the API, because the bridge only listens on that PC.
+      const here = window.location.hostname;
+      const onThisPc = here === "localhost" || here === "127.0.0.1" || here === "[::1]" || here === "::1";
       let ticket: string | null = null;
-      try {
-        ticket = await fetchKinectTicket();
-      } catch {
-        /* not reachable right now: try without, and the retry below tries again */
+      if (window.location.protocol === "https:" || onThisPc) {
+        try {
+          ticket = await fetchKinectTicket();
+        } catch {
+          /* not reachable right now: try without, and the retry below tries again */
+        }
       }
       if (closed) return;
       const query = ticket ? `?t=${encodeURIComponent(ticket)}` : "";
@@ -103,7 +108,9 @@ export function KinectDepthView({ fallback, onFlock }: { fallback: ReactNode; on
       const address =
         window.location.protocol === "https:"
           ? `wss://${window.location.host}/kinect/${query}`
-          : `ws://${window.location.hostname}:${BRIDGE_PORT}/${query}`;
+          : onThisPc
+            ? `ws://${here}:${BRIDGE_PORT}/${query}`
+            : kinectRelayUrl();
       const socket = new WebSocket(address);
       ws = socket;
       wsRef.current = socket;

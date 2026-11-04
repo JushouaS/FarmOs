@@ -87,6 +87,9 @@ const schema = z.object({
   // Where kinect_seg.py (the chicken outlines on the Kinect picture) runs: this computer, next to the Kinect.
   KINECT_SEG_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("http://127.0.0.1:8182")),
 
+  // Where the Kinect bridge listens: this computer. The API relays its stream to devices on the network (kinect-relay.ts).
+  KINECT_BRIDGE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("ws://127.0.0.1:8181/")),
+
   // Shared with the Kinect bridge (its KINECT_BRIDGE_KEY): the API hands signed-in viewers a short-lived ticket made
   // from it, and the bridge only streams depth frames to a viewer with one. Unset = the bridge needs no ticket.
   KINECT_BRIDGE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),

@@ -33,6 +33,7 @@ import { startHousekeeping } from "./housekeeping.js";
 import { registerVisionZoneRoutes } from "./routes/vision-zones.js";
 import { registerVisionVideoRoutes } from "./routes/vision-video.js";
 import { startBehaviorSampler } from "./sampler.js";
+import { attachKinectRelay } from "./kinect-relay.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 
 /** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
@@ -134,6 +135,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   // the thresholds, the night rule and the write all live on this side, so the
   // timer calls the same path a manual scan does instead of duplicating it.
   startBehaviorSampler(app);
+
+  // The Kinect depth stream for devices that cannot reach the bridge on this PC directly.
+  attachKinectRelay(app, (origin) =>
+    !origin || env.API_CORS_ORIGINS.includes(origin) || (env.NODE_ENV === "development" && PRIVATE_NETWORK_ORIGIN.test(origin)),
+  );
 
   return app;
 }

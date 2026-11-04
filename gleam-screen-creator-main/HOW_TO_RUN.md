@@ -682,11 +682,14 @@ it, and especially for birds much younger or older. To train it again on your ow
 `python train_weight_model.py your.csv`. Without the model file, `xgboost` or the depth picture, the weights are left
 out and everything else works.
 
-It only accepts pages from this computer or your local network. To let a phone see the 3D view, first
-make a key (at least 16 characters), put it in `packages\api\.env` as `KINECT_BRIDGE_KEY=...`, restart the
-API, set the same value in the window that starts the bridge (`set KINECT_BRIDGE_KEY=...`), and start it with
-`KinectBridge.exe --lan` from an administrator window. With a key, the website gives each signed-in viewer a
-short-lived ticket and the bridge refuses anyone without one; `--lan` will not start without a key.
+The bridge itself only listens on this computer. A phone or another computer on your network still sees the 3D view:
+the website asks the API (which that device already reaches on port 4000), and the API checks the sign-in and passes
+the Kinect stream on from the bridge. Nothing to set up, and nothing to change in Windows, as long as the bridge and
+the API run on the same computer. Signed-out devices and pages from other sites are refused.
+
+`KinectBridge.exe --lan` (from an administrator window, with `KINECT_BRIDGE_KEY` set to the same value of at least
+16 characters as in `packages\api\.env`) is only needed if you want devices to open the bridge directly on port 8181;
+the website does not use that path.
 
 ---
 

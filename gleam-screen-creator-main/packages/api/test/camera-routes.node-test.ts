@@ -34,6 +34,7 @@ const routes = [
   ["GET", "/visual/behavior?night=0"],
   ["GET", "/visual/behavior/CAM-01"],
   ["GET", "/visual/kinect-ticket"],
+  ["GET", "/visual/kinect-ws-check"],
   ["GET", "/visual/kinect-chickens"],
   ["GET", "/visual/stream/CAM-01"],
   ["POST", "/visual/capture/CAM-01"],
