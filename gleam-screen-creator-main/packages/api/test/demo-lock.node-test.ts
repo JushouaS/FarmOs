@@ -28,6 +28,7 @@ before(async () => {
   process.env.VISION_SERVICE_URL = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`;
   process.env.SENSOR_MONITOR = "off";
   process.env.BEHAVIOR_MONITOR = "off";
+  process.env.BEHAVIOR_INTERVAL_MINUTES = "0"; // the sampler would call the camera service on start-up
   const { buildApp } = await import("../src/app.js");
   const { signAccessToken, hashAccessToken } = await import("../src/auth/auth.js");
   app = await buildApp();

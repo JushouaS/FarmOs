@@ -96,8 +96,8 @@ You only need this section the first time, or after a fresh download.
 | Python | 3.13 | `python --version` |
 | PostgreSQL | any recent, installed in `C:\Program Files\PostgreSQL\<version>` | look for that folder |
 
-The local database script finds PostgreSQL there by itself. You do **not** need Docker and you do
-**not** need to know the PostgreSQL superuser password.
+The local database script finds PostgreSQL there by itself. You do **not** need Docker (the optional
+Docker stack is described in section 9) and you do **not** need to know the PostgreSQL superuser password.
 
 ### 3.2 Install the packages
 
@@ -600,7 +600,7 @@ the numbers should be checked on your own flock.
 **Flock Tracking** lists the birds of the pen the camera watches, B-001 up to the flock size set in **Settings**. Weigh a bird
 on a scale and type its weight in kilograms, with up to 3 decimals (like `0.946`), into its box, then press Enter or click away.
 There is no submit button: the weight saves by itself and a "Saved" note appears. Clear the box to remove a weight. Run
-`npm run db:migrate` once (migrations 0020 and 0025).
+`npm run db:migrate` once (migrations 0020 and 0022_measured_weights).
 
 What it feeds: the day's **average** of the weights typed in, and how many birds, is the weight the Dashboard's Growth card
 draws against the Ross 308 standard. The Analytics **Weight Growth** tab, the growth report under the Dashboard card
@@ -712,10 +712,16 @@ taskkill /PID <the number in the last column> /F
 
 ## 9. Things that exist but are not part of the normal start
 
-- The placeholder camera service that used to be in `packages\vision` (and the `npm run dev:vision` script) was removed.
-  The only camera service is `cerebroil-stream`. It stays in git history if it is ever wanted.
-- `cerebroil-backend` (an older FastAPI backend for a Raspberry Pi with YOLOv8, ByteTrack and ROS 2) was removed.
-  The website never used it. It stays in git history if it is ever wanted.
+- `packages\vision` is a second camera service (Flask, OpenCV, the trained detector, feeder and drinker zones, the
+  Test video and Settings camera-source features). The Raspberry Pi in this guide runs `cerebroil-stream` instead; the
+  vision package is what the Docker stack below starts. It has its own tests in `packages\vision\tests` (they need
+  `pytest` and the package's `requirements.txt`; they were not run when this guide was last checked).
+- `cerebroil-backend` (a FastAPI backend with YOLOv8, ByteTrack and ROS 2) is back in the repository because the Docker
+  stack builds it. The website does not call it, and none of the steps in this guide start it.
+- **Docker.** `docker-compose.yml` (one folder above this one) builds the website, the API, the vision service, the
+  backend, the stream server and a PostgreSQL 16 database in one go (`cp .env.example .env`, set the passwords, then
+  `docker compose up -d --build`). It was added by a teammate and has not been run on this laptop, which does not have
+  the memory for it. The steps in this guide do not need it.
 
 ---
 

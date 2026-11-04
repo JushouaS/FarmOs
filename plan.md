@@ -103,7 +103,7 @@ Verified by reading every `INSERT`/`UPDATE` in `app/packages/api/src` and by loo
 
 ### 2.3 Database contents (verified 2026-11-04, local development database)
 
-`cycle_weights` 7 rows, all standards only (the 2024 sample measurements were cleared by migration `0025`); `actual_weights` 0; `feed_samples`,
+`cycle_weights` 7 rows, all standards only (the 2024 sample measurements were cleared by migration `0022_measured_weights`); `actual_weights` 0; `feed_samples`,
 `water_samples`, `activity_samples`, `detections` 0; `users` 1; `sensor_readings` about 650 (DHT22). Demo rows still present: `alerts` 4 of 6
 (the other two are real "Sensor Offline" alerts), `incidents` 1, `monitoring_reports` 1, `archived_reports` 3, `anomaly_events` 5, `cohorts` 4,
 `houses` 3 extra (H01 4,210 birds, H03 4,260, H04 4,190) beside the real "Pen 1" (H02, 20 birds), `cameras` 2 extra beside the real `CAM-01`. The
@@ -124,7 +124,7 @@ Verified in code and exercised during the project.
 - **Sign-in and accounts:** login, refresh-token rotation, lockout after 5 failures, MFA, one-time privacy agreement, admin-created accounts with an emailed temporary password (`routes/auth.ts`). The built-in `admin`/`admin` login is gone. First administrator made with `scripts/seed-admin.ts`. Role checks on every route that changes something.
 - **Settings:** grow-out day window, lighting hours, flock size.
 - **Alerts and notifications:** list, acknowledge, dismiss; in-app, web push and email (delivery to real inboxes and phones: **Requires investigation**). A "Sensor Offline" alert after 10 minutes of silence, once per outage.
-- **Weights end to end:** type a bird's weight on Flock Tracking → the day's mean and bird count are saved → Dashboard card and chart, growth report, Analytics weight tab, spread and uniformity (shown from 5 birds) and the AI briefing all follow (`app/packages/api/src/measured-weights.ts`, migration `0025`).
+- **Weights end to end:** type a bird's weight on Flock Tracking → the day's mean and bird count are saved → Dashboard card and chart, growth report, Analytics weight tab, spread and uniformity (shown from 5 birds) and the AI briefing all follow (`app/packages/api/src/measured-weights.ts`, migration `0022_measured_weights`).
 - **Live Camera:** Dahua stream and Kinect through the API proxy with auto-reconnect; Kinect Picture and Depth 3D views, chicken outlines and weights; honest "not connected" and "sensor offline" states; sidebar status follows the camera-service check.
 - **Analyze data** scan with the trained detector and saved huddle clusters.
 - **Test video:** upload, boxes, automatic weights, a file checklist (format, size, length) with one "not ideal, use it anyway?" popup, the video's own full-screen button with the readings kept, and one-video-at-a-time that releases when the browser disconnects.
@@ -145,7 +145,7 @@ Verified in code and exercised during the project.
 | AI briefing | Real-data snapshot, prompts, tests | `GROQ_API_KEY` not set, so never run end to end |
 | Notifications | Web push + SMTP code | Real-world delivery untested |
 | Backups | Dump and model zip, nightly task, restore tested | No copy off this laptop |
-| Hosting | CI workflow (not yet run) | No Dockerfile, process manager, tunnel or monitoring; no host chosen (T3.x) |
+| Hosting | CI workflow (not yet run) | A Docker stack exists (`docker-compose.yml`, from a teammate) but has not been run; no process manager, tunnel or monitoring; no host chosen (T3.x) |
 | Kinect autostart | Start scripts | Scheduled-task installer not added (needs your OK) |
 | Tests | 36 across API, website, gateway and behavior engine | Auth lockout, role matrix, `kinect_weight.py` |
 | Accessibility | Keyboard and tree checks on eight pages | Screen reader, colour contrast, Test video box by keyboard |
@@ -165,7 +165,7 @@ Verified in code and exercised during the project.
 | G-09 | Kinect programs start by hand | **Partly** (T2.2): start scripts only |
 | G-10 | DHT22 fault, no offline detection | **Software fixed** (T0.4); wires still to reseat |
 | G-11 | Behavior monitor off, thresholds uncalibrated | **Open** (T2.1, T2.9) |
-| G-12 | Dead code (`cerebroil-backend/`, `app/packages/vision/`, sample dataset) | **Fixed** (T1.7); an empty `cerebroil-backend/` folder with a git-ignored `.env` remains for you to delete |
+| G-12 | Dead code (`cerebroil-backend/`, `app/packages/vision/`, sample dataset) | **Partly reversed**: the sample dataset stays deleted, but a teammate's merge brought `cerebroil-backend/` and `packages/vision/` back (the Docker stack builds them). Decide whether to keep them |
 | G-13 | Demo rows ship with every fresh database | **Tool written and tested** (T1.6); not yet run on the real database |
 | G-14 | Lint: 3,040 findings, almost all formatting | **Open**, low (T4.2) |
 | G-15 | No production hosting config | **Open** (T3.x); CI written |
@@ -198,7 +198,7 @@ M0 stable base → M1 honest data (**done in code**) → M2 field pilot ready �
 
 ### Phase 0 — Stable base
 
-**T0.1 Move the database off the unreliable Windows install** — *Critical*, open. Pick a stable host (the farm computer, a small Linux machine, or Postgres in Docker) and point `DATABASE_URL` there; migrations stay as they are. Depends on T3.1. Acceptance: a 24 h run with the web app, API and monitors on and no `error code 487` lines; `db:migrate` applies all 25 migrations on a blank instance.
+**T0.1 Move the database off the unreliable Windows install** — *Critical*, open. Pick a stable host (the farm computer, a small Linux machine, or Postgres in Docker) and point `DATABASE_URL` there; migrations stay as they are. Depends on T3.1. Acceptance: a 24 h run with the web app, API and monitors on and no `error code 487` lines; `db:migrate` applies all 26 migrations on a blank instance (note: the numbers 0021 and 0022 are each used twice; they are applied in filename order and work, but renumber them if you want a clean list).
 
 **T0.2 Rotate credentials** — *Critical*, open. New admin password (`scripts/seed-admin.ts` or Settings → Accounts), new `JWT_SECRET` (MFA accounts must re-enroll), `VISION_SERVICE_TOKEN`, `KINECT_BRIDGE_KEY`; a new Gmail app password. Acceptance: the old admin password no longer works; `git grep` for the old values finds nothing.
 
@@ -210,7 +210,7 @@ M0 stable base → M1 honest data (**done in code**) → M2 field pilot ready �
 
 **T1.0 Confirm what the database holds** — done (§2.3).
 
-**T1.1 A real writer for `cycle_weights`** — done. Migration `0025_measured_weights.sql` makes `actual_g` nullable, adds `source`, clears the 2024 sample measurements and keeps the standards. `measured-weights.ts` saves the day's mean and bird count on every save or removal on Flock Tracking and once at start-up. The overview reads only measured days (never filled in from the curve) and gives the newest measurement with the standard for the day it was measured. Kinect weights are deliberately not used here until T2.7 validates them. Tests: `test/measured-weights.test.ts`.
+**T1.1 A real writer for `cycle_weights`** — done. Migration `0022_measured_weights.sql` makes `actual_g` nullable, adds `source` (`standard` or `measured`), clears the 2024 sample measurements and keeps the standards (the merge replaced my own `0025` version with this one; the local database was repaired to match). `measured-weights.ts` saves the day's mean and bird count on every save or removal on Flock Tracking and once at start-up. The overview reads only measured days (never filled in from the curve) and gives the newest measurement with the standard for the day it was measured. Kinect weights are deliberately not used here until T2.7 validates them. Tests: `test/measured-weights.test.ts`.
 
 **T1.2 Feed, water, activity, FCR** — done by hiding: no sensor exists, nothing displays them. A manual feed-entry form is optional.
 
@@ -222,7 +222,7 @@ M0 stable base → M1 honest data (**done in code**) → M2 field pilot ready �
 
 **T1.6 Clean production seed** — tool done: `npx tsx scripts/seed-farm.ts --name "<farm>" [--house --birds --breed] [--yes]` (dry run unless `--yes`; one transaction). Tried on a restored copy: removed the demo incident, alerts, reports, anomaly events, cohorts, 2 cameras, 7 sensors and 3 houses; kept the real house, camera, readings and accounts; all API tests passed on the cleaned copy. **Not run on the real database: it needs the farm's name.**
 
-**T1.7 Remove dead code** — done: `cerebroil-backend/`, `app/packages/vision/`, `dataset.ts`, `sample.ts`, `SampleBadge.tsx` and `WEBSITE_GAPS_AND_PLAN.md` deleted (in git history); lighting helpers in `lighting.ts`, weight helpers in `weights.ts`.
+**T1.7 Remove dead code** — done, then partly undone by the merge (see G-12): `cerebroil-backend/`, `app/packages/vision/`, `dataset.ts`, `sample.ts`, `SampleBadge.tsx` and `WEBSITE_GAPS_AND_PLAN.md` deleted (in git history); lighting helpers in `lighting.ts`, weight helpers in `weights.ts`.
 
 ### Phase 2 — Field integration and accuracy (O2, O5)
 
@@ -247,7 +247,7 @@ M0 stable base → M1 honest data (**done in code**) → M2 field pilot ready �
 ### Phase 3 — Hosting (O3, O4), open
 
 **T3.1 Decide the topology** — *Critical*. (a) an always-on farm computer runs DB, API and web, the Pi and Kinect on the same LAN, remote access by tunnel (Cloudflare or Tailscale); (b) cloud API and DB with a tunnel or VPN so the API can reach the Pi (G-16). Recommendation: (a) for the pilot. Needs the owner's provider and budget.
-**T3.2 Process manager** — *Critical*. DB, API (`NODE_ENV=production`) and web (`.output/server/index.mjs`) restart on failure and at boot. Not built: Docker was not used because the laptop lacked memory to test an image.
+**T3.2 Process manager** — *Critical*. DB, API (`NODE_ENV=production`) and web (`.output/server/index.mjs`) restart on failure and at boot. Not built here. A teammate added a Docker stack (`docker-compose.yml`, `Dockerfile.api`, `Dockerfile.web`, `packages/vision/Dockerfile`); it has not been run because the laptop lacks the memory to test an image.
 **T3.3 Production config** — *High*. `NODE_ENV=production`, `TRUST_PROXY`, `COOKIE_SECURE`, monitors on.
 **T3.4 Link to the farm** — *High*. Tunnel or VPN so the API reaches `behavior.local:5000` and the Kinect bridge. Acceptance: Live Camera works from a phone on mobile data.
 **T3.5 HTTPS and public access** — *High*. `scripts/start-public.ps1` on an allowed network, or a named tunnel.

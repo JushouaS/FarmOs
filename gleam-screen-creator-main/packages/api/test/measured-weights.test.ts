@@ -7,35 +7,46 @@
  * the real routes and removes them again, so run it against a development database, never a live farm's.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { curveToDate, latestMeasured, standardAtDay, standardCurve, type WeightPoint } from "../src/cycle-day.js";
+import {
+  measuredSeries,
+  standardAtDay,
+  standardCurve,
+  weightAtDay,
+  type StandardPoint,
+  type WeightPoint,
+} from "../src/cycle-day.js";
 
-const rows: WeightPoint[] = [
-  { day: 14, actualG: null, standardG: 460 },
-  { day: 21, actualG: 880, standardG: 900 },
-  { day: 28, actualG: null, standardG: 1400 },
+const standards: StandardPoint[] = [
+  { day: 14, standardG: 460 },
+  { day: 21, standardG: 900 },
+  { day: 28, standardG: 1400 },
+  { day: 35, standardG: 1950 },
+];
+const weighIns: WeightPoint[] = [
   { day: 35, actualG: 1990, standardG: 1950 },
+  { day: 21, actualG: 880, standardG: 900 },
 ];
 
 describe("weights on the stored curve", () => {
   test("the standard is read between stored days", () => {
-    expect(standardAtDay(rows, 21)).toBe(900);
-    expect(standardAtDay(rows, 24)).toBe(Math.round(900 + ((1400 - 900) * 3) / 7));
+    expect(standardAtDay(standards, 21)).toBe(900);
+    expect(standardAtDay(standards, 24)).toBe(Math.round(900 + ((1400 - 900) * 3) / 7));
+    expect(standardAtDay([], 21)).toBeNull();
   });
 
   test("a day nobody weighed is never filled in", () => {
-    expect(curveToDate(rows, 14, 30)).toEqual([{ day: 21, actualG: 880, standardG: 900 }]);
-    expect(curveToDate(rows, 14, 40).map((p) => p.day)).toEqual([21, 35]);
+    expect(measuredSeries(weighIns, 14, 30)).toEqual([{ day: 21, actualG: 880, standardG: 900 }]);
+    expect(measuredSeries(weighIns, 14, 40).map((p) => p.day)).toEqual([21, 35]);
+    expect(measuredSeries(weighIns, 22, 34)).toEqual([]);
   });
 
-  test("the latest measurement is the newest one on or before the day", () => {
-    expect(latestMeasured(rows, 30)).toEqual({ day: 21, actualG: 880, standardG: 900 });
-    expect(latestMeasured(rows, 35)?.actualG).toBe(1990);
-    expect(latestMeasured(rows, 20)).toBeNull();
-    expect(latestMeasured([{ day: 7, actualG: null, standardG: 190 }], 30)).toBeNull();
+  test("a weight read for a day between weigh-ins stays on the line between them", () => {
+    expect(weightAtDay(weighIns, 21)).toEqual({ actualG: 880, standardG: 900 });
+    expect(weightAtDay([], 21)).toBeNull();
   });
 
   test("the standard curve covers every day of the window", () => {
-    const curve = standardCurve(rows, 16, 20);
+    const curve = standardCurve(standards, 16, 20);
     expect(curve.map((p) => p.day)).toEqual([16, 17, 18, 19, 20]);
   });
 });
@@ -61,6 +72,7 @@ describe.skipIf(!live)("typed-in weights reach the Dashboard", () => {
   beforeAll(async () => {
     process.env.SENSOR_MONITOR = "off";
     process.env.BEHAVIOR_MONITOR = "off";
+    process.env.BEHAVIOR_INTERVAL_MINUTES = "0"; // the sampler would call the camera service on start-up
     const { buildApp } = await import("../src/app.js");
     const { signAccessToken, hashAccessToken } = await import("../src/auth/auth.js");
     app = await buildApp();
@@ -92,7 +104,7 @@ describe.skipIf(!live)("typed-in weights reach the Dashboard", () => {
   test("with no weights the Dashboard has no measured weight", async () => {
     const w = (await overview()).weight;
     expect(w.actualAvgG).toBeNull();
-    expect(w.variancePercent).toBeNull();
+    expect(w.variancePercent).toBe(0);
     expect(w.curve.filter((p: { day: number }) => p.day === day)).toEqual([]);
     expect(w.standardCurve.length).toBeGreaterThan(0);
   });
