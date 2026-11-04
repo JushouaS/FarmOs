@@ -3,7 +3,11 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { AccountSection } from "@/components/farm/AccountSection";
 import { FlockSizeSection } from "@/components/farm/FlockSizeSection";
+import { FeederZonesSection } from "@/components/farm/FeederZonesSection";
+import { VideoTestSection } from "@/components/farm/VideoTestSection";
+import { WeightTestSection } from "@/components/farm/WeightTestSection";
 import { LightingSection } from "@/components/farm/LightingSection";
+import { CameraSourceSection } from "@/components/farm/CameraSourceSection";
 import { Block, Hint, MonoVal, Row, SaveRow, Section, Toggle, useSaver } from "@/components/farm/SettingsParts";
 import {
   ApiError,
@@ -385,6 +389,17 @@ function SettingsPage() {
           <CycleDaySection cycle={cycle} />
           <FlockSizeSection house={house} canManage={canManage} />
           <LightingSection lighting={overview?.lighting ?? DEFAULT_LIGHTING} canManage={canManage} />
+          {/* Above the zones on purpose: those polygons are drawn on this
+              camera's picture, so the link that produces it belongs first. */}
+          <CameraSourceSection camera={overview?.camera ?? null} canManage={canManage} />
+          <FeederZonesSection canManage={canManage} />
+          {/* Right below the zones on purpose: a clip is judged against those
+              very polygons, so the two belong within a glance of each other. */}
+          <VideoTestSection />
+          {/* Sibling of the behaviour test, kept beside it on purpose: the two
+              answer different questions about the same footage pipeline, and
+              a reader comparing them should not have to hunt for the other. */}
+          <WeightTestSection />
         </div>
         <div className="space-y-6">
           <AccountSection />

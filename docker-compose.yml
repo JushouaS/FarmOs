@@ -101,12 +101,43 @@ services:
       # Plain HTTP on the LAN, so session cookies must not be Secure-flagged.
       # Set to "true" once the stack sits behind TLS.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # The sign-in page advertises "admin / admin"; the API only accepts it in
+      # development unless this is set. Off by default — turn it on in .env for
+      # a demo, and leave it off anywhere real users sign in.
+      DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-false}
       # The dashboard is reached on the host, so allow host origins.
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+      # The behaviour analysis needs a detector, and only packages/vision runs
+      # one, so the camera routes now point there. cerebroil-stream keeps
+      # serving the Kinect depth view on host port 5050.
       VISION_SERVICE_URL: http://vision:5000
       VISION_SERVICE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
+      # Only used to answer "where does the link come from" when Settings holds
+      # none: the pages get it masked (Settings > Camera).
+      DAHUA_RTSP_URL: ${DAHUA_RTSP_URL:-}
+      # The flock's own clock. Containers run in UTC, so without this the
+      # night rule (birds asleep) would be eight hours out in the Philippines
+      # and a sleeping flock at 21:00 would be reported as huddling at 13:00.
+      FARM_TZ: ${FARM_TZ:-Asia/Manila}
+      # Minutes between automatic readings. 0 disables the sampler.
+      BEHAVIOR_INTERVAL_MINUTES: ${BEHAVIOR_INTERVAL_MINUTES:-5}
+      # Test clips (Settings -> Test Clips). The caps are enforced here as well
+      # as in the vision service so an oversized upload is refused before it
+      # has travelled anywhere.
+      VIDEO_MAX_MB: ${VIDEO_MAX_MB:-200}
+      VIDEO_MAX_SECONDS: ${VIDEO_MAX_SECONDS:-600}
+      VIDEO_SWEEP_SAMPLES: ${VIDEO_SWEEP_SAMPLES:-30}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      # "Report a problem" / SUS questionnaire (routes/feedback.ts). Empty means
+      # the defaults under packages/api/data, which the api_data volume keeps.
+      SUS_CSV_PATH: ${SUS_CSV_PATH:-}
+      REPORT_CSV_PATH: ${REPORT_CSV_PATH:-}
+      SUS_GOOGLE_SCRIPT_URL: ${SUS_GOOGLE_SCRIPT_URL:-}
+      SUS_GOOGLE_SCRIPT_TOKEN: ${SUS_GOOGLE_SCRIPT_TOKEN:-}
+    volumes:
+      # Keeps the CSV exports across container recreations.
+      - api_data:/app/packages/api/data
     ports:
       - "4000:4000"
     depends_on:
@@ -114,6 +145,8 @@ services:
         condition: service_healthy
       api-admin-seed:
         condition: service_completed_successfully
+      stream:
+        condition: service_started
       vision:
         condition: service_started
     healthcheck:
@@ -123,7 +156,11 @@ services:
       retries: 6
       start_period: 20s
 
-  # ── Vision service (Flask + OpenCV) ────────────────────────────────────────
+  # ── CV pipeline: ONNX detector + behaviour measurements ────────────────────
+  # Serves /analyze, /capture and the MJPEG stream for CAM-01, and reads the
+  # feeder zones the dashboard saves. Needs the .onnx export mounted at
+  # CHICKEN_MODEL_PATH; with no model present it still starts and still serves
+  # video, but reports that detection is unavailable instead of inventing birds.
   vision:
     build:
       context: ./gleam-screen-creator-main/packages/vision
@@ -134,10 +171,31 @@ services:
       FLASK_HOST: 0.0.0.0
       FLASK_PORT: "5000"
       VISION_SERVICE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
-      # psycopg2 needs the plain libpq DSN, not the asyncpg one.
+      # psycopg2 needs the plain libpq DSN, not the asyncpg one. Read-only use:
+      # the feeder polygons are read here, results are written by the API.
       DATABASE_URL: postgresql://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
-      # "camera_id=rtsp_url,..." — empty means no physical cameras are wired.
-      RTSP_SOURCES: ${RTSP_SOURCES:-}
+      # "camera_id=rtsp_url,..." — the same Dahua feed cerebroil-stream uses.
+      RTSP_SOURCES: CAM-01=${DAHUA_RTSP_URL:-}
+      CHICKEN_MODEL_PATH: ${CHICKEN_MODEL_PATH:-/app/models/chicken.onnx}
+      CHICKEN_INPUT_SIZE: ${CHICKEN_INPUT_SIZE:-640}
+      CHICKEN_CLASSES: ${CHICKEN_CLASSES:-chicken}
+      CHICKEN_CONF_MIN: ${CHICKEN_CONF_MIN:-0.35}
+      CHICKEN_NMS_IOU: ${CHICKEN_NMS_IOU:-0.45}
+      CHICKEN_MODEL_HAS_NMS: ${CHICKEN_MODEL_HAS_NMS:-false}
+      CHICKEN_ZONE_ANCHOR: ${CHICKEN_ZONE_ANCHOR:-centre}
+      VISION_FRAME_DELTA_MS: ${VISION_FRAME_DELTA_MS:-700}
+      # Uploaded test clips. They live in /tmp, so a restart forgetting them is
+      # the intended behaviour — they are test artefacts, not data.
+      VIDEO_MAX_MB: ${VIDEO_MAX_MB:-200}
+      VIDEO_MAX_SECONDS: ${VIDEO_MAX_SECONDS:-600}
+      VIDEO_SWEEP_SAMPLES: ${VIDEO_SWEEP_SAMPLES:-30}
+      VIDEO_TTL_MINUTES: ${VIDEO_TTL_MINUTES:-120}
+      VIDEO_SWEEP_BUDGET_S: ${VIDEO_SWEEP_BUDGET_S:-90}
+      # Which camera's saved feeder zones a clip is judged against.
+      VIDEO_ZONE_CAMERA: ${VIDEO_ZONE_CAMERA:-CAM-01}
+    volumes:
+      # Drop the exported model in here. Read-only: the container never writes it.
+      - ./gleam-screen-creator-main/packages/vision/models:/app/models:ro
     depends_on:
       db:
         condition: service_healthy
@@ -156,12 +214,19 @@ services:
       args:
         # Consumed by the browser, so it must be the host-published API port.
         VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+        # The host port cerebroil-stream is published on. The camera page builds
+        # the feed URL from the host it was opened on plus this port, so a phone
+        # on the LAN reaches this machine rather than its own localhost.
+        VITE_VISION_PORT: ${VITE_VISION_PORT:-5050}
     restart: unless-stopped
     init: true
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "8080"
+      # Server functions run inside this container, so their API calls must use
+      # the compose service name. The browser keeps the build-time VITE_API_URL.
+      API_INTERNAL_URL: http://api:4000
       # Server functions in src/lib/intelligence.ts read these at runtime.
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
@@ -235,10 +300,22 @@ services:
       context: ./cerebroil-stream
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      # 5050, not 5000: another stack on this machine commonly owns 5000, and a
+      # refused bind there takes the whole camera page down with it.
+      - "5050:5000"
     environment:
-      DAHUA_RTSP_URL: ${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      # Must match the API's token: the stream service rejects every protected
+      # route with vision_token_not_configured when this is unset.
+      VISION_SERVICE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
+      # The RTSP link comes from Settings (system_settings, key "camera"); this
+      # DSN is how it is read. Read-only use, like the vision service.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
+      # Fallback for an installation that has never saved a link in Settings.
+      DAHUA_RTSP_URL: ${DAHUA_RTSP_URL:-}
       KINECT_SOURCE: ${KINECT_SOURCE:-simulated}
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/status', timeout=3).status == 200 else 1)"]
       interval: 20s
@@ -256,8 +333,9 @@ services:
       - "8888:8888"      # HLS
       - "8189:8189/udp"  # WebRTC ICE
     environment:
-      MTX_PATHS_DAHUA_SOURCE: ${DAHUA_RTSP_URL:-rtsp://admin:12345qwert@192.168.1.108:554/cam/realmonitor?channel=1&subtype=1}
+      MTX_PATHS_DAHUA_SOURCE: ${DAHUA_RTSP_URL:-}
       MTX_PATHS_KINECT_SOURCE: ${KINECT_RTSP_URL:-rtsp://localhost:8554/kinect_source}
 
 volumes:
   postgres_data:
+  api_data:

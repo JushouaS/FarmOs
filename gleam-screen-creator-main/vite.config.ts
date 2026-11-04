@@ -9,6 +9,13 @@ import { isRunnableDevEnvironment } from "vite";
 import { NodeRequest, sendNodeResponse } from "srvx/node";
 import type { Plugin } from "vite";
 
+import { SECURITY_HEADERS } from "./src/lib/security-headers";
+
+// The wrapper's own option type lists only preset/output/cloudflare, but it
+// spreads whatever is passed here straight into Nitro's config.
+type ConfigOptions = NonNullable<Parameters<typeof defineConfig>[0]>;
+type NitroOptions = NonNullable<ConfigOptions["nitro"]>;
+
 // Forces the ssr environment to use moduleRunnerTransform during config phase
 // so it becomes a RunnableDevEnvironment, then installs the SSR middleware.
 const ssrDevMiddlewarePlugin: Plugin = {
@@ -67,7 +74,16 @@ const ssrDevMiddlewarePlugin: Plugin = {
 export default defineConfig({
   // Self-hosted deployments (Docker) need a Node server build instead of the
   // Cloudflare default preset, so pin the Nitro target explicitly.
-  nitro: { preset: "node-server" },
+  //
+  // The route rule is what puts the security headers on files served straight
+  // out of public/ (favicon, robots.txt): those never reach the server entry in
+  // src/server.ts, so the headers set there alone left them bare.
+  nitro: {
+    preset: "node-server",
+    routeRules: {
+      "/**": { headers: { ...SECURITY_HEADERS } },
+    },
+  } as NitroOptions,
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

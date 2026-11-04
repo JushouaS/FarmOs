@@ -1,0 +1,99 @@
+# CereBroiler — continuous integration.
+#
+# Three jobs, each one a command that has already been run by hand on this
+# machine, so a red run means the code changed rather than the recipe:
+#   web     — the dashboard typechecks and builds through Nitro's node-server
+#   api     — the Fastify routes typecheck (tsc needs no database)
+#   vision  — detector, behaviour policy, clip store and weight maths tests
+#
+# The API's own tests are not here: they sign in and write rows against a real
+# PostgreSQL, so they stay on a development machine until a service container
+# and a disposable database are wired up for them.
+
+name: CI
+
+on:
+  push:
+    branches: [main, responsive-login-local-db]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Website — typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No `cache: npm`: the app folder is pinned with bun.lock and ships no
+      # package-lock.json, so npm resolves fresh here exactly as it does inside
+      # Dockerfile.web.
+      - name: Install
+        working-directory: gleam-screen-creator-main
+        run: npm install --include=dev --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: gleam-screen-creator-main
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: gleam-screen-creator-main
+        env:
+          NODE_ENV: production
+        run: npm run build
+
+  api:
+    name: API — typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install
+        working-directory: gleam-screen-creator-main
+        run: npm install --include=dev --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: gleam-screen-creator-main
+        run: npm run typecheck --workspace=@farm-os/api
+
+  vision:
+    name: Vision — unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: gleam-screen-creator-main/packages/vision/requirements.txt
+
+      # cv2 keeps its own needs on the side: glib for the loader and OpenMP for
+      # the math kernel. The vision Dockerfile installs the same two packages.
+      - name: System libraries for OpenCV
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libglib2.0-0 libgomp1
+
+      - name: Install
+        working-directory: gleam-screen-creator-main/packages/vision
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      # `python -m pytest`, not `pytest`: the modules under test are imported by
+      # bare name (`import video`), which only resolves with the working
+      # directory on sys.path.
+      - name: Test
+        working-directory: gleam-screen-creator-main/packages/vision
+        run: python -m pytest tests -q

@@ -1,0 +1,1 @@
+# Drop chicken.onnx here; docker-compose mounts this folder read-only at /app/models.

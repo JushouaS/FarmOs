@@ -1,14 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
+import { BehaviorReading } from "@/components/farm/BehaviorReading";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
 import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
-import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
-import { DEFAULT_LIGHTING, behaviorBreakdown, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
 import { getOperationsOverview } from "@/lib/farm/repository";
-import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, sampleForDay } from "@/lib/farm/sample";
+import { fetchActualWeights } from "@/lib/api-client";
+import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, weightBandFor } from "@/lib/farm/weight-scale";
 import { localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/visuals")({
@@ -43,10 +44,28 @@ function ShellButtons() {
 }
 
 export function VisualsDashboardPage() {
-  // The sample flock, moved to the grow-out day set in Settings.
+  // Everything on the right rail is a reading the system actually holds: the pen's
+  // sensors for the environment, the day's typed weights for the bands, and the
+  // camera's own behaviour reading. There is no modelled flock here.
   const overview = Route.useLoaderData() as any;
-  const sample = useMemo(() => sampleForDay(overview), [overview]);
-  const { farm, broilers } = sample;
+  const house = (overview?.houses?.[0] ?? null) as { label: string } | null;
+  const day = Number(overview?.cycle?.day ?? 0);
+  const standardG: number | null =
+    (overview?.weight?.standardCurve as { day: number; standardG: number }[] | undefined)?.find((p) => p.day === day)?.standardG ?? null;
+  const readings = (overview?.readings ?? []) as { parameter: string; value: number; unit: string; status?: string }[];
+  const readingOf = (parameter: string) => readings.find((r) => r.parameter === parameter) ?? null;
+  // The day's weigh-ins, so the three bands count birds someone actually put on a scale.
+  const [weighed, setWeighed] = useState<number[]>([]);
+  useEffect(() => {
+    if (!day) return;
+    let alive = true;
+    fetchActualWeights(day)
+      .then((rows) => alive && setWeighed(rows.map((r) => r.actualG)))
+      .catch(() => alive && setWeighed([]));
+    return () => {
+      alive = false;
+    };
+  }, [day]);
   // When the day starts and the night starts comes from Settings.
   const lighting: LightingHours = overview?.lighting ?? DEFAULT_LIGHTING;
   const [layout, setLayout] = useState<ViewLayout>("dual");
@@ -63,24 +82,32 @@ export function VisualsDashboardPage() {
   }, []);
   const nightModeActive = now ? isNightCycle(now, lighting) : false;
 
-  // Vision service (cerebroil-stream, port 5000) on the host that served this
-  // page, so a phone on the LAN gets this machine's feed instead of its own
-  // localhost. Set after mount: the server render can't know that host, and a
-  // guessed src would mismatch on hydration.
+  // Vision service (cerebroil-stream) on the host that served this page, so a
+  // phone on the LAN gets this machine's feed instead of its own localhost. Set
+  // after mount: the server render can't know that host, and a guessed src
+  // would mismatch on hydration.
   const [feedOrigin, setFeedOrigin] = useState<string | null>(null);
   useEffect(() => {
     // VITE_VISION_ORIGIN points the page at a camera service on another machine
-    // (the Raspberry Pi), for example http://192.168.1.20:5000.
+    // (the Raspberry Pi), for example http://192.168.1.20:5000. Without it the
+    // feed is on this machine, at the port docker-compose publishes the stream
+    // on (VITE_VISION_PORT, 5050 in the compose file — not 5000, which another
+    // stack on the same machine often owns).
     const configured = import.meta.env.VITE_VISION_ORIGIN as string | undefined;
-    setFeedOrigin(configured?.trim().replace(/\/+$/, "") || `${window.location.protocol}//${window.location.hostname}:5000`);
+    const port = (import.meta.env.VITE_VISION_PORT as string | undefined)?.trim() || "5000";
+    setFeedOrigin(configured?.trim().replace(/\/+$/, "") || `${window.location.protocol}//${window.location.hostname}:${port}`);
   }, []);
-  const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "port 5000";
+  const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "the camera service";
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const bBreakdown = behaviorBreakdown(nightModeActive);
-  const wBreakdown = sample.weightBreakdown;
-  const totalBirds = broilers.length;
+  const bands = weighed.reduce(
+    (acc, g) => {
+      if (standardG !== null) acc[weightBandFor(g, standardG)]++;
+      return acc;
+    },
+    { Underweight: 0, Optimal: 0, Overweight: 0 },
+  );
 
   const handleFullscreenToggle = () => {
     if (!document.fullscreenElement) {
@@ -117,10 +144,10 @@ export function VisualsDashboardPage() {
             {/* Farm & Pen Info Tag */}
             <div className="hidden items-center gap-1.5 text-xs text-[var(--text-secondary)] xl:flex">
               <span className="rounded bg-[var(--surface-raised)] px-2 py-0.5 font-medium">
-                {farm.facility.houses[0].label}
+                {house?.label ?? tr("No pen")}
               </span>
               <span className="text-[var(--text-tertiary)]">/</span>
-              <span>{farm.facility.name}</span>
+              <span>{overview?.facility?.name ?? ""}</span>
             </div>
           </div>
 
@@ -303,28 +330,8 @@ export function VisualsDashboardPage() {
                       </div>
                     )}
 
-                    {/* Interactive Kinect Depth-Target Overlay */}
-                    {!kinectError && (
-                      <div className="pointer-events-none absolute inset-0">
-                        {sample.kinect.map((kd) => (
-                          <div
-                            key={kd.id}
-                            style={{
-                              left: `${kd.x}%`,
-                              top: `${kd.y}%`,
-                              width: `${kd.w}%`,
-                              height: `${kd.h}%`,
-                            }}
-                            className="absolute rounded border border-dashed border-[var(--brand)] bg-[rgba(52,211,153,0.06)]"
-                          >
-                            <div className="absolute -top-5 left-0 flex items-center gap-1 rounded bg-black/85 px-1.5 py-0.5 text-[9px] font-mono text-[var(--brand)]">
-                              <span>{kd.id}</span>
-                              <span className="text-[var(--text-primary)] tabular-nums">{kd.weightG}g</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {/* No depth-target boxes: the boxes that used to sit here were
+                        sample data, not sensor output. */}
                     </>} />
                   </div>
                 </div>
@@ -342,7 +349,6 @@ export function VisualsDashboardPage() {
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
                 <span className="flex items-center gap-2">
                   <span className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
-                  <SampleBadge />
                 </span>
                 <time
                   dateTime={now?.toISOString()}
@@ -355,137 +361,96 @@ export function VisualsDashboardPage() {
                 </time>
               </div>
 
-              <div className="mt-3.5 space-y-3 text-xs">
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">{tr("Active / Standing")}</span>
-                    <span className="font-mono font-semibold tabular-nums text-[var(--text-primary)]">
-                      {totalBirds - bBreakdown.Inactivity - bBreakdown.Huddling - bBreakdown.Sleeping}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--status-green)] transition-all duration-300"
-                      style={{
-                        width: `${((totalBirds - bBreakdown.Inactivity - bBreakdown.Huddling - bBreakdown.Sleeping) / totalBirds) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">{tr("Inactivity Alert")}</span>
-                    <span className="font-mono font-semibold tabular-nums text-[var(--status-red)]">
-                      {bBreakdown.Inactivity}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--status-red)] transition-all duration-300"
-                      style={{
-                        width: `${(bBreakdown.Inactivity / totalBirds) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-[var(--text-secondary)]">{tr("Huddling Cluster")}</span>
-                    <span className="font-mono font-semibold tabular-nums text-[var(--status-amber)]">
-                      {bBreakdown.Huddling}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--status-amber)] transition-all duration-300"
-                      style={{
-                        width: `${(bBreakdown.Huddling / totalBirds) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {nightModeActive && (
-                  <div>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-[var(--text-secondary)]">{tr("Sleeping Cycle")}</span>
-                      <span className="font-mono font-semibold tabular-nums text-[var(--status-blue)]">
-                        {bBreakdown.Sleeping}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                      <div
-                        className="h-full bg-[var(--status-blue)] transition-all duration-300"
-                        style={{
-                          width: `${(bBreakdown.Sleeping / totalBirds) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* What the camera counted, and only that. The modelled breakdown that
+                  used to sit above this was invented for the sample flock. */}
+              <BehaviorReading />
             </div>
 
             {/* Weight Category Distribution */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                {tr("Weight Classification")} <SampleBadge />
+                {tr("Weight Classification")}
               </span>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
-                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                    {wBreakdown.Underweight}
-                  </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(sample.standardG * UNDERWEIGHT_RATIO)}</div>
-                </div>
+              {standardG === null || weighed.length === 0 ? (
+                <p className="mt-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  {tr("No bird has been weighed on Day {day} yet. These bands count the weights typed on Flock Tracking, not a model.", { day })}
+                </p>
+              ) : (
+                <>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-[11px] font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
+                        {bands.Underweight}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(standardG * UNDERWEIGHT_RATIO)}</div>
+                    </div>
 
-                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
-                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                    {wBreakdown.Optimal}
-                  </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{rangeLabel(sample.standardG * UNDERWEIGHT_RATIO, sample.standardG * HEAVY_RATIO)}</div>
-                </div>
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-[11px] font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
+                        {bands.Optimal}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{rangeLabel(standardG * UNDERWEIGHT_RATIO, standardG * HEAVY_RATIO)}</div>
+                    </div>
 
-                <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                  <div className="text-[11px] font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
-                  <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                    {wBreakdown.Overweight}
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-[11px] font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
+                        {bands.Overweight}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(standardG * HEAVY_RATIO)}</div>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(sample.standardG * HEAVY_RATIO)}</div>
-                </div>
-              </div>
+                  <p className="mt-2 text-[10px]" style={{ color: "var(--text-tertiary)" }}>
+                    {tr("{n} birds weighed on Day {day}, against the {std} g standard", { n: weighed.length, day, std: standardG.toLocaleString() })}
+                  </p>
+                </>
+              )}
             </div>
 
-            {/* Quick Environment Telemetry */}
+            {/* Quick Environment Telemetry — straight from the pen's sensors */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                {tr("Pen Sensor Telemetry")} <SampleBadge />
+                {tr("Pen Sensor Telemetry")}
               </span>
 
               <div className="mt-3 space-y-2.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-secondary)] text-xs">{tr("Temperature:")}</span>
-                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    29.1°C <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-secondary)] text-xs">{tr("Humidity:")}</span>
-                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    63% <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Nominal)")}</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-secondary)] text-xs">{tr("Ammonia (NH3):")}</span>
-                  <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                    {tr("9 ppm")} <span className="text-[11px] text-[var(--status-green)] font-semibold">{tr("(Clean)")}</span>
-                  </span>
-                </div>
+                {[
+                  { label: tr("Temperature:"), parameter: "temperature" },
+                  { label: tr("Humidity:"), parameter: "humidity" },
+                  { label: tr("Ammonia (NH3):"), parameter: "nh3" },
+                ].map((row) => {
+                  const r = readingOf(row.parameter);
+                  return (
+                    <div key={row.parameter} className="flex items-center justify-between gap-2">
+                      <span className="text-[var(--text-secondary)] text-xs">{row.label}</span>
+                      {r ? (
+                        <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+                          {r.value} {r.unit}
+                          {r.status && (
+                            <span
+                              className="text-[11px] font-semibold ml-1"
+                              style={{
+                                color:
+                                  r.status === "critical"
+                                    ? "var(--status-red-text)"
+                                    : r.status === "warning"
+                                      ? "var(--status-amber-text)"
+                                      : "var(--status-green)",
+                              }}
+                            >
+                              ({r.status})
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("not connected")}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </aside>

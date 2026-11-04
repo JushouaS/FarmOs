@@ -5,3 +5,6 @@ numpy>=1.26
 psycopg2-binary>=2.9
 python-dotenv>=1.0
 gunicorn>=22.0
+# Runs the exported detector. Imported lazily, so the service still starts (and
+# still streams video) if this wheel is missing — it just cannot detect birds.
+onnxruntime>=1.18

@@ -47,12 +47,16 @@ async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  const hasBody = init?.body !== undefined && init?.body !== null;
   const send = () =>
     fetch(`${API_BASE}${path}`, {
       credentials: "include",
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        // Only when there is something to describe: a request with no body and
+        // `application/json` is refused by the server before the handler runs,
+        // which made every empty POST/DELETE look like a client error.
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
         ...init?.headers,
       },
     });
@@ -69,7 +73,13 @@ async function apiFetch<T>(
     throw new ApiError(
       res.status,
       typeof fields.error === "string" ? fields.error : res.statusText,
-      typeof fields.message === "string" ? fields.message : undefined,
+      // `message` is the form-validation style answer; `detail` is the vision
+      // service's own sentence, e.g. why a clip would not open.
+      typeof fields.detail === "string"
+        ? fields.detail
+        : typeof fields.message === "string"
+          ? fields.message
+          : undefined,
     );
   }
   return res.json() as Promise<T>;
@@ -176,6 +186,42 @@ export async function saveLighting(lighting: Lighting): Promise<Lighting> {
 /** The number of birds in each house. */
 export async function saveFlockSize(houses: { id: string; population: number }[]): Promise<void> {
   await apiFetch("/settings/flock", { method: "PUT", body: JSON.stringify({ houses }) });
+}
+
+/**
+ * The camera's RTSP link, as a page is allowed to see it: the login's password
+ * is replaced by "***" before it ever leaves the server.
+ */
+export interface CameraSource {
+  cameraId: string;
+  /** e.g. rtsp://admin:***@192.168.1.108:554/cam/realmonitor?... */
+  rtspUrl: string | null;
+  /** "settings" when saved here, "environment" when it came from .env, "none". */
+  source: "settings" | "environment" | "none";
+  updatedAt: string | null;
+}
+
+/** What opening a candidate link produced. Only the camera service can answer this. */
+export interface CameraSourceTest {
+  ok: boolean;
+  width?: number;
+  height?: number;
+  ms?: number;
+  error?: string;
+}
+
+export async function fetchCameraSource(): Promise<CameraSource> {
+  return apiFetch("/settings/camera");
+}
+
+/** Replace the link. An empty string clears it, which returns to the .env fallback. */
+export async function saveCameraSource(rtspUrl: string): Promise<CameraSource> {
+  return apiFetch("/settings/camera", { method: "PUT", body: JSON.stringify({ rtspUrl }) });
+}
+
+/** Ask the camera service to open the link once and report what came back. */
+export async function testCameraSource(rtspUrl: string): Promise<CameraSourceTest> {
+  return apiFetch("/visual/source-test", { method: "POST", body: JSON.stringify({ rtspUrl }) });
 }
 
 /** Change your own password. On success the API signs every session out, this one included. */
@@ -293,9 +339,33 @@ export interface VisionDetection {
   box_w: number;
   box_h: number;
   behavior: string;
+  confidence?: number;
+  motion?: number;
+  /** Set when the bird is standing inside a marked feeder/drinker zone. */
+  zone?: string | null;
   estimated_weight_g: number | null;
   weight_confidence: number | null;
   flag: string | null;
+}
+
+/** The raw counts the verdict was derived from. */
+export interface VisionMetrics {
+  bird_count: number;
+  zone_count: number;
+  evaluable_count: number;
+  inactive_count: number;
+  huddled_count: number;
+  movement_index: number;
+  huddling_risk: number;
+  huddling_coverage?: number;
+  huddling_compactness?: number;
+  huddle_radius_px?: number;
+  confidence?: number;
+  resolution?: [number, number];
+  mean_luma?: number;
+  global_shift?: number;
+  zones?: number;
+  model_loaded?: boolean;
 }
 
 export interface VisionBehavior {
@@ -306,6 +376,18 @@ export interface VisionBehavior {
   huddling_label: string;
   huddling_status: string;
   aggression_events: number;
+  bird_count?: number;
+  zone_count?: number;
+  evaluable_count?: number;
+  inactive_count?: number;
+  huddled_count?: number;
+  confidence?: number | null;
+  /** True when the night rule suppressed the judgement. */
+  night?: boolean;
+  suppressed?: boolean;
+  /** False when the picture or the model could not support a verdict. */
+  reliable?: boolean;
+  reason?: string | null;
 }
 
 export interface VisionWeight {
@@ -327,9 +409,86 @@ export interface AnalysisResult {
   detections: VisionDetection[];
   detection_count: number;
   behaviour: VisionBehavior;
+  metrics?: VisionMetrics;
+  /** Guard results from the vision service, e.g. "camera_moved", "too_dark". */
+  warnings?: string[];
   weight: VisionWeight | null;
   clusters: VisionCluster[];
   cluster_count: number;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Feeder / drinker zones                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** A polygon drawn over the camera picture, in normalised 0..1 coordinates. */
+export interface CameraZone {
+  id?: string;
+  kind: "feeder" | "drinker";
+  label: string;
+  polygon: [number, number][];
+  enabled: boolean;
+}
+
+export interface ZonesResponse {
+  camera_id: string;
+  zones: CameraZone[];
+  /** Share of the frame the zones cover, 0..1. */
+  coverage: number;
+  /** Set when the drawing covers so much of the frame it is probably wrong. */
+  warning?: string | null;
+}
+
+export async function getZones(cameraId: string): Promise<ZonesResponse> {
+  return apiFetch<ZonesResponse>(`/visual/zones/${encodeURIComponent(cameraId)}`);
+}
+
+/** Replaces the camera's whole zone set — see the API route for why. */
+export async function saveZones(
+  cameraId: string,
+  zones: Array<Omit<CameraZone, "id">>,
+): Promise<ZonesResponse> {
+  return apiFetch<ZonesResponse>(`/visual/zones/${encodeURIComponent(cameraId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ zones }),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Behaviour over time                                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface BehaviorSampleRow {
+  at: string;
+  movement_index: number;
+  movement_label: string;
+  movement_status: string;
+  huddling_risk: number;
+  huddling_label: string;
+  huddling_status: string;
+  bird_count: number | null;
+  zone_count: number | null;
+  evaluable_count: number | null;
+  inactive_count: number | null;
+  huddled_count: number | null;
+  night: boolean;
+  suppressed: boolean;
+  reliable: boolean;
+}
+
+export interface BehaviorReport {
+  camera_id: string;
+  night: boolean;
+  timezone: string;
+  lighting: { dayStart: string; nightStart: string };
+  latest: BehaviorSampleRow | null;
+  recent: BehaviorSampleRow[];
+  sustained: { inactivity: boolean; huddling: boolean; samples: number };
+}
+
+/** The stored verdicts for a camera, newest first, plus the rolling window. */
+export async function getBehavior(cameraId: string): Promise<BehaviorReport> {
+  return apiFetch<BehaviorReport>(`/visual/behavior/${encodeURIComponent(cameraId)}`);
 }
 
 export interface CaptureResult {
@@ -363,6 +522,185 @@ export async function analyzeFrame(cameraId: string): Promise<AnalysisResult> {
 /** Build the MJPEG stream URL for a given camera (served via Fastify proxy). */
 export function visionStreamUrl(cameraId: string): string {
   return `${API_BASE}/visual/stream/${encodeURIComponent(cameraId)}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Clip testing                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** What the vision service reports about a stored clip. */
+export interface VisionClip {
+  id: string;
+  name: string;
+  duration_s: number;
+  fps: number;
+  width: number;
+  height: number;
+  bytes: number;
+  /** The most samples one sweep will take from this clip. */
+  max_samples: number;
+}
+
+export interface VideoFrameResult {
+  t: number;
+  content_type: string;
+  size_bytes: number;
+  /** base64 JPEG, the same shape /visual/capture returns. */
+  image: string;
+}
+
+export interface VideoAnalysisResult {
+  clip: VisionClip;
+  t: number;
+  zone_camera: string;
+  db_written: false;
+  detections: VisionDetection[];
+  detection_count: number;
+  metrics: VisionMetrics;
+  clusters: VisionCluster[];
+  cluster_count: number;
+  warnings?: string[];
+  behaviour: VisionBehavior;
+  /** Always false: a recording has no clock, so the night rule cannot apply. */
+  night: false;
+}
+
+export interface VideoSampleReading {
+  t: number;
+  warnings: string[];
+  behavior: VisionBehavior;
+}
+
+/** The clip's headline. A code, so the wording can be translated. */
+export type VideoConclusion =
+  | "no_samples"
+  | "model_unavailable"
+  | "nothing_usable"
+  | "both_sustained"
+  | "inactivity_sustained"
+  | "huddling_sustained"
+  | "inactivity_seen"
+  | "huddling_seen"
+  | "nothing_alarming";
+
+export interface VideoSweepResult {
+  clip: VisionClip;
+  zone_camera: string;
+  sampling: { requested: number; taken: number; truncated: boolean; delta_ms: number };
+  /** False when no model is loaded — every sample then says so instead of counting. */
+  model_loaded: boolean;
+  night: false;
+  samples: VideoSampleReading[];
+  summary: {
+    samples: number;
+    usable: number;
+    sustained: { inactivity: boolean; huddling: boolean; samples: number };
+    conclusion: VideoConclusion;
+  };
+}
+
+/**
+ * Store a clip for testing.
+ *
+ * The file *is* the request body — the name travels in a header — which is
+ * what keeps a 200 MB recording out of memory on both the browser and the
+ * server. `apiFetch` retries a 401 by re-sending the whole request, and a
+ * File can be read again, so a lapsed session costs one retry and no data.
+ */
+export async function uploadClip(file: File): Promise<VisionClip> {
+  return apiFetch<VisionClip>("/visual/video", {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      // A header cannot carry non-Latin-1, and "aso't manok (final).mp4"
+      // should not arrive mangled at the other end.
+      "X-Filename": encodeURIComponent(file.name),
+    },
+    body: file,
+  });
+}
+
+export async function getClip(clipId: string): Promise<VisionClip> {
+  return apiFetch<VisionClip>(`/visual/video/${encodeURIComponent(clipId)}`);
+}
+
+/** Forget a clip now, rather than when its TTL runs out. */
+export async function deleteClip(clipId: string): Promise<{ ok: boolean; clip_id: string }> {
+  return apiFetch<{ ok: boolean; clip_id: string }>(
+    `/visual/video/${encodeURIComponent(clipId)}`,
+    { method: "DELETE" },
+  );
+}
+
+/** One frame at `t`. Annotated, the detector's boxes are drawn on it. */
+export async function clipFrame(
+  clipId: string,
+  t: number,
+  annotate = true,
+): Promise<VideoFrameResult> {
+  const query = `t=${t}${annotate ? "&annotate=1" : ""}`;
+  return apiFetch<VideoFrameResult>(
+    `/visual/video/${encodeURIComponent(clipId)}/frame?${query}`,
+  );
+}
+
+/** One measurement at `t`, judged by the same policy the camera uses. */
+export async function analyzeClipAt(clipId: string, t: number): Promise<VideoAnalysisResult> {
+  return apiFetch<VideoAnalysisResult>(
+    `/visual/video/${encodeURIComponent(clipId)}/analyze?t=${t}`,
+    { method: "POST" },
+  );
+}
+
+/** The whole clip, sampled evenly and judged as a run. Writes nothing. */
+export async function sweepClip(
+  clipId: string,
+  count?: number,
+): Promise<VideoSweepResult> {
+  const query = count ? `?count=${count}` : "";
+  return apiFetch<VideoSweepResult>(
+    `/visual/video/${encodeURIComponent(clipId)}/sweep${query}`,
+    { method: "POST" },
+  );
+}
+
+/** One sampled frame of a depth recording. `null` mass means the frame could not be read. */
+export interface VideoWeightSample {
+  t: number;
+  mass_g: number | null;
+  confidence: number | null;
+  warnings?: string[];
+}
+
+/** The 3D weight estimation over a recorded Kinect depth clip. Writes nothing. */
+export interface VideoWeightResult {
+  clip: VisionClip;
+  sampling: { requested: number; taken: number; truncated: boolean };
+  per_frame: VideoWeightSample[];
+  /** Real statistics across the sampled frames; `samples` is how many were usable. */
+  summary: {
+    median_g: number | null;
+    std_dev_g: number | null;
+    min_g: number | null;
+    max_g: number | null;
+    samples: number;
+    confidence: number | null;
+  };
+}
+
+/**
+ * The clip's depth frames, sampled evenly and turned into one mass estimate
+ * by the same line the live Kinect station uses. Writes nothing.
+ */
+export async function weighClip(
+  clipId: string,
+  count?: number,
+): Promise<VideoWeightResult> {
+  const query = count ? `?count=${count}` : "";
+  return apiFetch<VideoWeightResult>(
+    `/visual/video/${encodeURIComponent(clipId)}/weights${query}`,
+    { method: "POST" },
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -450,7 +788,10 @@ export interface ActualWeight {
   birdId: string;
   day: number;
   actualG: number;
-  /** What the page estimated for the bird when the weight was entered. */
+  /**
+   * What the page used to estimate for the bird when the weight was entered. Only rows
+   * written before the per-bird estimate was removed carry this; nothing reads it now.
+   */
   estimatedG: number | null;
   recordedAt: string;
 }
@@ -464,7 +805,7 @@ export async function fetchPreviousWeights(day: number): Promise<{ birdId: strin
   return apiFetch(`/growth/actual-weights/previous?day=${encodeURIComponent(day)}`);
 }
 
-export async function saveActualWeight(input: { birdId: string; day: number; actualG: number; estimatedG: number }): Promise<unknown> {
+export async function saveActualWeight(input: { birdId: string; day: number; actualG: number; estimatedG?: number }): Promise<unknown> {
   return apiFetch("/growth/actual-weights", { method: "PUT", body: JSON.stringify(input) });
 }
 

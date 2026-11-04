@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
+import { refreshMeasuredDay } from "../measured-weights.js";
 import { raiseAlert } from "../notify.js";
 
 /**
@@ -82,7 +83,11 @@ export async function registerGrowthRoutes(app: FastifyInstance) {
         ON CONFLICT (cycle_id, bird_id, day) DO UPDATE SET
           actual_g = EXCLUDED.actual_g, estimated_g = EXCLUDED.estimated_g,
           recorded_by = EXCLUDED.recorded_by, recorded_at = now()`;
-      return reply.send({ saved: true, birdId: id, day, actualG });
+      // The day's mean becomes the point on the growth curve, so the Dashboard
+      // and the report follow the weights as they are typed rather than a
+      // separate curve nobody updates.
+      const measured = await refreshMeasuredDay(app, cycleId, day);
+      return reply.send({ saved: true, birdId: id, day, actualG, ...measured });
     },
   );
 
@@ -98,7 +103,9 @@ export async function registerGrowthRoutes(app: FastifyInstance) {
       const gone = await app.sqlWrite`
         DELETE FROM actual_weights WHERE cycle_id = ${cycleId} AND bird_id = ${q.data.birdId} AND day = ${q.data.day}
         RETURNING bird_id`;
-      return reply.send({ removed: gone.count > 0 });
+      // A day left with no weigh-ins goes back to being the breed standard.
+      const measured = gone.count > 0 ? await refreshMeasuredDay(app, cycleId, q.data.day) : null;
+      return reply.send({ removed: gone.count > 0, ...(measured ?? {}) });
     },
   );
 

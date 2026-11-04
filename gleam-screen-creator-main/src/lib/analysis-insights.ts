@@ -42,9 +42,25 @@ const LOW_MOVEMENT = 0.02;
 
 export function buildFindings(result: ScanResult, night: boolean): Finding[] {
   const out: Finding[] = [];
-  const movement = result.behaviour?.movement_index ?? 0;
+  const behaviour = result.behaviour;
+  const movement = behaviour?.movement_index ?? 0;
 
-  if (movement > HIGH_MOVEMENT) {
+  // The API's own verdict wins now that birds are detected individually. These
+  // thresholds were tuned for whole-frame motion, and per-bird motion is far
+  // smaller, so falling back to them would call every calm flock sick. They
+  // stay only for rows written before the detector existed.
+  const status = behaviour?.movement_status;
+
+  if (status === "unknown") {
+    // "We could not see" is not "the flock is fine" — say so plainly.
+    out.push({ id: "activity", severity: "info", key: "activity_unknown" });
+  } else if (night || behaviour?.suppressed) {
+    out.push({ id: "activity", severity: "ok", key: "activity_rest_night" });
+  } else if (status === "warning") {
+    out.push({ id: "activity", severity: "warn", key: "activity_low_day" });
+  } else if (status === "nominal") {
+    out.push({ id: "activity", severity: "ok", key: "activity_normal" });
+  } else if (movement > HIGH_MOVEMENT) {
     out.push({ id: "activity", severity: "warn", key: "activity_high" });
   } else if (movement > LOW_MOVEMENT) {
     out.push({ id: "activity", severity: "ok", key: "activity_normal" });
@@ -54,22 +70,45 @@ export function buildFindings(result: ScanResult, night: boolean): Finding[] {
     out.push({ id: "activity", severity: "warn", key: "activity_low_day" });
   }
 
-  // Many small moving areas with almost no movement overall is picture noise
-  // (night-vision grain, compression), not a crowd, so it says nothing either way.
-  if (result.cluster_count > 0) {
-    if (movement > LOW_MOVEMENT) {
-      out.push({
-        id: "crowding",
-        severity: "warn",
-        key: "crowding",
-        params: { count: result.detection_count },
-      });
-    }
-  } else {
+  // Crowding comes from the huddle verdict, which already ignores birds inside
+  // the feeder zones an operator marked. A cluster warning is only worth
+  // raising when the flock was actually visible: many small moving areas with
+  // almost no movement overall is night-vision grain, not a crowd.
+  const huddleStatus = behaviour?.huddling_status;
+  if (huddleStatus === "critical" || huddleStatus === "warning") {
+    out.push({
+      id: "crowding",
+      severity: huddleStatus === "critical" ? "alert" : "warn",
+      key: "crowding",
+      params: { count: behaviour?.huddled_count || result.detection_count },
+    });
+  } else if (behaviour?.reason === "too_few_outside_zones") {
+    // Nearly every bird is at a feeder. Explaining that is more useful than
+    // claiming there is no crowding.
+    out.push({
+      id: "crowding",
+      severity: "ok",
+      key: "crouching_at_feeders",
+      params: { count: behaviour.zone_count ?? result.detection_count },
+    });
+  } else if (huddleStatus === "nominal" && behaviour?.reliable) {
     out.push({ id: "crowding", severity: "ok", key: "crowding_none" });
+  } else if (!behaviour) {
+    if (result.cluster_count > 0) {
+      if (movement > LOW_MOVEMENT) {
+        out.push({
+          id: "crowding",
+          severity: "warn",
+          key: "crowding",
+          params: { count: result.detection_count },
+        });
+      }
+    } else {
+      out.push({ id: "crowding", severity: "ok", key: "crowding_none" });
+    }
   }
 
-  const fights = result.behaviour?.aggression_events ?? 0;
+  const fights = behaviour?.aggression_events ?? 0;
   if (fights > 0) {
     out.push({ id: "aggression", severity: "alert", key: "aggression", params: { n: fights } });
   }
@@ -170,9 +209,28 @@ const en: Messages = {
         "Check that the lights are on and bright enough.",
       ],
     },
+    activity_unknown: {
+      title: "The flock could not be judged this time",
+      detail:
+        "The picture was dark, the camera moved, or too few birds were in view. Nothing can be concluded either way, so treat this as no reading rather than a quiet flock.",
+      tips: [
+        "Check that the camera is clean and pointed at the flock, and that the lens is not fogged.",
+        "Check the lighting at the camera. Night-vision grain hides small movements.",
+        "Run the analysis again once the picture is clear.",
+      ],
+    },
+    crouching_at_feeders: {
+      title: "Birds gathered at the feeders, which is normal",
+      detail:
+        "{count} birds are inside the marked feeder areas. They are excluded from the crowding check because standing at a feeder is feeding, not huddling.",
+      tips: [
+        "No action needed. Feeding time looks like a crowd and is expected.",
+        "If the feeders are empty or the birds look thin, review how the feed is being offered.",
+      ],
+    },
     crowding: {
-      title: "Many moving areas seen",
-      detail: "The scan found {count} separate areas of movement, which can mean birds crowding together.",
+      title: "Birds packed together",
+      detail: "The scan found {count} birds packed tightly together, which can mean the flock is huddling.",
       tips: [
         "If birds bunch up and look cold, add heat or close drafts.",
         "If they spread out, pant or hold their wings out, it is too hot. Improve the ventilation.",
@@ -260,10 +318,29 @@ const tl: Messages = {
         "Tiyaking bukas at sapat ang liwanag ng ilaw.",
       ],
     },
-    crowding: {
-      title: "Maraming lugar na may galaw",
+    activity_unknown: {
+      title: "Hindi masuri ang kawan ngayon",
       detail:
-        "May nakitang {count} magkakahiwalay na lugar na may galaw, na maaaring ibig sabihing nagsisiksikan ang mga manok.",
+        "Madilim ang larawan, gumalaw ang kamera, o kakaunti lang ang manok na nakita. Walang mabubuo, kaya ituring itong walang resulta at hindi tahimik na kawan.",
+      tips: [
+        "Tiyaking malinis at nakatutok sa kawan ang kamera, at hindi nanlalabo ang lente.",
+        "Tingnan ang ilaw sa kamera. Ang butil ng night-vision ay nagtatago ng maliliit na galaw.",
+        "Patakbuhin muli ang pagsusuri kapag malinaw na ang larawan.",
+      ],
+    },
+    crouching_at_feeders: {
+      title: "Nagkukumpol ang mga manok sa pakainan, normal ito",
+      detail:
+        "{count} manok ang nasa loob ng minarkahang pakainan. Hindi sila kasama sa pagsusuri ng pagkukumpol dahil ang pagtayo sa pakainan ay pagkain, hindi pagkukumpol.",
+      tips: [
+        "Walang kailangang aksyon. Ang oras ng pagkain ay mukhang kumpol at inaasahan ito.",
+        "Kung walang laman ang pakainan o payat ang mga manok, balikan kung paano ibinibigay ang pakain.",
+      ],
+    },
+    crowding: {
+      title: "Nagsisiksikan ang mga manok",
+      detail:
+        "May nakitang {count} manok na nagsisiksik nang husto, na maaaring ibig sabihing nagkukumpol ang kawan.",
       tips: [
         "Kung nagsisiksikan at mukhang giniginaw, dagdagan ang init o takpan ang mga butas na pinapasukan ng hangin.",
         "Kung kalat-kalat, humihingal, o nakabuka ang pakpak, masyadong mainit. Paganahin nang husto ang bentilasyon.",
@@ -351,10 +428,29 @@ const ceb: Messages = {
         "Siguroha nga naka-on ug igo ang suga.",
       ],
     },
-    crowding: {
-      title: "Daghang lugar nga naay lihok",
+    activity_unknown: {
+      title: "Wala masusi ang panon karong panahona",
       detail:
-        "Nakakita og {count} ka managlahing lugar nga naay lihok, nga mahimong timailhan nga nagsiksik ang mga manok.",
+        "Ngitngit ang hulagway, milihok ang kamera, o diyot ra ang mga manok nga nakita. Walay matapos, busa isipa kini nga walay resulta ug dili hilom nga panon.",
+      tips: [
+        "Siguroha nga limpyo ang kamera ug naka-tutok sa panon, ug wala maglubog ang lente.",
+        "Susiha ang suga sa kamera. Ang lugas sa night-vision motago sa gagmayng lihok.",
+        "Padagana pag-usab ang pagsusi kung tin-aw na ang hulagway.",
+      ],
+    },
+    crouching_at_feeders: {
+      title: "Nangtapok ang mga manok sa kan-anan, normal kini",
+      detail:
+        "{count} ka manok ang naa sa sulod sa gimarkahang kan-anan. Wala sila apila sa pagsusi sa pagtapok kay ang pagtindog sa kan-anan pagkaon, dili pagtapok.",
+      tips: [
+        "Walay angay buhaton. Ang oras sa pagkaon morag tapok ug gilauman kini.",
+        "Kung walay sulod ang kan-anan o niwang ang mga manok, ribyuha kung giunsa paghatag ang pagkaon.",
+      ],
+    },
+    crowding: {
+      title: "Nagsiksik ang mga manok",
+      detail:
+        "Nakakita og {count} ka manok nga nagsiksik pag-ayo, nga mahimong timailhan nga nangtapok ang panon.",
       tips: [
         "Kung nagsiksik ug murag gitugnaw, dugangi ang kainit o tabuni ang mga lungag nga mosulod ang hangin.",
         "Kung nagkalayo, naghangos, o gibuka ang pako, init kaayo. Papaganaha pag-ayo ang bentilasyon.",

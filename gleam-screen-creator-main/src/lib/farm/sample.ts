@@ -8,21 +8,21 @@ import {
   type WeightCategory,
 } from "./dataset";
 import type { FarmDataset } from "./types";
+import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, weightBandFor } from "./weight-scale";
+
+/** The scale itself lives in weight-scale.ts; re-exported so existing pages keep one import. */
+export { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel };
 
 /**
  * The built-in sample flock, moved to the grow-out day Settings sets.
  *
  * The sample (dataset.ts) was written for one day. The pages that still run on
- * it (Flock Tracking, Analytics, Live Camera, Insights) must still agree with
- * the day and the weight the Dashboard shows, so this takes the API's
- * /operations/overview (the day, the breed standard for that day, the flock's
- * average weight) and rescales the sample around it: same spread of birds,
- * same behaviours, weights that match the day. Nothing here is stored.
+ * it (Analytics and Live Camera) must still agree with the day and the weight
+ * the Dashboard shows, so this takes the API's /operations/overview (the day,
+ * the breed standard for that day, the flock's average weight) and rescales the
+ * sample around it: same spread of birds, same behaviours, weights that match
+ * the day. Nothing here is stored.
  */
-
-/** Under 92% of the breed standard for the day a bird is underweight; over 115% it is heavy. */
-export const UNDERWEIGHT_RATIO = 0.92;
-export const HEAVY_RATIO = 1.15;
 
 /** The grow-out window when the API does not say (Settings default). */
 export const DEFAULT_START_DAY = 16;
@@ -32,19 +32,7 @@ export const DEFAULT_END_DAY = 45;
 const BASE_STANDARD_G = 1300;
 
 export function weightCategoryFor(weightG: number, standardG: number): WeightCategory {
-  if (weightG < standardG * UNDERWEIGHT_RATIO) return "Underweight";
-  if (weightG > standardG * HEAVY_RATIO) return "Overweight";
-  return "Optimal";
-}
-
-/** Grams under a kilogram, kilograms above: "598 g", "1.34 kg". */
-export const fmtW = (g: number) => (g < 1000 ? `${Math.round(g)} g` : `${(g / 1000).toFixed(2)} kg`);
-
-/** "498 – 539 g" or "1.30 – 1.40 kg": the unit once when both ends share it. */
-export function rangeLabel(lo: number, hi: number) {
-  if (lo < 1000 && hi < 1000) return `${Math.round(lo)} – ${Math.round(hi)} g`;
-  if (lo >= 1000 && hi >= 1000) return `${(lo / 1000).toFixed(2)} – ${(hi / 1000).toFixed(2)} kg`;
-  return `${fmtW(lo)} – ${fmtW(hi)}`;
+  return weightBandFor(weightG, standardG);
 }
 
 function num(v: unknown): number | null {

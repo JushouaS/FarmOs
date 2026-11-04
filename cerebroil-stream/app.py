@@ -29,10 +29,19 @@ from flask import Flask, Response, jsonify, render_template, request
 # Load cerebroil-stream/.env (if present) before reading any of the vars below.
 load_dotenv()
 
+# After load_dotenv on purpose: camera_config reads DATABASE_URL at import.
+import camera_config  # noqa: E402
+
 # ── Configuration ─────────────────────────────────────────────────────────────
-# No default: the URL carries the camera's login, so it must come from .env
-# (see .env.example). Unset means the Dahua stream stays off.
-DAHUA_RTSP_URL = os.getenv("DAHUA_RTSP_URL", os.getenv("RTSP_URL", ""))
+# The link carries the camera's login, so where it comes from is decided in one
+# place: Settings (system_settings, key "camera"), with DAHUA_RTSP_URL in .env
+# as the fallback for an installation that has never opened Settings. This is
+# the value the process starts on; camera_config_loop follows it from there.
+_dahua_url = camera_config.read_url() or ""
+#: Raised when the link changes, so the capture loop drops its connection and
+#: opens the new one instead of waiting for the old stream to fail.
+_dahua_reload = threading.Event()
+
 KINECT_SOURCE = os.getenv("KINECT_SOURCE", "simulated")  # "0", "1", rtsp url, or "simulated"
 
 
@@ -96,14 +105,21 @@ def dahua_capture_loop() -> None:
     global _latest_dahua_frame, _dahua_ok, _dahua_changed_at
     encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
 
-    if not DAHUA_RTSP_URL:
-        print("[dahua] DAHUA_RTSP_URL is not set in .env; Dahua stream disabled.")
-        return
-
     while True:
-        print(f"[dahua] Connecting to {_redact_url(DAHUA_RTSP_URL)} …")
+        url = _dahua_url
+        if not url:
+            # No link yet. Wait rather than give up: the first save in Settings
+            # starts the camera without a restart of this container.
+            _dahua_ok = False
+            with _dahua_lock:
+                _latest_dahua_frame = None
+            _dahua_reload.wait(2.0)
+            _dahua_reload.clear()
+            continue
+
+        print(f"[dahua] Connecting to {_redact_url(url)} …")
         cap = cv2.VideoCapture(
-            DAHUA_RTSP_URL,
+            url,
             cv2.CAP_FFMPEG,
             [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, IO_TIMEOUT_MS, cv2.CAP_PROP_READ_TIMEOUT_MSEC, IO_TIMEOUT_MS],
         )
@@ -112,7 +128,8 @@ def dahua_capture_loop() -> None:
         if not cap.isOpened():
             print(f"[dahua] Failed to open stream. Retrying in {RETRY_DELAY}s …")
             _dahua_ok = False
-            time.sleep(RETRY_DELAY)
+            _dahua_reload.wait(RETRY_DELAY)
+            _dahua_reload.clear()
             continue
 
         w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -123,6 +140,13 @@ def dahua_capture_loop() -> None:
         last_signature: bytes | None = None
 
         while True:
+            if _dahua_reload.is_set():
+                # Settings holds a different link (or none). Drop this stream and
+                # let the outer loop open what it now says.
+                _dahua_reload.clear()
+                print("[dahua] Link changed — reconnecting …")
+                break
+
             ret, frame = cap.read()
             if not ret or frame is None:
                 elapsed = time.monotonic() - last_frame_time
@@ -155,6 +179,28 @@ def dahua_capture_loop() -> None:
         _dahua_ok = False
         print(f"[dahua] Disconnected. Retrying in {RETRY_DELAY}s …")
         time.sleep(RETRY_DELAY)
+
+
+# ── Camera link updates ───────────────────────────────────────────────────────
+#: How often the link saved in Settings is checked.
+CONFIG_POLL_SECONDS = float(os.getenv("CAMERA_CONFIG_POLL_SECONDS", "10"))
+
+
+def camera_config_loop() -> None:
+    """Follow the link Settings holds, so a save reconnects without a restart."""
+    global _dahua_url
+    while True:
+        time.sleep(CONFIG_POLL_SECONDS)
+        try:
+            wanted = camera_config.read_url() or ""
+        except Exception:  # noqa: BLE001 - a bad read must not stop the stream
+            print("[dahua] Could not read the camera setting; keeping the current link.")
+            continue
+        if wanted == _dahua_url:
+            continue
+        print(f"[dahua] Link changed to {_redact_url(wanted) if wanted else '(none)'}")
+        _dahua_url = wanted
+        _dahua_reload.set()
 
 
 # ── 3D Kinect Depth Camera Loop ───────────────────────────────────────────────
@@ -322,7 +368,7 @@ def status() -> Response:
         "camera_ok": _dahua_alive() or _kinect_ok,
         "dahua_ok": _dahua_alive(),
         "kinect_ok": _kinect_ok,
-        "dahua_url": _redact_url(DAHUA_RTSP_URL),
+        "dahua_url": _redact_url(_dahua_url),
         "kinect_source": _redact_url(KINECT_SOURCE),
     })
 
@@ -436,7 +482,7 @@ def vision_cameras() -> Response:
     if err:
         return err
     return jsonify([
-        {"camera_id": "CAM-01", "rtsp_url": _redact_url(DAHUA_RTSP_URL), "connected": _dahua_alive()},
+        {"camera_id": "CAM-01", "rtsp_url": _redact_url(_dahua_url), "connected": _dahua_alive()},
         {"camera_id": "KINECT-01", "rtsp_url": _redact_url(KINECT_SOURCE), "connected": _kinect_ok},
     ])
 
@@ -686,6 +732,10 @@ def demo_convert_route() -> tuple[Response, int] | Response:
 if __name__ == "__main__":
     t_dahua = threading.Thread(target=dahua_capture_loop, daemon=True)
     t_dahua.start()
+
+    # Settings can change the link later; this is the thread that notices.
+    t_config = threading.Thread(target=camera_config_loop, daemon=True)
+    t_config.start()
 
     t_kinect = threading.Thread(target=kinect_capture_loop, daemon=True)
     t_kinect.start()

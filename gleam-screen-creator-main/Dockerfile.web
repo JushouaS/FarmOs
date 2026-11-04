@@ -21,6 +21,12 @@ WORKDIR /app
 ARG VITE_API_URL=http://localhost:4000
 ENV VITE_API_URL=${VITE_API_URL}
 
+# The port cerebroil-stream publishes on the host (the camera page builds
+# http://<this machine>:<port>/video_feed/... from it). Not 5000 by default:
+# that port is commonly taken by something else on the same machine.
+ARG VITE_VISION_PORT=5000
+ENV VITE_VISION_PORT=${VITE_VISION_PORT}
+
 # Copy manifests first so dependency layers cache independently of source edits.
 COPY package.json ./
 COPY packages/api/package.json ./packages/api/package.json

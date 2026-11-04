@@ -1,14 +1,8 @@
-import { redirect } from "@tanstack/react-router";
+import { isRedirect, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
 import { formatMeasurement } from "./format";
-import {
-  activeIncident,
-  farm,
-  houseLabel,
-  liveCamera,
-  readingByCode,
-} from "./dataset";
+import { activeIncident, farm, houseLabel, liveCamera, readingByCode } from "./dataset";
 import { sampleForDay } from "./sample";
 import type { ReportFinding } from "./types";
 
@@ -32,8 +26,15 @@ import type { ReportFinding } from "./types";
  * the project's phase2-remediation-log for what's still pending.
  */
 
+/**
+ * Base URL for the API as seen from the *server*. These are server functions,
+ * so they run in the web container, where `localhost` is the web container
+ * itself rather than the API. Docker sets API_INTERNAL_URL to the compose
+ * service name; the browser keeps talking to VITE_API_URL.
+ */
 const API_BASE =
-  (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
+  (typeof process !== "undefined" &&
+    (process.env?.API_INTERNAL_URL || process.env?.VITE_API_URL)) ||
   "http://localhost:4000";
 
 /**
@@ -141,6 +142,26 @@ async function apiGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/**
+ * A source a page can be without.
+ *
+ * The growth curve is required — no curve, no page. The behaviour window and
+ * the typed weigh-ins are extras: a table that has no rows yet, a vision route
+ * this deployment has not got, or a service that is down should leave the rest
+ * of the page readable instead of replacing it with an error screen.
+ *
+ * A redirect is rethrown: "signed out" is not a missing extra, and swallowing
+ * it would keep a signed-out visitor on a page of empty cards.
+ */
+async function apiGetOptional<T>(path: string, fallback: T): Promise<T> {
+  try {
+    return await apiGet<T>(path);
+  } catch (err) {
+    if (isRedirect(err)) throw err;
+    return fallback;
+  }
+}
+
 /** Settings — the signed-in user's saved notification preferences (one row per channel). */
 export const getNotificationPreferences = createServerFn({ method: "GET" }).handler(async () => {
   return apiGet<any[]>("/notifications/preferences");
@@ -152,11 +173,16 @@ export const getOperationsOverview = createServerFn({ method: "GET" }).handler(a
 });
 
 /**
- * Analytics — growth curve, cohort distribution, volumetric sample.
+ * Analytics — the growth curve, the typed weigh-ins behind it, the behaviour
+ * window and the house readings.
  *
- * Pulls weight/feed/flockStandardDeviationG from /operations/overview (the
- * richer, already-computed figures) and cohorts/volumetric from
- * /growth/analytics, rather than duplicating that SQL in two routes.
+ * One loader for the page, because the figures have to agree with each other: a
+ * distribution is only meaningful against the day its birds were weighed, so
+ * that day and those weights are read here rather than in two round trips from
+ * the browser.
+ *
+ * `/operations/overview` computes the weight/feed figures once, for the whole
+ * app; `/growth/analytics` adds cohorts, the volumetric sample and mortality.
  */
 export const getGrowthAnalytics = createServerFn({ method: "GET" }).handler(async () => {
   const [overview, growth] = await Promise.all([
@@ -164,14 +190,34 @@ export const getGrowthAnalytics = createServerFn({ method: "GET" }).handler(asyn
     apiGet<any>("/growth/analytics"),
   ]);
 
+  // The day the average was measured on, not today: the curve's last real point
+  // can be days old, and the per-bird weights belong to that same day.
+  const measuredDay = overview?.weight?.measuredDay ?? null;
+
+  const [behaviour, weighIns] = await Promise.all([
+    apiGetOptional<any>("/visual/behavior/CAM-01", null),
+    measuredDay
+      ? apiGetOptional<any[]>(`/growth/actual-weights?day=${measuredDay}`, [])
+      : Promise.resolve([]),
+  ]);
+
   return {
     cycle: overview.cycle,
+    facility: overview.facility,
+    houses: overview.houses,
     weight: overview.weight,
     feed: overview.feed,
+    water: overview.water,
+    /** The live camera's house readings, with their bounds and timestamps. */
+    cluster: overview.cluster,
     flockStandardDeviationG: overview.flockStandardDeviationG,
     cohorts: growth.cohorts,
     volumetric: growth.volumetric,
     mortality: growth.mortality,
+    /** Latest behaviour snapshot plus the rolling window behind it, or null. */
+    behaviour,
+    /** The per-bird weights typed for `weight.measuredDay`, and nothing else. */
+    weighIns,
   };
 });
 
@@ -181,8 +227,7 @@ export const getVisualTelemetry = createServerFn({ method: "GET" }).handler(asyn
   const { farm } = sampleForDay(await apiGet<any>("/operations/overview"));
   const camera = liveCamera();
   const cycleTotalDays = Math.round(
-    (new Date(farm.cycle.projectedYieldDate).getTime() -
-      new Date(farm.cycle.startDate).getTime()) /
+    (new Date(farm.cycle.projectedYieldDate).getTime() - new Date(farm.cycle.startDate).getTime()) /
       86_400_000,
   );
 
@@ -289,55 +334,54 @@ export const getMonitoringReport = createServerFn({ method: "GET" }).handler(asy
 });
 
 /** Alerts — list with optional severity / acknowledged filters. */
-export const getAlerts = createServerFn({ method: "GET" })
-  .handler(async ({ data }) => {
-    const input = (data ?? {}) as { severity?: string; acknowledged?: boolean };
-    const params = new URLSearchParams();
-    if (input.severity) params.set("severity", input.severity);
-    if (input.acknowledged !== undefined) params.set("acknowledged", String(input.acknowledged));
-    const qs = params.toString();
-    // /alerts already returns exactly this shape (id/kind/severity/raisedAt/
-    // message/acknowledged/acknowledgedAt/sourceIncidentId) — no reshaping needed.
-    return apiGet<any>(`/alerts${qs ? `?${qs}` : ""}`);
-  });
+export const getAlerts = createServerFn({ method: "GET" }).handler(async ({ data }) => {
+  const input = (data ?? {}) as { severity?: string; acknowledged?: boolean };
+  const params = new URLSearchParams();
+  if (input.severity) params.set("severity", input.severity);
+  if (input.acknowledged !== undefined) params.set("acknowledged", String(input.acknowledged));
+  const qs = params.toString();
+  // /alerts already returns exactly this shape (id/kind/severity/raisedAt/
+  // message/acknowledged/acknowledgedAt/sourceIncidentId) — no reshaping needed.
+  return apiGet<any>(`/alerts${qs ? `?${qs}` : ""}`);
+});
 
 /** Alerts — mark an alert as acknowledged via the REST API. */
-export const acknowledgeAlertFn = createServerFn({ method: "POST" })
-  .handler(async ({ data }) => {
-    // M-2: mutations go through the real REST API, not the in-memory dataset.
-    // The api-client handles credentials via the httpOnly cookie.
-    const { id } = (data ?? {}) as { id: string };
-    const API_BASE =
-      (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
-      "http://localhost:4000";
-    const res = await fetch(`${API_BASE}/alerts/${id}/acknowledge`, {
-      method: "POST",
-      credentials: "include",
-      headers: forwardedCookieHeader(),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { updated: false, reason: (body as any).error ?? "request_failed" };
-    }
-    return res.json() as Promise<{ updated: boolean; id?: string; reason?: string }>;
+export const acknowledgeAlertFn = createServerFn({ method: "POST" }).handler(async ({ data }) => {
+  // M-2: mutations go through the real REST API, not the in-memory dataset.
+  // The api-client handles credentials via the httpOnly cookie.
+  const { id } = (data ?? {}) as { id: string };
+  const API_BASE =
+    (typeof process !== "undefined" &&
+      (process.env?.API_INTERNAL_URL || process.env?.VITE_API_URL)) ||
+    "http://localhost:4000";
+  const res = await fetch(`${API_BASE}/alerts/${id}/acknowledge`, {
+    method: "POST",
+    credentials: "include",
+    headers: forwardedCookieHeader(),
   });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { updated: false, reason: (body as any).error ?? "request_failed" };
+  }
+  return res.json() as Promise<{ updated: boolean; id?: string; reason?: string }>;
+});
 
 /** Alerts — dismiss an alert via the REST API. */
-export const dismissAlertFn = createServerFn({ method: "POST" })
-  .handler(async ({ data }) => {
-    // M-2: mutations go through the real REST API, not the in-memory dataset.
-    const { id } = (data ?? {}) as { id: string };
-    const API_BASE =
-      (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
-      "http://localhost:4000";
-    const res = await fetch(`${API_BASE}/alerts/${id}/dismiss`, {
-      method: "POST",
-      credentials: "include",
-      headers: forwardedCookieHeader(),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { updated: false, reason: (body as any).error ?? "request_failed" };
-    }
-    return res.json() as Promise<{ updated: boolean; id?: string; reason?: string }>;
+export const dismissAlertFn = createServerFn({ method: "POST" }).handler(async ({ data }) => {
+  // M-2: mutations go through the real REST API, not the in-memory dataset.
+  const { id } = (data ?? {}) as { id: string };
+  const API_BASE =
+    (typeof process !== "undefined" &&
+      (process.env?.API_INTERNAL_URL || process.env?.VITE_API_URL)) ||
+    "http://localhost:4000";
+  const res = await fetch(`${API_BASE}/alerts/${id}/dismiss`, {
+    method: "POST",
+    credentials: "include",
+    headers: forwardedCookieHeader(),
   });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { updated: false, reason: (body as any).error ?? "request_failed" };
+  }
+  return res.json() as Promise<{ updated: boolean; id?: string; reason?: string }>;
+});

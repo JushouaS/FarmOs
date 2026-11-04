@@ -44,11 +44,37 @@ const schema = z.object({
   // NODE_ENV — which breaks plain-HTTP deployments (a Secure cookie is never
   // sent back over http), so container setups pin it explicitly.
   COOKIE_SECURE: z.enum(["true", "false"]).optional(),
+  // The sign-in page advertises "admin / admin", but POST /auth/login only
+  // accepts it under NODE_ENV=development — which a container deployment is
+  // not. Setting this to "true" opts in explicitly; left unset, the shortcut
+  // stays bound to NODE_ENV and production is never let in by accident.
+  DEMO_LOGIN_ENABLED: z.enum(["true", "false"]).optional(),
 
   // Vision service (Flask)
   VISION_SERVICE_URL: z.string().url().default("http://127.0.0.1:5000"),
   // H-4: no insecure default — server will refuse to start without a real token.
   VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
+  // The camera's RTSP link, as the fallback for the one Settings stores
+  // (Settings > Camera, key 'camera'). Its password stays on the server: the
+  // pages only ever get the link with "***" in place of it. Empty means no
+  // fallback, so a deployment that has never opened Settings has no camera.
+  DAHUA_RTSP_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // The flock's clock, not the server's. Containers run in UTC, so without
+  // this the day/night rule would be eight hours out in the Philippines and
+  // a sleeping flock at 21:00 would be reported as huddling at 13:00.
+  // Any IANA zone name works: Asia/Manila, Asia/Singapore, UTC.
+  FARM_TZ: z.string().default("Asia/Manila"),
+  // Minutes between automatic behaviour samples. 0 turns the sampler off, for
+  // a deployment that would rather only analyse when someone asks.
+  BEHAVIOR_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(5),
+
+  // Uploaded clips, for testing the analysis against footage instead of a live
+  // camera. The body is streamed to the vision service and never buffered here,
+  // but the cap is enforced on this side too so an oversized upload is refused
+  // before it has travelled anywhere.
+  VIDEO_MAX_MB: z.coerce.number().int().positive().default(200),
+  VIDEO_MAX_SECONDS: z.coerce.number().positive().default(600),
+  VIDEO_SWEEP_SAMPLES: z.coerce.number().int().positive().max(120).default(30),
 
   // SUS questionnaire / "Report a problem" form (routes/feedback.ts).
   // Every response is written to a local CSV. When BOTH script settings are

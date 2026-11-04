@@ -16,7 +16,7 @@ import {
  *
  * Authentication is carried in httpOnly, Secure, SameSite=Strict cookies
  * issued by the API. The frontend never stores tokens in localStorage.
- * Exception: the local admin account (below) persists its demo session
+ * Exception: the opt-in offline admin account (below) persists its session
  * profile (not a token) so a page refresh keeps the user signed in while
  * no backend is running.
  */
@@ -29,17 +29,24 @@ const API_BASE =
 
 const fetchOpts: RequestInit = { credentials: "include" };
 
-/* ── Local admin account ────────────────────────────────────────
- * Offline fallback only: used when the API can't be reached, so the
- * dashboard is still reachable with no backend running. While the API
- * is up it must not apply — the API knows nothing of this session, so
- * every data loader would 401 and bounce back to /login in a loop.
- * Username "admin", password "admin". */
+/* ── Offline admin account (opt-in) ─────────────────────────────
+ * A browser cannot authenticate anyone. This account only exists so the
+ * dashboard opens when the API is unreachable, and it is compiled in only
+ * when VITE_OFFLINE_ADMIN=1 at build time: "admin"/"admin" sitting in the
+ * shipped bundle is not a credential, it is a door held open. Off by default,
+ * so a normal build refuses the pair like any other wrong password.
+ *
+ * While the API is up it must not apply even then — the API knows nothing of
+ * this session, so every data loader would 401 and bounce back to /login. */
+const OFFLINE_ADMIN_ENABLED = Boolean((import.meta as any).env?.VITE_OFFLINE_ADMIN);
 const LOCAL_USERNAME = "admin";
 const LOCAL_PASSWORD = "admin";
 const SESSION_KEY = "cb-auth-session";
 
 function readLocalSession(): AuthUser | null {
+  // A session persisted by a build that had the account enabled must not
+  // survive into one that does not.
+  if (!OFFLINE_ADMIN_ENABLED) return null;
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
@@ -55,7 +62,9 @@ function readLocalSession(): AuthUser | null {
 
 function writeLocalSession(user: AuthUser | null) {
   try {
-    if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    // The remove branch still runs when the account is off: that is what signs
+    // a browser out of a session an earlier build left in storage.
+    if (user && OFFLINE_ADMIN_ENABLED) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     else localStorage.removeItem(SESSION_KEY);
   } catch {
     /* storage unavailable — session just won't survive a refresh */
@@ -77,6 +86,16 @@ export class MfaRequiredError extends Error {
     super("mfa_required");
     this.name = "MfaRequiredError";
   }
+}
+
+/**
+ * The machine-readable code for a failed auth call. A 429 is the one case the
+ * body can't be trusted for: Fastify writes its own payload for rate-limit
+ * rejections and puts the status phrase in `error`, so trust the status first.
+ */
+function authErrorCode(res: Response, body: unknown, fallback: string): string {
+  if (res.status === 429) return "rate_limit_exceeded";
+  return (body as Record<string, string> | null)?.error ?? fallback;
 }
 
 export interface LoginError extends Error {
@@ -177,7 +196,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
     } catch {
-      // API unreachable — allow the local admin account instead.
+      // API unreachable. With the offline account compiled in, it is the way
+      // in; without it there is nothing to fall back to, and saying so is the
+      // honest answer rather than a silent client-side bypass.
+      if (!OFFLINE_ADMIN_ENABLED) throw new Error("login_failed");
       const username = email.trim().toLowerCase();
       if (username === LOCAL_USERNAME && password === LOCAL_PASSWORD) {
         const adminUser: AuthUser = {
@@ -196,9 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      const err: LoginError = new Error(
-        (body as Record<string, string>).error ?? "login_failed",
-      );
+      const err: LoginError = new Error(authErrorCode(res, body, "login_failed"));
       err.attemptsRemaining = (body as any).attemptsRemaining;
       err.lockedUntil = (body as any).lockedUntil;
       throw err;
@@ -225,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error((body as Record<string, string>).error ?? "mfa_failed");
+      throw new Error(authErrorCode(res, body, "mfa_failed"));
     }
     const data = await res.json();
     setUser({

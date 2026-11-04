@@ -7,11 +7,13 @@ packages/*/node_modules
 dist
 dist-ssr
 
-# Secrets and local config
+# Secrets, local data and local database files
 .env
 .env.*
 !.env.example
 packages/api/.env
+packages/api/data
+.pgdata
 
 # VCS / editor noise
 .git

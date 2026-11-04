@@ -1,15 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
+import { publicCameraSource, readCameraSource } from "../camera-source.js";
 import { readLighting } from "../lighting.js";
 import {
   CYCLE_END_DAY,
   addDays,
   currentDay,
-  curveToDate,
   databaseToday,
+  measuredSeries,
   readCycleSetting,
   standardCurve,
-  weightAtDay,
+  type StandardPoint,
   type WeightPoint,
 } from "../cycle-day.js";
 
@@ -102,41 +103,48 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       FROM platform_status LIMIT 1`;
 
     // ---- weight (WeightAnalytics) --------------------------------------
-    const storedRows = activeCycle
+    // One table, two series. Every row carries the breed's standard for its day;
+    // only a row a weigh-in wrote carries an actual weight (migration 0022 made
+    // that difference visible as `source`). Reading them apart is what stops
+    // "no weigh-in yet" from being drawn as if it were a reading.
+    const weightRows = activeCycle
       ? await app.sqlRead`
           SELECT day, actual_g AS "actualG", standard_g AS "standardG",
                  sample_size AS "sampleSize", estimation_confidence AS "estimationConfidence"
           FROM cycle_weights WHERE cycle_id = ${activeCycle.id} ORDER BY day ASC`
       : [];
-    const stored: WeightPoint[] = storedRows.map((r) => ({
+    const standard: StandardPoint[] = weightRows.map((r) => ({
       day: Number(r.day),
-      actualG: Number(r.actualG),
       standardG: Number(r.standardG),
     }));
-    // Weight for today's grow-out day (read off the stored curve when no row
-    // is stored for exactly today), not the last row in the table.
-    const lw = weightAtDay(stored, day);
-    // Confidence and sample size come from the stored weigh-in nearest to today
-    // that recorded them.
-    const measured = storedRows
-      .filter((r) => r.estimationConfidence != null)
-      .sort((a, b) => Math.abs(Number(a.day) - day) - Math.abs(Number(b.day) - day))[0];
-    const variancePercent = lw && lw.standardG ? ((lw.actualG - lw.standardG) / lw.standardG) * 100 : 0;
-    const estimationConfidencePercent = measured ? Number(measured.estimationConfidence) * 100 : null;
+    const weighIns: WeightPoint[] = weightRows
+      .filter((r) => r.actualG != null)
+      .map((r) => ({ day: Number(r.day), actualG: Number(r.actualG), standardG: Number(r.standardG) }));
+    // The card shows the newest weigh-in up to today, with the standard for the
+    // day that bird was on the scale — not a figure interpolated between two
+    // measurements, which would read as a measurement of its own.
+    const latest = weighIns.filter((p) => p.day <= day).at(-1) ?? null;
+    const latestRow = latest ? weightRows.find((r) => Number(r.day) === latest.day) : undefined;
+    const variancePercent = latest && latest.standardG ? ((latest.actualG - latest.standardG) / latest.standardG) * 100 : 0;
     const weight = {
-      actualAvgG: lw?.actualG ?? null,
-      standardG: lw?.standardG ?? null,
+      actualAvgG: latest?.actualG ?? null,
+      standardG: latest?.standardG ?? null,
       variancePercent,
-      // Only one confidence figure is actually stored (estimation_confidence);
-      // used for both fields pending a separate model-confidence column.
-      modelConfidence: estimationConfidencePercent,
-      estimationConfidencePercent,
-      sampleSize: measured?.sampleSize ?? null,
-      status: variancePercent >= 0 ? "optimal" : variancePercent > -5 ? "nominal" : "warning",
-      // Weigh-ins from the start day to today, and the target for every day of
-      // the window (the dashed line, which carries on to day 45).
-      curve: activeCycle ? curveToDate(stored, setting.startDay, day) : [],
-      standardCurve: activeCycle ? standardCurve(stored, setting.startDay, CYCLE_END_DAY) : [],
+      // Nothing in the stored curve is a model estimate any more, so there is no
+      // confidence to report: a typed weight is exact by definition, and an
+      // absent one is absent.
+      modelConfidence: null,
+      estimationConfidencePercent: null,
+      sampleSize: latestRow?.sampleSize == null ? null : Number(latestRow.sampleSize),
+      // The grow-out day the figure above was measured on, so a page can say
+      // "Day 21" instead of implying it is today's weight.
+      measuredDay: latest?.day ?? null,
+      // No weigh-in is neither good nor bad news, so it does not get a green pill.
+      status: latest ? (variancePercent >= 0 ? "optimal" : variancePercent > -5 ? "nominal" : "warning") : "nominal",
+      // The weigh-ins themselves, and the target for every day of the window
+      // (the dashed line, which carries on to day 45).
+      curve: measuredSeries(weighIns, setting.startDay, day),
+      standardCurve: standardCurve(standard, setting.startDay, CYCLE_END_DAY),
     };
 
     // ---- feed (FeedMetrics) ---------------------------------------------
@@ -205,12 +213,14 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     const clusterReadingRows = liveCam
       ? await app.sqlRead`
           SELECT DISTINCT ON (s.id) st.code AS parameter, r.value, r.unit, r.status,
+                 r.recorded_at::text AS "recordedAt",
+                 sb.lower_bound AS "lowerBound", sb.upper_bound AS "upperBound",
                  sb.display_label AS "boundsLabel"
           FROM sensor_readings r
           JOIN sensors s ON s.id = r.sensor_id
           JOIN sensor_types st ON st.code = s.sensor_type_code
           LEFT JOIN LATERAL (
-            SELECT display_label FROM sensor_bounds
+            SELECT lower_bound, upper_bound, display_label FROM sensor_bounds
             WHERE sensor_id = s.id AND effective_from <= CURRENT_DATE
               AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
             ORDER BY effective_from DESC LIMIT 1
@@ -219,10 +229,18 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
           ORDER BY s.id, r.recorded_at DESC`
       : [];
     // index.tsx reads `reading.bounds.label` — nest it to match, rather than
-    // changing the frontend's access pattern for this one field.
+    // changing the frontend's access pattern for this one field. The numeric
+    // ends ride along so a page can draw the reading against its range instead
+    // of parsing the label, and recordedAt says how old the reading is: one
+    // stored reading per sensor is the normal state here, not a gap to paper over.
     const clusterReadings = clusterReadingRows.map((r) => ({
       parameter: r.parameter, value: r.value, unit: r.unit, status: r.status,
-      bounds: { label: r.boundsLabel ?? null },
+      recordedAt: r.recordedAt,
+      bounds: {
+        label: r.boundsLabel ?? null,
+        lowerBound: r.lowerBound == null ? null : Number(r.lowerBound),
+        upperBound: r.upperBound == null ? null : Number(r.upperBound),
+      },
     }));
     const cluster = liveCam
       ? { houseId: liveCam.houseId, houseLabel: liveCam.houseLabel, readings: clusterReadings }
@@ -254,7 +272,9 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     const hasWarning = alerts.some((a) => a.severity === "warning" && !a.acknowledged) || weight.status === "warning";
     const summary = {
       status: hasCritical ? "critical" : hasWarning ? "warning" : weight.status === "optimal" ? "optimal" : "nominal",
-      confidence: estimationConfidencePercent ?? 80,
+      // The figure that used to sit here was a fallback of 80 whenever nothing
+      // was stored, which is a confidence invented for a number nobody measured.
+      confidence: weight.estimationConfidencePercent,
     };
 
     return reply.send({
@@ -268,6 +288,9 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       readings: latestReadings,
       // When the day starts and when the night starts (Settings > Light and night hours).
       lighting: await readLighting(app),
+      // The camera's RTSP link with its password masked, and whether it came
+      // from Settings or from .env (Settings > Camera).
+      camera: publicCameraSource(await readCameraSource(app)),
       alerts,
       summary,
       activity,

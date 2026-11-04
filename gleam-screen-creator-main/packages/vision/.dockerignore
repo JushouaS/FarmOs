@@ -4,3 +4,5 @@ __pycache__/
 venv/
 .env
 .git
+# Bind-mounted at runtime; keeping a 50 MB export out of the build context.
+models/

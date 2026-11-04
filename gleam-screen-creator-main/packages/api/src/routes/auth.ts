@@ -72,6 +72,12 @@ const cookieSecure = env.COOKIE_SECURE
   ? env.COOKIE_SECURE === "true"
   : env.NODE_ENV === "production";
 
+// Same shape as cookieSecure: unset keeps the original NODE_ENV rule, and
+// DEMO_LOGIN_ENABLED="true" is the one way a production container can opt in.
+const demoLoginEnabled = env.DEMO_LOGIN_ENABLED
+  ? env.DEMO_LOGIN_ENABLED === "true"
+  : env.NODE_ENV === "development";
+
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: cookieSecure,
@@ -193,11 +199,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   });
 
   app.post("/login", { ...loginRateLimit }, async (request, reply) => {
-    // Development-only shortcut matching the "admin / admin" demo hint on the
-    // sign-in page: signs in as the seeded admin without touching its real
-    // password. Never active outside NODE_ENV=development.
+    // Shortcut matching the "admin / admin" demo hint on the sign-in page:
+    // signs in as the seeded admin without touching its real password. Active
+    // in development, or wherever DEMO_LOGIN_ENABLED="true" is set — the
+    // default is off everywhere else, so a production deploy must ask for it.
     const body = request.body as { email?: unknown; password?: unknown } | undefined;
-    if (env.NODE_ENV === "development" && body?.email === "admin" && body?.password === "admin") {
+    if (demoLoginEnabled && body?.email === "admin" && body?.password === "admin") {
       const admin = await app.sqlRead`
         SELECT id FROM users WHERE email = ${DEV_ADMIN_EMAIL} AND is_active`;
       if (admin.count === 0) return reply.code(401).send({ error: "invalid_credentials" });

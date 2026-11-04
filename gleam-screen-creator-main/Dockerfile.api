@@ -47,6 +47,10 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/packages/api ./packages/api
 COPY --from=builder /app/packages/types ./packages/types
 
+# Created up front with the runtime user's ownership so the api_data volume
+# (report/SUS CSV exports) inherits writable permissions on first mount.
+RUN mkdir -p /app/packages/api/data
+
 RUN groupadd --system --gid 1001 appgroup && \
     useradd --system --uid 1001 --gid appgroup appuser && \
     chown -R appuser:appgroup /app

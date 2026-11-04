@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
+import { looksLikeRtsp, publicCameraSource, readCameraSource } from "../camera-source.js";
 import {
   CYCLE_DEFAULT_START_DAY,
   CYCLE_END_DAY,
@@ -18,6 +19,8 @@ import { HHMM, readLighting } from "../lighting.js";
  * GET /settings/lighting       when the day starts and when the night starts.
  * PUT /settings/lighting       change them.
  * PUT /settings/flock          the number of birds in each house.
+ * GET /settings/camera         the RTSP link the camera services open, without its password.
+ * PUT /settings/camera         replace that link, or clear it and fall back to .env.
  *
  * Every PUT is for ADMIN and FARM_MANAGER.
  */
@@ -37,6 +40,10 @@ const flockBody = z.object({
     .min(1)
     .max(50),
 });
+
+// An empty string is a real instruction — "forget this and use .env" — so it is
+// allowed here and the link is checked separately, by looksLikeRtsp.
+const cameraBody = z.object({ rtspUrl: z.string().max(2048) });
 
 export async function registerSettingsRoutes(app: FastifyInstance) {
   const describeCycle = async () => {
@@ -96,6 +103,46 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
     return reply.send(await readLighting(app));
   });
 
+  /* ---- camera --------------------------------------------------------- */
+
+  app.get("/camera", { preHandler: [requireAuth] }, async (_request, reply) =>
+    reply.send(publicCameraSource(await readCameraSource(app))),
+  );
+
+  app.put("/camera", { preHandler: manage }, async (request, reply) => {
+    const parsed = cameraBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "invalid_camera_url",
+        message: "Paste the camera's own link, for example rtsp://user:password@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0.",
+      });
+    }
+    const rtspUrl = parsed.data.rtspUrl.trim();
+    if (rtspUrl && !looksLikeRtsp(rtspUrl)) {
+      return reply.code(400).send({
+        error: "invalid_camera_url",
+        message:
+          "That is not a link the camera services can open. It has to start with rtsp:// (or rtsps://, http://, https://) and have no spaces in it.",
+      });
+    }
+
+    if (!rtspUrl) {
+      // Clearing the setting is a delete, not an empty value: the camera
+      // services then go back to the link in .env, which is where they started.
+      await app.sqlWrite`DELETE FROM system_settings WHERE key = 'camera'`;
+    } else {
+      const value = { rtspUrl };
+      await app.sqlWrite`
+        INSERT INTO system_settings (key, value, updated_by)
+        VALUES ('camera', ${app.sqlWrite.json(value)}, ${request.authUser!.sub})
+        ON CONFLICT (key) DO UPDATE SET
+          value = EXCLUDED.value,
+          updated_at = now(),
+          updated_by = EXCLUDED.updated_by`;
+    }
+    return reply.send(publicCameraSource(await readCameraSource(app)));
+  });
+
   /* ---- flock size ----------------------------------------------------- */
 
   app.put("/flock", { preHandler: manage }, async (request, reply) => {
@@ -120,6 +167,4 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
       SELECT id, label, section, population FROM houses WHERE is_active = true ORDER BY sort_order`;
     return reply.send({ houses: rows });
   });
-
-
 }

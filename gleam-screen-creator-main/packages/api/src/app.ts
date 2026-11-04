@@ -28,6 +28,9 @@ import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
 import { startBehaviorMonitor } from "./behavior-monitor.js";
+import { registerVisionZoneRoutes } from "./routes/vision-zones.js";
+import { registerVisionVideoRoutes } from "./routes/vision-video.js";
+import { startBehaviorSampler } from "./sampler.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 
 /** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
@@ -76,10 +79,19 @@ export async function buildApp(): Promise<FastifyInstance> {
     timeWindow: "1 minute",
     keyGenerator: (request) =>
       (request.authUser?.sub ?? request.ip?.toString() ?? "anonymous"),
-    errorResponseBuilder: (request, context) => ({
-      error: "rate_limit_exceeded",
-      retryAfter: context.after,
-    }),
+    // @fastify/rate-limit *throws* whatever this returns, and Fastify only reads
+    // `statusCode` off a thrown Error. Returning a plain object here made every
+    // rate-limited request report a generic 500, so clients treated a normal
+    // "slow down" as a server crash. Fastify then writes its own body and
+    // replaces `error` with the status phrase, so the status code — not the
+    // body — is what the dashboard keys off.
+    errorResponseBuilder: (request, context) => {
+      const err = new Error(`Rate limit exceeded, retry in ${context.after}`) as Error & {
+        statusCode?: number;
+      };
+      err.statusCode = context.statusCode;
+      return err;
+    },
   });
   await app.register(dbPlugin);
 
@@ -92,6 +104,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerGrowthRoutes, { prefix: "/growth" });
   await app.register(registerVisualRoutes, { prefix: "/visual" });
   await app.register(registerVisionProxyRoutes, { prefix: "/visual" });
+  // Feeder/drinker polygons. Their own plugin so a route typo cannot take the
+  // camera proxy down with it.
+  await app.register(registerVisionZoneRoutes, { prefix: "/visual" });
+  // Uploaded clips, for testing the analysis against footage. Its own plugin
+  // because it installs a raw-body content type parser, and a parser mounted
+  // at the root would make every route accept a 200 MB video body.
+  await app.register(registerVisionVideoRoutes, { prefix: "/visual" });
   await app.register(registerIntelligenceRoutes, { prefix: "/intelligence" });
   await app.register(registerAlertRoutes, { prefix: "/alerts" });
   await app.register(registerIncidentRoutes, { prefix: "/incidents" });
@@ -101,6 +120,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerSettingsRoutes, { prefix: "/settings" });
 
   startBehaviorMonitor(app);
+
+  // Behaviour sampling. Deliberately here rather than in the vision service:
+  // the thresholds, the night rule and the write all live on this side, so the
+  // timer calls the same path a manual scan does instead of duplicating it.
+  startBehaviorSampler(app);
 
   return app;
 }

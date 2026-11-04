@@ -1,6 +1,6 @@
 import { compare, hash } from "bcrypt";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import * as speakeasy from "speakeasy";
 import { env } from "../config.js";
 
@@ -70,6 +70,11 @@ export async function signAccessToken(payload: AccessTokenPayload): Promise<stri
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt(now)
     .setExpirationTime(now + env.JWT_ACCESS_TTL_SECONDS)
+    // iat is only second-granular, so two logins in the same second used to
+    // sign to the exact same string. sessions.access_token is UNIQUE, so the
+    // second one 500'd on a duplicate key. A per-token id makes every issued
+    // session distinct regardless of timing.
+    .setJti(randomUUID())
     .sign(jwtSecret);
 }
 

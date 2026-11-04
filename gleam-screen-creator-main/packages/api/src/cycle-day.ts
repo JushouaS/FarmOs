@@ -27,6 +27,12 @@ export interface WeightPoint {
   standardG: number;
 }
 
+/** A day and the breed's target weight for it: all a row needs to be a standard. */
+export interface StandardPoint {
+  day: number;
+  standardG: number;
+}
+
 const DAY_MS = 86_400_000;
 
 const daysBetween = (fromIso: string, toIso: string) =>
@@ -82,26 +88,36 @@ export function weightAtDay(rows: WeightPoint[], day: number): { actualG: number
   return actualG === null || standardG === null ? null : { actualG: Math.round(actualG), standardG: Math.round(standardG) };
 }
 
+/**
+ * The breed's target weight for a day, read from the rows that carry one.
+ *
+ * Separate from `weightAtDay` because the two series no longer live in the same
+ * rows: a day can have a standard (the Ross 308 table) without a weigh-in, and
+ * a weigh-in always needs the standard beside it.
+ */
+export function standardAtDay(rows: StandardPoint[], day: number): number | null {
+  const g = lerp(rows.map((r) => ({ day: r.day, v: r.standardG })), day);
+  return g === null ? null : Math.round(g);
+}
+
 /** The breed's target weight for every day of the window, the dashed line on the growth chart. */
-export function standardCurve(rows: WeightPoint[], fromDay: number, toDay: number) {
+export function standardCurve(rows: StandardPoint[], fromDay: number, toDay: number) {
   const out: { day: number; standardG: number }[] = [];
   for (let day = fromDay; day <= toDay; day++) {
-    const w = weightAtDay(rows, day);
-    if (w) out.push({ day, standardG: w.standardG });
+    const g = standardAtDay(rows, day);
+    if (g !== null) out.push({ day, standardG: g });
   }
   return out;
 }
 
 /**
- * The weigh-ins to date: one point per day from the start day to today. A day
- * with a stored weigh-in uses it; for any other day the stored curve is read at
- * that day, a stand-in until the scans write one row per day.
+ * The days that were actually weighed, in order, up to today.
+ *
+ * Deliberately not one point per day: a line drawn through three weigh-ins says
+ * "these are the three days we put birds on a scale", and joining them is a
+ * reading of that, while a point for every day in between would say the flock
+ * was weighed on days nobody touched a scale.
  */
-export function curveToDate(rows: WeightPoint[], fromDay: number, today: number): WeightPoint[] {
-  const out: WeightPoint[] = [];
-  for (let day = fromDay; day <= today; day++) {
-    const w = weightAtDay(rows, day);
-    if (w) out.push({ day, ...w });
-  }
-  return out;
+export function measuredSeries(rows: WeightPoint[], fromDay: number, today: number): WeightPoint[] {
+  return rows.filter((r) => r.day >= fromDay && r.day <= today).sort((a, b) => a.day - b.day);
 }

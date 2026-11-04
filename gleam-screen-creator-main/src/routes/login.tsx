@@ -154,6 +154,7 @@ function LoginPage() {
         user_disabled: tr("This account is disabled. Contact your administrator."),
         account_locked: tr("Account temporarily locked due to too many failed attempts."),
         rate_limit_exceeded: tr("Too many attempts. Wait a minute and try again."),
+        invalid_body: tr("That sign-in didn't match what the server expects. Use your email address, not a short username."),
         login_failed: tr("Could not reach the server. Check your connection."),
       };
       setError(msgs[code] ?? tr("Login failed ({code})", { code }));
