@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { Sparkles } from "lucide-react";
 import { formatUnit, type GrowthCardData, type GrowthPoint, type GrowthReading } from "@/lib/farm/growth";
 import { tr } from "@/lib/i18n";
 
 /* The dashboard's growth card: how heavy the birds are against the breed's
  * target weight, as a headline, a plain-language sentence and a chart with real
- * axes. The house readings (flock, temperature, humidity, ammonia) sit in a
- * small strip underneath, since weight is what this page is about.
+ * axes. The house readings (flock, temperature, humidity) sit small
+ * under the weight sentence, beside the chart.
  *
  * The card holds no figures, names or units of its own. Everything it shows
  * comes from `data` (see lib/farm/growth.ts for where each field is read from);
@@ -14,6 +15,8 @@ import { tr } from "@/lib/i18n";
 
 interface Props {
   data: GrowthCardData;
+  /** Pressed on the Analyze Growth button. */
+  onAnalyze: () => void;
 }
 
 const kg = (g: number, digits = 2) => (g / 1000).toFixed(digits);
@@ -344,8 +347,8 @@ function ReadingCell({ label, reading }: { label: string; reading: GrowthReading
   );
 }
 
-export function GrowthCard({ data }: Props) {
-  const { curve, standardCurve, actualG, standardG, variancePercent, cycleLength, cycleStart, cycleDay: day, flock } = data;
+export function GrowthCard({ data, onAnalyze }: Props) {
+  const { curve, standardCurve, actualG, standardG, variancePercent, cycleLength, cycleStart, cycleDay: day, flock, measuredDay, sampleSize } = data;
   const targetLabel = data.standardName ? `${data.standardName} target` : "target";
   const has = actualG != null && standardG != null && curve.length > 0;
   const state = variancePercent != null ? standing(variancePercent) : null;
@@ -357,7 +360,8 @@ export function GrowthCard({ data }: Props) {
       }[state.tone]
     : null;
   const gap = has ? Math.round(Math.abs(actualG! - standardG!)) : 0;
-  const dayText = day != null ? tr(" for day {day}", { day }) : "";
+  // The standard in the sentence is the one for the day the birds were weighed, which is not always today.
+  const dayText = (measuredDay ?? day) != null ? tr(" for day {day}", { day: (measuredDay ?? day)! }) : "";
 
   return (
     <section aria-labelledby="growth-title" className="cb-card mb-6 p-5 sm:p-6">
@@ -368,18 +372,25 @@ export function GrowthCard({ data }: Props) {
           </h2>
           <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>{tr("Average weight vs {targetLabel}{value}", { targetLabel, value: day != null ? tr(" · Day {day} of {cycleLength}", { day, cycleLength }) : "" })}</p>
         </div>
-        <Link
-          to="/telemetry"
-          className="tap inline-flex shrink-0 items-center justify-end text-sm font-semibold hover:underline"
-          style={{ color: "var(--brand)" }}
-        >
-          {tr("Full Analytics →")}
-        </Link>
+        <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-4">
+          {/* Runs the growth analysis and shows the result under this card; Analytics keeps its own button for it */}
+          <button type="button" onClick={onAnalyze} className="btn-primary tap">
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            {tr("Analyze Growth")}
+          </button>
+          <Link
+            to="/telemetry"
+            className="tap inline-flex items-center justify-end text-sm font-semibold hover:underline"
+            style={{ color: "var(--brand)" }}
+          >
+            {tr("Full Analytics →")}
+          </Link>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        {/* The answer, in words; on a wide screen the small stats sit at the bottom, level with the chart's baseline */}
-        <div className="min-w-0 lg:flex lg:flex-col">
+        {/* The answer, in words, with the house readings under it */}
+        <div className="min-w-0">
           <p className="label-section">{tr("Average weight")}</p>
           <p className="mt-1 flex items-baseline gap-1.5">
             <span className="font-mono text-4xl font-bold tabular-nums" style={{ color: "var(--cv-accent)" }}>
@@ -406,25 +417,30 @@ export function GrowthCard({ data }: Props) {
             </p>
           )}
 
-          <dl className="mt-4 grid gap-2.5 border-t pt-3 lg:mt-auto" style={{ borderColor: "var(--border-subtle)" }}>
-            <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>{tr("Estimate confidence")}</dt>
-              <dd className="font-mono text-sm font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                {data.confidencePercent != null ? `${Math.round(data.confidencePercent)}%` : "—"}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>{tr("Birds weighed")}</dt>
-              <dd className="font-mono text-sm font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                {data.sampleSize != null ? data.sampleSize.toLocaleString() : "—"}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-sm" style={{ color: "var(--text-tertiary)" }}>{tr("Feed conversion")}</dt>
-              <dd className="font-mono text-sm font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
-                {data.fcr != null ? data.fcr.toFixed(2) : "—"}
-              </dd>
-            </div>
+          {has && measuredDay != null && (
+            <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
+              {sampleSize != null
+                ? tr("Weighed on Day {day}, {n} birds on the scale.", { day: measuredDay, n: sampleSize })
+                : tr("Weighed on Day {day}.", { day: measuredDay })}
+              {day != null && measuredDay < day ? tr(" Enter today's weights on Flock Tracking to update it.") : ""}
+            </p>
+          )}
+          {!has && (
+            <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+              {tr("No weight measured yet. Type in the weights of a few birds on Flock Tracking and the average shows here.")}
+            </p>
+          )}
+
+          {/* House readings, kept small: one column beside the chart, two columns when the card is narrow */}
+          <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t pt-4 lg:grid-cols-1" style={{ borderColor: "var(--border-subtle)" }}>
+            <Small
+              label={tr("Flock")}
+              value={flock.total != null ? flock.total.toLocaleString() : "—"}
+              unit={flock.total != null ? tr("birds") : undefined}
+              note={flock.active != null && flock.inactive != null ? tr("{active} active · {inactive} inactive", { active: flock.active, inactive: flock.inactive }) : undefined}
+            />
+            <ReadingCell label={tr("Temperature")} reading={data.temperature} />
+            <ReadingCell label={tr("Humidity")} reading={data.humidity} />
           </dl>
         </div>
 
@@ -456,19 +472,6 @@ export function GrowthCard({ data }: Props) {
           )}
         </div>
       </div>
-
-      {/* House readings, kept small */}
-      <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t pt-4 sm:grid-cols-4" style={{ borderColor: "var(--border-subtle)" }}>
-        <Small
-          label={tr("Flock")}
-          value={flock.total != null ? flock.total.toLocaleString() : "—"}
-          unit={flock.total != null ? tr("birds") : undefined}
-          note={flock.active != null && flock.inactive != null ? tr("{active} active · {inactive} inactive", { active: flock.active, inactive: flock.inactive }) : undefined}
-        />
-        <ReadingCell label={tr("Temperature")} reading={data.temperature} />
-        <ReadingCell label={tr("Humidity")} reading={data.humidity} />
-        <ReadingCell label={tr("Ammonia NH₃")} reading={data.ammonia} />
-      </dl>
     </section>
   );
 }

@@ -1,5 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { checkVisionHealth } from "@/lib/api-client";
 import { UserAvatar } from "./UserAvatar";
 import { useUnacknowledgedAlertCount } from "@/lib/alert-store";
 import {
@@ -71,6 +73,31 @@ export function SideNav({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const alertCount = useUnacknowledgedAlertCount();
+  // Whether the camera computer answers, checked every 30 seconds. The card used to say "online" whatever happened.
+  const [camera, setCamera] = useState<"checking" | "ok" | "down">("checking");
+  useEffect(() => {
+    let stop = false;
+    const check = async () => {
+      try {
+        await checkVisionHealth();
+        if (!stop) setCamera("ok");
+      } catch {
+        if (!stop) setCamera("down");
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 30_000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+  const status =
+    camera === "ok"
+      ? { title: tr("System Online"), note: tr("Pen 1 Connected"), dot: "bg-emerald-500", ping: "bg-emerald-400", box: "rgba(16,185,129,0.06)", edge: "rgba(16,185,129,0.18)" }
+      : camera === "down"
+        ? { title: tr("Camera computer not answering"), note: tr("Pen 1 not connected"), dot: "bg-amber-500", ping: "bg-amber-400", box: "rgba(245,158,11,0.08)", edge: "rgba(245,158,11,0.3)" }
+        : { title: tr("Checking the camera computer"), note: "", dot: "bg-slate-400", ping: "bg-slate-300", box: "rgba(148,163,184,0.06)", edge: "rgba(148,163,184,0.18)" };
 
   const handleLogout = async () => {
     await logout();
@@ -123,7 +150,7 @@ export function SideNav({
                   {tr("Cerebroil")}
                 </div>
                 <div
-                  className="text-[11px] font-medium leading-none mt-1"
+                  className="text-xs font-medium leading-none mt-1"
                   style={{ color: "var(--sidebar-muted)" }}
                 >
                   {tr("Flock Monitor")}
@@ -161,7 +188,7 @@ export function SideNav({
       <nav className="flex-1 overflow-y-auto py-3 space-y-1">
         {!collapsed && (
           <p
-            className="px-4 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider"
+            className="px-4 pb-1.5 pt-1 text-xs font-semibold uppercase tracking-wider"
             style={{ color: "var(--sidebar-muted)" }}
           >
             {tr("Navigation")}
@@ -182,7 +209,7 @@ export function SideNav({
               <item.icon className="h-4.5 w-4.5 shrink-0 stroke-[1.8px] transition-transform duration-150 group-hover:scale-105" />
               {collapsed && "badge" in item && item.badge && alertCount > 0 && (
                 <span
-                  className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-xs"
+                  className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-xs"
                   style={{ background: "var(--status-red)" }}
                 >
                   {alertCount}
@@ -196,7 +223,7 @@ export function SideNav({
                 <span className="truncate">{tr(item.label)}</span>
                 {"badge" in item && item.badge && alertCount > 0 && (
                   <span
-                    className="ml-auto rounded-full px-2 py-0.5 font-mono text-[10px] font-bold shrink-0"
+                    className="ml-auto rounded-full px-2 py-0.5 font-mono text-xs font-bold shrink-0"
                     style={{
                       background: "rgba(239,68,68,0.18)",
                       color: "#fca5a5",
@@ -222,32 +249,28 @@ export function SideNav({
           <div
             className="flex items-center gap-2.5 rounded-lg px-3 py-2"
             style={{
-              background: "rgba(16,185,129,0.06)",
-              border: "1px solid rgba(16,185,129,0.18)",
+              background: status.box,
+              border: `1px solid ${status.edge}`,
             }}
           >
             <span className="relative flex h-2 w-2 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              {camera === "ok" && <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${status.ping} opacity-75`} />}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${status.dot}`} />
             </span>
             <div className="min-w-0">
-              <p className="text-xs font-semibold leading-tight text-[var(--sidebar-heading)]">
-                {tr("System Online")}
-              </p>
-              <p className="text-[10px] leading-tight text-[var(--sidebar-muted)]">
-                {tr("Pen 1 Connected")}
-              </p>
+              <p className="text-xs font-semibold leading-tight text-[var(--sidebar-heading)]">{status.title}</p>
+              {status.note && <p className="text-xs leading-tight text-[var(--sidebar-muted)]">{status.note}</p>}
             </div>
           </div>
         ) : (
           <div className="flex justify-center py-1">
             <span
               className="relative flex h-2.5 w-2.5 cursor-pointer"
-              title={tr("System Online · Pen 1 Connected")}
+              title={status.note ? `${status.title} · ${status.note}` : status.title}
               onClick={onToggle}
             >
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              {camera === "ok" && <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${status.ping} opacity-75`} />}
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${status.dot}`} />
             </span>
           </div>
         )}
@@ -266,7 +289,7 @@ export function SideNav({
                 <p className="text-xs font-semibold leading-tight truncate text-[var(--sidebar-heading)]">
                   {user?.fullName ?? user?.email ?? tr("Farm Manager")}
                 </p>
-                <p className="text-[10px] truncate text-[var(--sidebar-muted)]">
+                <p className="text-xs truncate text-[var(--sidebar-muted)]">
                   {user?.roles?.[0] ?? tr("Manager")}
                 </p>
               </div>

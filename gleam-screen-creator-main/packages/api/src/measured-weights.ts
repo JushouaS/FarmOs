@@ -73,3 +73,13 @@ export async function refreshMeasuredDay(app: FastifyInstance, cycleId: string, 
 
   return { meanG, sampleSize };
 }
+
+/**
+ * Every day that has typed-in weights, refreshed in one go. Runs at start-up, in
+ * case weights were saved before this join existed.
+ */
+export async function syncAllWeights(app: FastifyInstance): Promise<number> {
+  const days = await app.sqlRead`SELECT DISTINCT cycle_id AS "cycleId", day FROM actual_weights`;
+  for (const d of days) await refreshMeasuredDay(app, String(d.cycleId), Number(d.day));
+  return days.length;
+}

@@ -21,7 +21,7 @@ You open **one window for each**. Nothing works properly until all four are runn
         |  (React / Vite)    |   |  (Python, cerebroil-      |
         |  the pages you see |   |   stream)                 |
         +--------------------+   |  reads the Dahua camera   |
-                     |           |  and the Kinect (simulated)|
+                     |           |  (Kinect: see section 7)  |
                      v           +---------------------------+
         +--------------------+                ^
         |  API  :4000        |----------------+  asks it to analyze a frame
@@ -49,6 +49,10 @@ You open **one window for each**. Nothing works properly until all four are runn
 **Start them in this order:** database, API, camera, web app.
 The API needs the database. The web app needs the API. The camera is only needed for Live Camera.
 
+Two more programs are optional and only matter for the Kinect weighing station: the **Kinect bridge** (port 8181) and the
+**chicken finder** (port 8182). They are in section 7. Without them everything else works and the Kinect panel says
+"Kinect is not connected".
+
 ---
 
 ## 2. Folder layout
@@ -59,11 +63,12 @@ Everything lives under one parent folder:
 drive-download-20260831T212213Z-1-001\
   gleam-screen-creator-main\                <-- PARENT folder
     cerebroil-stream\                        <-- camera service (Python)   [used]
-    cerebroil-backend\                       <-- older Python/FastAPI backend [NOT used by the website]
+    docs\                                    <-- security review, steps for checking the weights, counts and alerts
     gleam-screen-creator-main\               <-- the project (git repo, web app)
       src\                                   <-- website code (React)
-      packages\api\                          <-- API server + database scripts
-      packages\vision\                       <-- alternative camera stub [NOT used, see section 9]
+      packages\api\                          <-- API server + database scripts + tests
+      kinect-bridge\                         <-- the Kinect program (C#)
+      scripts\                               <-- public link, backup, Kinect start scripts
       HOW_TO_RUN.md                          <-- this file
 ```
 
@@ -155,6 +160,19 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 |------|---------|
 | `GROQ_API_KEY` | Needed only for the **Insights** page (the AI briefing). Get a free key at console.groq.com. Without it the Insights AI cards show a "key not configured" message and everything else still works. |
 
+**Other settings** (all have sensible defaults; `.env.example` and `packages\api\src\config.ts` list every name)
+
+| Name | Where | Meaning |
+|------|-------|---------|
+| `VISION_SERVICE_URL` | `packages\api\.env` | Where the camera service is: `http://127.0.0.1:5000`, or the Raspberry Pi (see section 7). |
+| `SENSOR_MONITOR`, `SENSOR_POLL_SECONDS`, `SENSOR_OFFLINE_MINUTES` | `packages\api\.env` | Reads the pen's temperature and humidity every minute; raises a "Sensor Offline" alert after 10 minutes of silence. |
+| `BEHAVIOR_MONITOR`, `BEHAVIOR_POLL_SECONDS` | `packages\api\.env` | Asks the camera service every 30 seconds which birds are inactive or huddled and raises alerts. |
+| `KINECT_BRIDGE_KEY`, `KINECT_SEG_URL` | `packages\api\.env` | Access key shared with the Kinect bridge, and where the chicken finder is. |
+| `SMTP_*`, `VAPID_*`, `APP_URL` | `packages\api\.env` | Email and browser-push alerts (see "Alerts and notifications"). |
+| `TEMP_PASSWORD_HOURS`, `TRUST_PROXY`, `COOKIE_SECURE` | `packages\api\.env` | Temporary-password lifetime; proxy and HTTPS settings (see "Security notes"). |
+| `LIVE_BEHAVIOR`, `DETECTOR_MODEL_PATH`, `SCAN_DETECTOR`, `DEMO_*`, `BEHAVIOR_*` | `cerebroil-stream\.env` | Live behavior monitoring and the detector (see section 7). |
+| `GROQ_API_KEY` | project root `.env` | The Insights AI briefing. |
+
 ### 3.4 Create the database (once)
 
 ```
@@ -171,6 +189,10 @@ npm run db:migrate
 ```
 
 You should see lines like `✓ 0016_cycle_day_setting.sql` and `Migrations applied: N.`
+
+Then, once: make the administrator (see "Open it" in section 4) and remove the demo rows that come with a new database
+(see "Setting up your own farm" near the end). In short, a new computer needs: `db:local:init`, `db:migrate`,
+`scripts\seed-admin.ts`, `scripts\seed-farm.ts`.
 
 ---
 
@@ -252,14 +274,17 @@ You should see:
 
 ### Open it
 
-Go to **http://localhost:8080** in your browser.
-
-Development sign in (only works on your own computer in development mode):
+Go to **http://localhost:8080** in your browser and sign in with the administrator account. There is no built-in
+login: `admin` / `admin` was removed and does not work anywhere. The administrator is made once, with a random
+password that is shown only once, so save it in a password manager straight away:
 
 ```
-Username: admin
-Password: admin
+cd packages\api
+.\node_modules\.bin\tsx.exe scripts\seed-admin.ts
 ```
+
+The user name is `admin@cerebroiler.dev`. Run the same command again any time to replace a lost password (the old one
+stops working). Accounts are not open to the public: an administrator adds people in **Settings, Accounts**.
 
 ---
 
@@ -277,6 +302,10 @@ Each of the four ports should appear with `LISTENING`. In PowerShell you can als
 foreach ($p in 5434,4000,5000,8080) { "$p : " + (Test-NetConnection 127.0.0.1 -Port $p -WarningAction SilentlyContinue).TcpTestSucceeded }
 ```
 
+The optional Kinect programs use ports 8181 (bridge) and 8182 (chicken finder). Quick health pages: the API answers at
+http://localhost:4000/health, and the website's sidebar shows whether the camera computer answers (green "System Online",
+amber "Camera computer not answering").
+
 Database status:
 
 ```
@@ -284,8 +313,10 @@ cd /d "...\packages\api"
 npm run db:local:status
 ```
 
-Camera video, straight from the camera service (no login needed):
-open **http://localhost:5000/video_feed/dahua** in the browser. You should see live video.
+Camera video, straight from the camera service, on the computer that runs it:
+open **http://localhost:5000/video_feed/dahua** in the browser. You should see live video. Any other
+computer gets `unauthorized` from that address on purpose: everyone else watches through the website's
+**Live Camera** page, which signs you in first.
 
 ---
 
@@ -299,6 +330,38 @@ open **http://localhost:5000/video_feed/dahua** in the browser. You should see l
    Allow them (Windows Security, Firewall, Allow an app) or ask for help.
 
 The API must be listening on all addresses (`API_HOST=0.0.0.0` in `packages\api\.env`).
+
+### Sharing the site on a public link (optional)
+
+For a demo to people outside your network (a panel, a visitor), one command makes the whole site reachable at a
+temporary `https://...trycloudflare.com` address. Anyone who has the link can reach the sign-in page, so read the
+points below first.
+
+1. Make the administrator password, once: see "Open it" above (`scripts\seed-admin.ts`). Never share it.
+2. Start the database (`bun run db:local:start` in `packages\api`). Build the Kinect bridge once (`kinect-bridge\build.cmd`)
+   if you want the Kinect picture. Download `cloudflared.exe` (Cloudflare's free tunnel program, from
+   github.com/cloudflare/cloudflared/releases, the `windows-amd64.exe` file) into `C:\Users\YOU\cloudflared\`.
+3. Run:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\start-public.ps1
+```
+
+   It starts the API in **production mode** (port 4100), the production website (8180), the Kinect bridge with an access key,
+   and `scripts\public-gateway.mjs` (port 9000), the one door that puts the website, the API (under `/api`) and the Kinect
+   picture behind a single address. It then prints `PUBLIC LINK: https://...`. Use `-NoTunnel` to try everything on this
+   computer first (`http://localhost:9000`), `-Rebuild` after changing the website, and `-Stop` to stop it all.
+
+What is different from your own `localhost:8080` site:
+
+- Nothing opens without an account. The API is in production mode, secure cookies are on, there is no built-in login,
+  and the Kinect picture needs a ticket that only signed-in people get.
+- The link changes every time, and works only while this computer and the script's programs are running. The
+  Raspberry Pi must be on the same network as this computer for the camera, the scan, the Test video and the sensor.
+- The tunnel needs this computer to reach Cloudflare on port 7844. School, office and public Wi-Fi often blocks it (the
+  link then shows the error "530"). Use home Wi-Fi or a phone hotspot.
+- Give people their own accounts (**Settings, Accounts**), not the administrator's.
+
 
 ---
 
@@ -323,7 +386,9 @@ What the pieces do:
 - The website shows the video straight from port 5000.
 - **Analyze data** goes browser, API (4000), camera service (5000). The API sends the shared token
   (`VISION_SERVICE_TOKEN`) so the camera service accepts the request.
-- The Kinect weighing station shows a **simulated** picture unless the Kinect bridge below is running.
+- The Kinect weighing station shows "Kinect is not connected" unless the Kinect bridge below is running. It never shows a
+  stand-in picture. (The camera service's `KINECT_SOURCE=simulated` is only for developing without a Kinect and is not used by
+  the page.)
 
 The message **"Vision service not reachable. Nothing is answering at localhost:5000"** simply means
 Window 3 is not running, or it crashed. Start it again with `python app.py`.
@@ -362,16 +427,64 @@ blocks that. A phone hotspot or a small router works.
    bash setup-pi.sh
    ```
 
-   It ends by printing the Pi's address. Open `http://PI-WIFI-ADDRESS:5000/video_feed/dahua` in the
-   laptop browser to check the video.
+   It ends by printing the Pi's address. The Pi answers only to the API (which sends the token) and to
+   the Pi itself, so check the video from the laptop with the website's **Live Camera** page.
+
+   **If the camera does not appear**, run the check script. It looks at the cable, the camera's address, the
+   service and one real picture from the camera, and it never prints the camera's password. From the laptop,
+   copy it to the Pi (your user name and the Pi's address filled in), then run it on the Pi and read what it says
+   under "Summary":
+
+   ```
+   scp cerebroil-stream/check-pi.sh YOUR-PI-USER@PI-WIFI-ADDRESS:~/cerebroil-stream/
+   ```
+
+   ```
+   bash ~/cerebroil-stream/check-pi.sh
+   ```
 
 **On the laptop**, point the website and the API at the Pi, then restart both (Windows 2 and 4):
 
-- Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000`
+- Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000` (only used for the "not answering" message now; the video itself comes through the API)
 - `packages\api\.env`: `VISION_SERVICE_URL=http://PI-WIFI-ADDRESS:5000`
 - `VISION_SERVICE_TOKEN` must be the same in `packages\api\.env` and in the Pi's `cerebroil-stream/.env`.
 
 Remove those two lines to go back to the camera service on the laptop.
+
+### Temperature and humidity: the DHT22 sensor on the Raspberry Pi (optional)
+
+The pen's temperature and humidity come from a DHT22 sensor wired to the Pi. Switch the Pi **off** while you wire it.
+This is for a Raspberry Pi 4 and the 3-pin module (a small board with three pins marked `+`, `OUT` and `-`):
+
+| Sensor module | Raspberry Pi | Pin |
+|---|---|---|
+| `+` | 3.3 V power | **1** |
+| `OUT` (data) | GPIO 4 | **7** |
+| `-` | Ground | **6** |
+
+Use 3.3 V, not 5 V (the Pi's pins must not see 5 V). A bare 4-pin DHT22 (no board) also needs a 10 kΩ resistor
+between `+` and `OUT`; its pins, left to right with the grid facing you, are `+`, data, (not used), `-`.
+
+Switch the Pi on, and on the Pi run (in the folder with the camera service; it installs one package, tests the
+sensor once and starts a service that reads it all the time and at every boot):
+
+```
+cd ~/cerebroil-stream
+bash setup-dht22.sh
+```
+
+An occasional failed try in the test is normal for this sensor. If **every** try fails, check the three wires and that
+`OUT` is on pin 7 (counting from the corner pin 1, odd pins are the inner row). Another data pin: `DHT22_GPIO=17 bash
+setup-dht22.sh` (the number after "GPIO"). Then restart the camera service so it can hand the reading on:
+`sudo systemctl restart cerebroil-stream`.
+
+What happens next: the reading is kept in `~/cerebroil-stream/dht22.json`, the camera service shows it at `/sensors`, and
+the API asks for it every minute (`SENSOR_POLL_SECONDS`) and stores it as the two sensors `SN-DHT22-T` and `SN-DHT22-H`
+of Pen 1 (migration `0024`, run `bun run db:migrate` in `packages\api` once). The **Pen Sensor Telemetry** card on
+Live Camera and the dashboard then show real numbers, marked Warning or Critical outside the limits (temperature 20 to
+32 °C, humidity 50 to 70 %; they are rows in `sensor_bounds`). A reading older than 5 minutes is not shown as the pen's air: the
+card says "Sensor offline, last reading 2 h ago" (or "No reading" if it never reported), and after 10 minutes of silence the API
+raises one "Sensor Offline" alert. There is no ammonia sensor, so ammonia is not shown anywhere.
 
 ### Test video: the trained model on an uploaded clip (optional)
 
@@ -393,6 +506,20 @@ Limits: the first 30 seconds are checked, about 4 frames per second (`DEMO_MAX_S
 `DEMO_SAMPLE_FPS` change that). A Raspberry Pi needs roughly a second per checked frame, so a 30
 second clip can take a minute or two. Without the model file the dialog says the detector is not
 installed.
+
+The **Analyze data** button on Live Camera uses the same model. It takes about 3 seconds: four pictures a
+second apart go through the detector, and the page shows how many birds were seen, the movement, and any group of
+birds packed closely together (a huddle in one picture; how long it lasts is the live monitor's job). When the model
+is not installed, or the detector is busy with an uploaded clip, it falls back to motion only and the page says
+"Moving areas" instead of "Birds seen". `SCAN_DETECTOR=0` in `cerebroil-stream/.env` turns the detector off for the
+scan. A bird's state (resting, inactive) needs minutes of watching, so the scan does not guess it.
+
+Every check also gives a weight on each bird, with nothing to tick or type. A video has no depth, so this is not the
+Kinect weight model: it spreads the standard weight for the grow-out day (Settings) over the birds in proportion to how
+big each bird's box is. With the right average one bird is typically about 17 % off, and rougher in a video, because a
+bird nearer the camera looks bigger and a box around a diagonal bird is bigger than the bird. If the clip shows birds of
+a different age than the day in Settings, all the weights shift together. It needs at least 5 birds followed in at least
+3 frames, and leaves out boxes cut off by the edge of the picture. The code is `src/lib/farm/video-weight.ts`.
 
 What the result shows (code: `cerebroil-stream/behavior.py`): each detected bird is followed from
 frame to frame and its box is colored by what it is doing.
@@ -417,6 +544,12 @@ for a huddle (`BEHAVIOR_INACTIVE_SECONDS`, `BEHAVIOR_HUDDLE_SECONDS`, `BEHAVIOR_
 about feeder and drinker areas, lights-off hours or temperature yet, so treat a flag as "go and look",
 not as a diagnosis. It was tested on simulated flocks; check it on your own footage before trusting
 the numbers.
+
+Choosing a file: the best file is an **MP4 or WebM, under 60 MB and 30 seconds or shorter**. As soon as a file is chosen the box
+shows a checklist of its format, size and length, with an amber warning on anything that will cost time or be cut. Pressing
+**Check video** on a file that is not ideal asks once, in one popup that lists every problem, and you can **Choose another
+video** or **Use it anyway**. A good file starts at once. The video's own full-screen button (beside the volume) shows the
+boxes and weights too, in a normal browser.
 
 Big and odd files:
 
@@ -454,35 +587,38 @@ camera and the API (checking every 30 seconds) raises:
 - **Flock Inactivity**: most of the flock still for 30 minutes during the day.
 - **Huddling Detected**: 35% or more of the birds huddled together for 10 minutes.
 
+**Sensor Offline** comes from the API itself: when the temperature and humidity sensor has reported before and then sends
+nothing for 10 minutes (`SENSOR_OFFLINE_MINUTES`), one alert says so (not again within 12 hours). Check its wires and the Pi's power.
+
 At night (the lights-off hours in Settings) still birds are sleeping, so no inactivity alert is raised.
 The same kind of alert is not raised again for an hour. The times are `LIVE_INACTIVE_SECONDS` and
 `LIVE_HUDDLE_SECONDS`. Like the Test video check, these are flags to go and look, not a diagnosis, and
 the numbers should be checked on your own flock.
 
-### Actual weights in Flock Tracking
+### Weights in Flock Tracking
 
-On **Flock Tracking**, type a bird's real weight in kilograms, with up to 3 decimals (like `0.946`),
-into its **Actual Weight** box and press Enter. It is saved (per bird, per grow-out day, with the estimate
-shown at that moment) and the page shows the
-difference from the estimate: green within 5%, amber within 10%, red beyond. The summary shows how many
-birds were weighed today and the average difference, so you can see how good the weight estimate is.
-There is no submit button: the weight saves when you press Enter or click away, and a "Saved" note appears.
-Once a bird has a weight, the "vs Standard" figure uses it instead of the estimate. Clear the box to remove a weight. Run `npm run db:migrate` once (it adds the table).
+**Flock Tracking** lists the birds of the pen the camera watches, B-001 up to the flock size set in **Settings**. Weigh a bird
+on a scale and type its weight in kilograms, with up to 3 decimals (like `0.946`), into its box, then press Enter or click away.
+There is no submit button: the weight saves by itself and a "Saved" note appears. Clear the box to remove a weight. Run
+`npm run db:migrate` once (migrations 0020 and 0025).
 
-**Every day is new data.** The boxes belong to the grow-out day (it counts up at midnight), so a new day
-starts with empty boxes and the earlier days stay saved. **Gain** on each bird shows how much it gained
-since the last day it was weighed. (The Dashboard's Growth card shows the pen's average weight by day
-against the standard.)
+What it feeds: the day's **average** of the weights typed in, and how many birds, is the weight the Dashboard's Growth card
+draws against the Ross 308 standard. The Analytics **Weight Growth** tab, the growth report under the Dashboard card
+and the Insights AI briefing describe the same birds: their spread, the share under or over the standard, and where the flock
+is heading for the last day. A report from fewer than 10 birds says it may be far from the real flock, and the uniformity grade
+appears from 5 birds. A day nobody weighed has no point: nothing is guessed. Weigh at least 30 birds for a reliable picture.
 
-A weight is kept per bird and per grow-out day, so if someone changes the day in Settings to a day that
-already has weights, those weights show again. Typing a new value for the same bird and day replaces the
-old one, so the table never holds more than one row per bird per day.
+**Every day is new data.** The boxes belong to the grow-out day (it counts up at midnight), so a new day starts with empty boxes
+and the earlier days stay saved. **Gain** shows how much a bird gained since the last day it was weighed, and **vs Standard**
+how far it is above or below the breed standard for the day. A weight is kept per bird and per grow-out day, so if someone
+changes the day in Settings to a day that already has weights, those weights show again. Typing a new value for the same bird
+and day replaces the old one.
 
 ### Live 3D depth from the Kinect (optional, Window 5)
 
 A browser cannot talk to the Kinect, so a small Windows program streams its depth picture to the
 website. With it running, **Live Camera** shows the Kinect as a 3D point cloud you can drag to
-turn. Without it, the page falls back to the simulated picture and keeps retrying, so nothing breaks.
+turn. Without it, the panel says "Kinect is not connected" and keeps trying, so nothing breaks.
 
 This is for the **Kinect v2** (Xbox One sensor with the USB 3.0 adapter). One-time: install the
 [Kinect for Windows SDK 2.0](https://www.microsoft.com/en-us/download/details.aspx?id=44561) and
@@ -505,14 +641,59 @@ You should see `Kinect is sending data.` and `Kinect bridge ready on ws://localh
 **Live Camera**, choose **Kinect**. A green `Live 3D depth` badge appears. Drag to turn the view,
 double-click (or **Reset view**) to go back. Press Ctrl+C in that window to stop it.
 
-It only accepts pages from this computer or your local network. To let a phone see the 3D view,
-start it with `KinectBridge.exe --lan` from an administrator window.
+The panel has two views, chosen with the **Picture** and **Depth 3D** buttons at its top right (the choice is
+remembered in that browser). **Picture** is the normal colour camera. **Depth 3D** is the depth as a 3D view: yellow
+is near, green farther, blue farthest, and black means the sensor got no reading there (closer than 0.5 m, farther
+than 4.5 m, or a dark, shiny or see-through surface). The bridge only makes the pictures while somebody is watching
+them. The picture is shown live and is not saved. After a change to `Program.cs`, run `build.cmd` again.
+
+### Chicken outlines on the Kinect picture (optional)
+
+On the **Picture** view the page can outline each chicken and count them. A small program does this on the
+computer the Kinect is plugged into: `cerebroil-stream\kinect_seg.py`. It reads the colour picture from the bridge,
+runs the trained segmentation model, and keeps the newest answer. Put the model at
+`cerebroil-stream\models\kinect_chicken_seg.pt` (it is not in the repository, like `detector.onnx`), then:
+
+```
+cd cerebroil-stream
+pip install -r requirements.txt
+pip install -r requirements-kinect.txt     (once; it brings PyTorch, so it is big)
+python kinect_seg.py
+```
+
+It only listens on this computer (`127.0.0.1:8182`). The API asks it (`GET /visual/kinect-chickens`, which needs a
+sign-in), so nobody reaches it from outside. It works only while somebody has the Picture view open, and rests
+otherwise. If it is not running, the Picture view says "Chicken finder is not running" and everything else works.
+`KINECT_SEG_URL` in `packages\api\.env` changes where the API looks for it. In a room with no chickens it may still
+find one now and then (a person or an object): the model counts anything above 25% confidence
+(`KINECT_SEG_CONFIDENCE`).
+
+**Weights.** Each outlined bird also gets an estimated weight. The Picture view shows it on the bird, and the
+flock's average under the picture. The weight comes from the size of the bird's outline on the depth picture
+(`cerebroil-stream\kinect_weight.py`): its footprint, length and width go into a small model
+(`models\weight_model_size_v1.json`, not in the repository like the other models). The program asks the bridge for
+the depth picture as well as the colour one. `pip install -r requirements-kinect.txt` brings `xgboost`, which it needs.
+
+How far to trust it: one bird is typically about 18 % (about 175 g) off, because a footprint says only so much; the
+flock's average from one picture is typically within about 5 % (tested on 40 labelled frames with the real outline
+model). The model was trained on one flock, days 26 to 40, so check it with a few birds on a scale before relying on
+it, and especially for birds much younger or older. To train it again on your own data (a CSV with the columns
+`projected_area_mm2`, `length_mm`, `width_mm`, `elongation`, `pixel_count`, `weight_g`, `session` and `band_id`):
+`python train_weight_model.py your.csv`. Without the model file, `xgboost` or the depth picture, the weights are left
+out and everything else works.
+
+It only accepts pages from this computer or your local network. To let a phone see the 3D view, first
+make a key (at least 16 characters), put it in `packages\api\.env` as `KINECT_BRIDGE_KEY=...`, restart the
+API, set the same value in the window that starts the bridge (`set KINECT_BRIDGE_KEY=...`), and start it with
+`KinectBridge.exe --lan` from an administrator window. With a key, the website gives each signed-in viewer a
+short-lived ticket and the bridge refuses anyone without one; `--lan` will not start without a key.
 
 ---
 
 ## 8. Turning everything off
 
-- In each of the four windows press **Ctrl + C**.
+- In each of the four windows press **Ctrl + C**. Do the same in the Kinect bridge and chicken finder windows if you started them
+  (if you made them start at sign-in with Task Scheduler, stop the task there instead).
 - For the database you can also stop it politely from the API folder:
 
   ```
@@ -531,11 +712,10 @@ taskkill /PID <the number in the last column> /F
 
 ## 9. Things that exist but are not part of the normal start
 
-- `gleam-screen-creator-main\packages\vision` is an alternative camera service that returns
-  **placeholder** data. It also uses port 5000, so **never run it at the same time** as
-  `cerebroil-stream`. The root script `npm run dev:vision` starts it; ignore that script.
-- `cerebroil-backend` is an older FastAPI backend written for a Raspberry Pi (YOLOv8, ByteTrack, ROS 2).
-  The website does **not** use it.
+- The placeholder camera service that used to be in `packages\vision` (and the `npm run dev:vision` script) was removed.
+  The only camera service is `cerebroil-stream`. It stays in git history if it is ever wanted.
+- `cerebroil-backend` (an older FastAPI backend for a Raspberry Pi with YOLOv8, ByteTrack and ROS 2) was removed.
+  The website never used it. It stays in git history if it is ever wanted.
 
 ---
 
@@ -555,6 +735,12 @@ taskkill /PID <the number in the last column> /F
 | Insights page says the Groq key is not configured | `GROQ_API_KEY` not set | Add it to the project root `.env`, restart the web app |
 | Phone cannot open the site | Different Wi-Fi, or Firewall | See section 6 |
 | `bun install` or the site breaks after copying the folder | Stale installed packages | Delete `node_modules` and run `bun install` again |
+| Panel says "Kinect is not connected" | The Kinect bridge is not running | Start `kinect-bridge\bin\KinectBridge.exe` (section 7). The page keeps trying by itself |
+| Amber "Camera computer not answering" in the sidebar | The camera service or the Pi is off or on another network | Check the Pi's power and network; `VISION_SERVICE_URL` in `packages\api\.env` |
+| "Sensor offline, last reading ... ago" | The DHT22 sensor or its reader stopped | Check the three wires and 3.3 V, then `sudo systemctl restart dht22` on the Pi (see the sensor section) |
+| Database refuses connections, its log (`packages\api\.pgdata\server.log`) shows `could not reserve shared memory region` | The computer is short of memory | Close other programs, then `npm run db:local:stop` and `npm run db:local:start` |
+| The Insights AI says the key is not configured | `GROQ_API_KEY` missing | Add it to the project root `.env` and restart the website |
+| "Another video is being checked" | A Test video is still running on the camera computer | Wait a minute and try again; a closed browser tab no longer keeps it busy |
 
 Quick order to try when "nothing works": run `netstat -ano | findstr ":5434 :4000 :5000 :8080"`.
 Whichever port is missing tells you which window to start.
@@ -569,16 +755,126 @@ Whichever port is missing tells you which window to start.
 | The Settings page | `src\routes\settings.tsx` and `src\components\farm\*Section.tsx` |
 | How the website asks the API for data | `src\lib\farm\repository.ts` (server side), `src\lib\api-client.ts` (browser side) |
 | Sign in and sessions | `src\lib\auth-context.tsx`, `packages\api\src\routes\auth.ts` |
-| The grow-out day (Day 16 to 45) | `packages\api\src\cycle-day.ts`, `src\lib\farm\sample.ts` |
+| The grow-out day (Day 16 to 45) and the standard weight curve | `packages\api\src\cycle-day.ts` |
 | All the API endpoints | `packages\api\src\routes\*.ts`, wired together in `packages\api\src\app.ts` |
 | The database tables | `packages\api\migrations\*.sql` (numbered, applied in order) |
 | How the camera is analyzed | `cerebroil-stream\app.py` (function `_analyze_dahua`), `src\lib\analysis-insights.ts` |
 | The AI briefing (Insights page) | `src\lib\intelligence.ts` (Groq, Llama 3.3 70B) |
-| The built-in sample data | `src\lib\farm\dataset.ts` |
+| The weights typed in, and what is worked out from them | `packages\api\src\measured-weights.ts`, `src\lib\farm\weights.ts` |
+| What the AI briefing is told | `src\lib\farm\snapshot.ts` |
+| Day and night hours | `src\lib\farm\lighting.ts` |
+| Checking weights, counts and alerts against the real flock | `docs\validation.md`, `packages\api\src\validation.ts` |
+| The tests | `packages\api\test\`, `src\lib\farm\weights.test.ts`, `scripts\public-gateway.node-test.mjs`, `cerebroil-stream\test_behavior.py` |
 
-What is real and what is a stand-in (important when you write about it):
+What is real and what is a stand-in (important when you write about it; kept up to date in `plan.md` section 2.2):
 
-- **Real:** the camera video, the frame-by-frame movement analysis (OpenCV), the logins, settings,
-  database, and the Insights AI (when a Groq key is set).
-- **Stand-in:** there is no trained detector (YOLO) and no weight model. The Kinect is simulated,
-  and the per-bird weights on Analytics and Flock Tracking are sample data scaled to the chosen day.
+- **Real:**
+  - the Dahua video and the pen's temperature and humidity (the DHT22 on the Raspberry Pi);
+  - the bird count on **Analyze data** and the boxes on the Test video (the trained detector, `detector.onnx`);
+  - the Kinect picture, the outlines and the per-bird weights (about 18 % off for one bird, see the Kinect section);
+  - the live behavior numbers, once `LIVE_BEHAVIOR=1` is set on the Pi;
+  - the Dashboard's Growth card: the average of the weights typed in on Flock Tracking, for each day they were typed;
+  - logins, accounts, settings, alerts raised by the monitors, and mortality typed in by a person.
+- **Stand-in or derived:**
+  - the weights on the Test video are the standard weight for the day spread over the birds by box size, not measured;
+  - the **Weight Growth** tab, the report under the Dashboard's Growth card and the **Insights** AI text describe only the
+    birds whose weights were typed in on Flock Tracking; with none typed in they say so instead of showing numbers;
+  - the Insights AI needs `GROQ_API_KEY` in the project root `.env`, and it is told to say "not measured" for anything it
+    has no data for;
+  - a new database comes with demo rows dated 2024 (extra houses, cameras, an incident, reports); see "Setting up your
+    own farm" below to remove them;
+  - there is no feed, water or ammonia sensor, so those figures are not shown.
+
+
+## Setting up your own farm (once, after the database is created)
+
+A new database comes with demo rows: three extra houses, two extra cameras, their sensors, four alerts, an incident,
+reports and cohorts, all dated 2024, and a facility named `POULTRY_AI`. To remove them and set your own farm name, the
+house the camera watches and how many birds are in it, run this in `packages\api` (it only shows what it would change
+until you add `--yes`; back the database up first with `scripts\backup-db.ps1`):
+
+```
+npx tsx scripts/seed-farm.ts --name "Your Farm Name" --birds 20
+npx tsx scripts/seed-farm.ts --name "Your Farm Name" --birds 20 --yes
+```
+
+What was measured for real stays: the DHT22 readings, typed-in weights, accounts, settings and any alerts raised by the
+monitors. Options: `--house "Pen 1"`, `--breed "Ross 308"`.
+
+
+## Backups and restore
+
+Everything in the database (accounts, settings, weights typed in, alerts) and the trained model files (which are not in git)
+are saved by one script:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1
+```
+
+It writes `db-<date>-<time>.dump` and, once a day, `models-<date>.zip` into `cerebroil-backups` in your user folder, and keeps the
+newest 14 dumps. A Windows task named "Cerebroil nightly backup" can run it every evening (see Task Scheduler). **Copy that
+folder to another computer, a drive or cloud storage:** a backup on the same computer is lost with it.
+
+To restore into an empty database (the API stopped): create the database, then
+`pg_restore --no-owner -d "<connection url>" db-<date>-<time>.dump`, then `npm run db:migrate` in `packages\api` to apply any newer
+migrations.
+
+## Running the tests
+
+| Command | Where | What it checks |
+|---------|-------|----------------|
+| `bun test --timeout 30000` | `packages\api` | The weight rules through the real routes, the sensor monitor, the validation maths. Needs the database running; it writes two test birds' weights and a temporary session and removes them again, so use a development database |
+| `bun run test:node` | `packages\api` | A closed browser connection releases the Test video lock (runs on Node) |
+| `bun run test` | project root | The weight logic and the AI briefing's input |
+| `npm run test:gateway` | project root | The public-link gateway, against stand-in servers |
+| `python -m unittest test_behavior` | `cerebroil-stream` | The inactive and huddling rules |
+
+The same checks run on GitHub for every push (`.github\workflows\ci.yml`). Before sending changes: `bunx tsc --noEmit` in the project
+root and in `packages\api`.
+
+## Checking the system against the real flock
+
+The weights, bird counts and behavior alerts are estimates. `docs\validation.md` explains how to weigh birds, count pictures and
+review video, and `npx tsx scripts\validation-report.ts <weight|count|behavior> <file.csv>` (in `packages\api`) turns the sheets
+into error figures. The security review is `docs\security-review.md`; the plan and what is left is `plan.md` in the parent folder.
+
+## Privacy Policy
+
+The policy is at `/privacy` (anyone can read it, signed in or not) and is linked from the sign-in page and the account menu. After signing in, a person has to read a short summary and tick "I have read and understood" before the app opens; declining signs them out. The agreement is saved per person and per version in the `privacy_consents` table (with the time and IP address) and noted in `auth_audit`. Run `npm run db:migrate` once to add the table.
+
+When the policy changes in a way that matters, edit the text in `src/lib/privacy-policy.ts`, set `POLICY_UPDATED` in `src/lib/privacy-version.ts`, and set `PRIVACY_VERSION` in `packages/api/src/routes/auth.ts` to a new value. Everyone is then asked to agree again at their next sign-in.
+
+
+## Security notes
+
+What was found and closed in the security review, and what you still decide (the full review, with how it was done and what is open, is `docs\security-review.md`):
+
+- **Accounts.** Only a signed-in administrator can create accounts (`POST /auth/register`). There is no built-in
+  `admin` / `admin` login any more: the administrator is made by `scripts/seed-admin.ts` with a random password.
+- **Wrong passwords.** Five wrong tries in 30 minutes lock that email from that network address for the rest of the
+  30 minutes. The answers are the same whether or not the email has an account. The second-step code is limited
+  per account. Run `npm run db:migrate` once (it adds the `login_failures` table).
+- **Stored secrets.** Sessions keep a hash of the token, not the token. Two-step (MFA) secrets are encrypted with a
+  key made from `JWT_SECRET`, so changing `JWT_SECRET` also means turning two-step sign-in off and on again for
+  those accounts. Backup codes are stored as keyed hashes.
+- **Camera service.** Every route needs the token (the API sends it). Only the computer the service runs on may
+  open its own control page. The live picture reaches the website through the API. The API and the camera service
+  talk over plain http, so keep them on a network you trust, or put a TLS proxy in front.
+- **Camera actions.** Watching needs a sign-in; a scan, a capture or a test video needs the Operator, Farm Manager
+  or Administrator role. One test video runs at a time.
+- **Behind a proxy?** Set `TRUST_PROXY` to the proxy's address. Use HTTPS in production (`COOKIE_SECURE` stays on
+  `auto` and the cookies become Secure there).
+- **Accounts.** An administrator opens **Settings, Accounts** (only administrators see it) to add a person with an
+  email, a role and a temporary password, to switch an account off or on, and to set a new temporary password. The
+  person gets an email with the password; it works for `TEMP_PASSWORD_HOURS` (48 by default), and the first
+  sign-in makes them choose their own. If nobody signs in in time, the sign-in says the password expired and the
+  administrator sets a new one. Switching an account off or changing its password signs it out of every session at
+  once, and an administrator cannot change their own account from this list. A person's roles are read from the
+  database on every request, so a change applies on the next click. The same things are available on the API
+  (`GET /auth/users`, `POST /auth/register`, `PATCH /auth/users/:id`, `POST /auth/users/:id/password`).
+- **Email for new accounts.** It uses the same SMTP settings as the alert emails (`SMTP_*` in `packages\api\.env`).
+  For Gmail: turn on 2-Step Verification, make an app password at https://myaccount.google.com/apppasswords, and put
+  it (16 characters, no spaces) in `SMTP_PASS`. Restart the API afterwards. If the email cannot be sent, the account is
+  still made and the screen says so, so the password can be given in person.
+- **Known and accepted.** `minimatch` and `brace-expansion` have open advisories; they come in through the linting
+  tools only, never in the running app. The API and the camera service talk over plain http (see above).

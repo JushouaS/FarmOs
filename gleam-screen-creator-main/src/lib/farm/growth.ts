@@ -13,7 +13,8 @@
  *   cycleStart                cycle.startDay (the day the window starts, Settings)
  *   curve                     weight.curve[]  { day, actualG, standardG } up to today
  *   standardCurve             weight.standardCurve[]  { day, standardG } to the last day
- *   actualG / standardG       weight.actualAvgG / weight.standardG
+ *   actualG / standardG       weight.actualAvgG / weight.standardG (the newest measured day, and its standard)
+ *   measuredDay               weight.measuredDay  the day that weight was measured (null: nothing measured yet)
  *   variancePercent           weight.variancePercent
  *   confidencePercent         weight.estimationConfidencePercent
  *   sampleSize                weight.sampleSize
@@ -22,6 +23,8 @@
  *   temperature / humidity /  cluster.readings[] by `parameter`:
  *   ammonia                   temperature, humidity, nh3  { value, unit, status, bounds.label }
  */
+
+import { FRESH_MS } from "./pen-sensors";
 
 export interface GrowthPoint {
   day: number;
@@ -53,6 +56,8 @@ export interface GrowthCardData {
   variancePercent: number | null;
   confidencePercent: number | null;
   sampleSize: number | null;
+  /** The grow-out day `actualG` was measured on, which is not always today. */
+  measuredDay: number | null;
   fcr: number | null;
   flock: { total: number | null; active: number | null; inactive: number | null };
   temperature: GrowthReading;
@@ -71,10 +76,18 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function reading(readings: any[], parameter: string): GrowthReading {
-  const r = readings.find((x) => x?.parameter === parameter);
+/**
+ * The newest reading of one kind. One that is older than the sensor's reporting rhythm (a sensor that stopped,
+ * or a sample row from 2024) is not "the pen's air now", so its value is left empty and the card shows "—".
+ */
+function reading(readings: any[], parameter: string, now = Date.now()): GrowthReading {
+  const r = readings
+    .filter((x) => x?.parameter === parameter)
+    .sort((a, b) => Date.parse(b?.recordedAt ?? "") - Date.parse(a?.recordedAt ?? "") || 0)[0];
+  const at = r?.recordedAt ? Date.parse(r.recordedAt) : NaN;
+  const fresh = Number.isFinite(at) && now - at <= FRESH_MS;
   return {
-    value: num(r?.value),
+    value: fresh ? num(r?.value) : null,
     unit: typeof r?.unit === "string" ? r.unit : null,
     range: typeof r?.bounds?.label === "string" ? r.bounds.label : null,
     status: typeof r?.status === "string" ? r.status : null,
@@ -131,6 +144,7 @@ export function buildGrowthCardData(overview: any): GrowthCardData {
     variancePercent: variance,
     confidencePercent: num(overview?.weight?.estimationConfidencePercent),
     sampleSize: num(overview?.weight?.sampleSize),
+    measuredDay: num(overview?.weight?.measuredDay),
     fcr: num(overview?.feed?.fcr),
     flock: { total, active, inactive: active !== null && total !== null ? total - active : null },
     temperature: reading(readings, "temperature"),

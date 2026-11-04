@@ -1,22 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/farm/AppShell";
-import { getMonitoringReport } from "@/lib/farm/repository";
+import { getOperationsOverview } from "@/lib/farm/repository";
 import { fetchSituationBriefing, fetchFeedbackAlerts } from "@/lib/intelligence";
-import { SampleBadge, SampleNotice } from "@/components/farm/SampleBadge";
+import { fetchLiveBehavior } from "@/lib/api-client";
 import { T, getLanguage, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/intelligence")({
   head: () => ({ meta: [{ title: tr("Insights — CereBroiler") }] }),
-  loader: () => getMonitoringReport(),
+  loader: () => getOperationsOverview(),
   component: InsightsPage,
 });
 
 const RECOMMENDATIONS = [
-  { icon: "🌡️", title: T("Maintain temperature between 26–32°C"), why: T("Broiler chickens are sensitive to heat. Temperatures above 32°C cause stress and reduce feed intake."), ok: true },
-  { icon: "💧", title: T("Make sure clean water is always available"), why: T("Chickens drink 2–3× more water than they eat. Dehydration quickly leads to health problems."), ok: true },
-  { icon: "🐔", title: T("Monitor the 2 inactive birds closely"), why: T("Long inactivity may indicate stress, illness, or injury. Early detection prevents losses."), ok: false },
-  { icon: "💨", title: T("Keep ventilation adequate"), why: T("Good air circulation prevents ammonia buildup, which irritates the respiratory system."), ok: true },
+  { icon: "🌡️", title: T("Maintain temperature between 26–32°C"), why: T("Broiler chickens are sensitive to heat. Temperatures above 32°C cause stress and reduce feed intake.") },
+  { icon: "💧", title: T("Make sure clean water is always available"), why: T("Chickens drink 2–3× more water than they eat. Dehydration quickly leads to health problems.") },
+  { icon: "🐔", title: T("Check birds that stay still for a long time"), why: T("Long inactivity may indicate stress, illness, or injury. Early detection prevents losses.") },
+  { icon: "💨", title: T("Keep ventilation adequate"), why: T("Good air circulation prevents ammonia buildup, which irritates the respiratory system.") },
 ];
 
 function InsightsPage() {
@@ -24,8 +24,31 @@ function InsightsPage() {
   const report = Route.useLoaderData() as any;
   const day = Number(report?.cycle?.day ?? 0);
   const endDay = Number(report?.cycle?.endDay ?? report?.cycle?.lengthDays ?? 45);
-  const behind = report?.weightStatus === "warning";
+  const behind = report?.weight?.status === "warning";
   const lang = getLanguage();
+  // What the live behavior monitor sees now; it says "off" until LIVE_BEHAVIOR=1 is set on the camera computer.
+  const behaviorQ = useQuery({
+    queryKey: ["live-behavior"],
+    queryFn: () => fetchLiveBehavior(false),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+  const monitor = behaviorQ.data?.running ? behaviorQ.data : null;
+  const stillBirds = monitor ? (monitor.flock_inactive ? (monitor.birds ?? 0) : (monitor.inactive?.length ?? 0)) : 0;
+  const observations: { ok: boolean | null; text: string }[] = [];
+  if (report?.weight?.actualAvgG != null) {
+    observations.push(behind ? { ok: false, text: tr("Average weight is behind the target") } : { ok: true, text: tr("Average weight is on track") });
+  }
+  if (monitor) {
+    observations.push(
+      stillBirds > 0
+        ? { ok: false, text: tr("{n} birds have stayed still. Check on them.", { n: stillBirds }) }
+        : { ok: true, text: tr("Activity level is normal") },
+    );
+    if (monitor.huddle?.warning) observations.push({ ok: false, text: tr("{n} birds are huddled together.", { n: monitor.huddle.birds }) });
+  } else {
+    observations.push({ ok: null, text: tr("Behavior monitoring is off. Turn it on at the camera computer (LIVE_BEHAVIOR=1) to see this.") });
+  }
   const briefingQ = useQuery({
     queryKey: ["situation-briefing", lang],
     queryFn: () => fetchSituationBriefing({ data: { lang } } as never),
@@ -87,13 +110,13 @@ function InsightsPage() {
               ) : briefingQ.data ? (
                 <div>
                   <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>{briefingQ.data.briefing}</p>
-                  <p className="mt-3 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                  <p className="mt-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
                     {tr("Generated from current flock data")}
                   </p>
                 </div>
               ) : (
-                <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
-                  {tr("Your flock is generally healthy. Average weight is increasing normally and environmental conditions are within the recommended range. Monitor the 2 inactive birds closely and ensure ventilation is adequate.")}
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  {tr("No insight yet. Press Refresh to write one from the flock's current data.")}
                 </p>
               )}
             </div>
@@ -149,17 +172,6 @@ function InsightsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{tr(rec.title)}</p>
                     <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{tr(rec.why)}</p>
-                    {/* Status sits under the text on phones so it can't squeeze the title */}
-                    <div className="mt-2 sm:hidden">
-                      <span className={rec.ok ? "badge-green" : "badge-amber"}>
-                        {rec.ok ? tr("✓ Good") : tr("⚠ Attention")}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="hidden shrink-0 sm:block">
-                    <span className={rec.ok ? "badge-green" : "badge-amber"}>
-                      {rec.ok ? tr("✓ Good") : tr("⚠ Attention")}
-                    </span>
                   </div>
                 </div>
               ))}
@@ -172,15 +184,10 @@ function InsightsPage() {
           <div className="cb-card p-5">
             <h3 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{tr("Key Observations")}</h3>
             <ul className="space-y-2 text-sm">
-              {[
-                { ok: true,  text: tr("Average weight is on track") },
-                { ok: true,  text: tr("Activity level is normal") },
-                { ok: true,  text: tr("Ammonia level is safe (9 ppm)") },
-                { ok: false, text: tr("2 birds inactive — monitor closely") },
-              ].map((item, i) => (
+              {observations.map((item, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <span className="shrink-0" style={{ color: item.ok ? "var(--status-green)" : "var(--status-amber)" }}>
-                    {item.ok ? "✓" : "⚠"}
+                  <span className="shrink-0" style={{ color: item.ok ? "var(--status-green)" : item.ok === false ? "var(--status-amber)" : "var(--text-tertiary)" }}>
+                    {item.ok ? "✓" : item.ok === false ? "⚠" : "–"}
                   </span>
                   <span style={{ color: "var(--text-secondary)" }}>{item.text}</span>
                 </li>
@@ -189,15 +196,16 @@ function InsightsPage() {
           </div>
 
           <div className="cb-card p-5">
-            <h3 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              {tr("Next Focus")} <SampleBadge />
+            <h3 className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              {tr("Grow-out Status")}
             </h3>
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              {tr("Prepare for the next weight check in the coming days.")}
-            </p>
-            <div className="mt-3 rounded-lg px-3 py-2 text-xs font-medium"
+            <div className="rounded-lg px-3 py-2 text-xs font-medium"
               style={{ background: "var(--status-green-bg)", color: "var(--status-green-text)", border: "1px solid var(--status-green-border)" }}>
-              {behind ? tr("Day {day} of {endDay}: behind the weight target, check feed and water", { day, endDay }) : tr("Day {day} of {endDay}: on track for harvest", { day, endDay })}
+              {report?.weight?.actualAvgG == null
+                ? tr("Day {day} of {endDay}: no bird weights typed in yet", { day, endDay })
+                : behind
+                  ? tr("Day {day} of {endDay}: behind the weight target, check feed and water", { day, endDay })
+                  : tr("Day {day} of {endDay}: on track for harvest", { day, endDay })}
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
+import { useState, useEffect, useRef, createContext, useContext, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { SideNav } from "./SideNav";
 import { AccountMenu } from "./AccountMenu";
@@ -108,7 +108,7 @@ function TopBar({ onMenuOpen }: { onMenuOpen: () => void }) {
           <Bell className="h-4 w-4" />
           {alertCount > 0 && (
             <span
-              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-xs"
+              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold text-white shadow-xs"
               style={{ background: "var(--status-red)" }}
             >
               {alertCount}
@@ -145,7 +145,7 @@ function BottomNav() {
           key={r.to}
           to={r.to}
           activeOptions={{ exact: r.to === "/" }}
-          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors"
+          className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 text-xs font-medium transition-colors"
           style={{ color: "var(--text-tertiary)" }}
           activeProps={{ style: { color: "var(--brand)" } }}
         >
@@ -153,7 +153,7 @@ function BottomNav() {
             <r.icon className="h-4.5 w-4.5 stroke-[1.8px]" />
             {r.label === "Alerts" && alertCount > 0 && (
               <span
-                className="absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[8px] font-bold text-white"
+                className="absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-xs font-bold text-white"
                 style={{ background: "var(--status-red)" }}
               >
                 {alertCount}
@@ -178,6 +178,39 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
     return false;
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+  // On a phone or tablet the menu is a drawer that waits off the left edge. Until it is opened, nobody should be able to
+  // reach it: keyboard focus would otherwise walk through eight controls that cannot be seen, and a screen reader would
+  // read them out. `desktop` starts true so the server and the first browser render agree.
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const drawerAway = !desktop && !mobileOpen;
+  // An open drawer takes the keyboard: focus moves into it, the page behind cannot be reached while it is open, and
+  // closing it puts focus back on the button that opened it.
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (mobileOpen) {
+      opener.current = document.activeElement as HTMLElement | null;
+      const frame = requestAnimationFrame(() => {
+        // The first control that can be seen: the drawer also holds a collapse button that only shows on a wide screen.
+        const controls = document.getElementById("app-sidenav")?.querySelectorAll<HTMLElement>("button, a[href]") ?? [];
+        for (const control of controls) {
+          if (control.getClientRects().length > 0) {
+            control.focus();
+            break;
+          }
+        }
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    opener.current?.focus?.();
+    opener.current = null;
+  }, [mobileOpen]);
 
   // While the drawer is open: Escape closes it (R-32) and the page behind
   // it stops scrolling, so a swipe on the drawer doesn't move the page.
@@ -233,6 +266,8 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
         {/* Sidebar — hidden on mobile by default, slide-in on mobileOpen */}
         <div
           id="app-sidenav"
+          inert={drawerAway}
+          aria-hidden={drawerAway || undefined}
           className={`
             fixed left-0 top-0 z-40 h-full transition-[width,transform] duration-200
             ${sidebarW}
@@ -249,7 +284,7 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
         </div>
 
         {/* Main layout container */}
-        <div className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
+        <div inert={mobileOpen && !desktop} className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
           {bare ? (
             <main className="flex flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:overflow-hidden lg:pb-0">
               {children}

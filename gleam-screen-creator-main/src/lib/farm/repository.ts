@@ -1,10 +1,8 @@
 import { isRedirect, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
-import { formatMeasurement } from "./format";
-import { activeIncident, farm, houseLabel, liveCamera, readingByCode } from "./dataset";
-import { sampleForDay } from "./sample";
-import type { ReportFinding } from "./types";
+import { isNightCycle } from "./lighting";
+import { NO_SPREAD, type WeightSpread } from "./weights";
 
 /**
  * Data access layer — the seam a real database plugs into.
@@ -19,11 +17,7 @@ import type { ReportFinding } from "./types";
  * - returns raw values, not formatted strings (formatting lives in `format.ts`);
  * - is read-only and safe to call during render.
  *
- * `getOperationsOverview`, `getGrowthAnalytics` and `getAlerts` below now call
- * the live packages/api REST API (same pattern `acknowledgeAlertFn` already
- * used for mutations) instead of the in-memory `farm` dataset. The others
- * (`getMonitoringReport`, `getVisualTelemetry`) are not converted yet — see
- * the project's phase2-remediation-log for what's still pending.
+ * Every function below calls the live packages/api REST API. There is no sample dataset behind any of them.
  */
 
 /**
@@ -221,116 +215,18 @@ export const getGrowthAnalytics = createServerFn({ method: "GET" }).handler(asyn
   };
 });
 
-/** Visual telemetry — live feed overlays, behaviour metrics, anomaly timeline. */
-export const getVisualTelemetry = createServerFn({ method: "GET" }).handler(async () => {
-  // The sample flock, moved to the grow-out day set in Settings.
-  const { farm } = sampleForDay(await apiGet<any>("/operations/overview"));
-  const camera = liveCamera();
-  const cycleTotalDays = Math.round(
-    (new Date(farm.cycle.projectedYieldDate).getTime() - new Date(farm.cycle.startDate).getTime()) /
-      86_400_000,
-  );
-
-  return {
-    camera: { ...camera, houseLabel: houseLabel(camera.houseId) },
-    /** HUD readings for the house on camera. */
-    hud: {
-      temperature: readingByCode(`TEMP_${camera.houseId}`),
-      humidity: readingByCode(`HUMID_${camera.houseId}`),
-    },
-    detections: farm.detections,
-    clusterWarning: farm.clusterWarning,
-    behavior: farm.behavior,
-    weight: {
-      actualAvgG: farm.weight.actualAvgG,
-      standardG: farm.weight.standardG,
-      variancePercent: farm.weight.variancePercent,
-      estimationConfidencePercent: farm.weight.estimationConfidencePercent,
-      sampleSize: farm.weight.sampleSize,
-      status: farm.weight.status,
-    },
-    cycleDay: farm.cycle.day,
-    /** Grow-out length used to show how far the cycle has progressed. */
-    cycleTotalDays,
-    timeline: farm.timeline,
-  };
-});
-
-/** Intelligence — the auto-generated monitoring report and its evidence. */
-export const getMonitoringReport = createServerFn({ method: "GET" }).handler(async () => {
-  // The sample flock, moved to the grow-out day set in Settings.
+/**
+ * What the AI briefing is written from: the overview, the weights typed in, and the live behavior monitor.
+ * Each part that cannot be read comes back empty, and the snapshot says so, instead of failing the page.
+ */
+export const getLiveSnapshotInputs = createServerFn({ method: "GET" }).handler(async () => {
   const overview = await apiGet<any>("/operations/overview");
-  const { farm } = sampleForDay(overview);
-  const incident = activeIncident();
-  const nh3Current = readingByCode("NH3_H01");
-  const temperature = readingByCode("TEMP_H01");
-  const humidity = readingByCode("HUMID_H01");
-
-  const findings: ReportFinding[] = [
-    {
-      id: "nh3-peak",
-      parameter: "Ammonia NH3 (incident peak)",
-      source: `${incident.peak.sensorId} / ${houseLabel(incident.houseId)}`,
-      value: incident.peak.value,
-      unit: incident.peak.unit,
-      boundsLabel: `<= ${incident.peak.threshold} ${incident.peak.unit.toLowerCase()}`,
-      status: "critical",
-    },
-    {
-      id: "nh3-current",
-      parameter: "Ammonia NH3 (current)",
-      source: `${nh3Current.sensorId} / ${houseLabel(nh3Current.houseId)}`,
-      value: nh3Current.value,
-      unit: nh3Current.unit,
-      boundsLabel: nh3Current.bounds.label,
-      status: nh3Current.status,
-    },
-    {
-      id: "temperature",
-      parameter: "Temperature",
-      source: `${temperature.sensorId} / ${houseLabel(temperature.houseId)}`,
-      value: temperature.value,
-      unit: temperature.unit,
-      boundsLabel: temperature.bounds.label,
-      status: temperature.status,
-    },
-    {
-      id: "humidity",
-      parameter: "Relative humidity",
-      source: `${humidity.sensorId} / ${houseLabel(humidity.houseId)}`,
-      value: humidity.value,
-      unit: humidity.unit,
-      boundsLabel: humidity.bounds.label,
-      status: humidity.status,
-    },
-    {
-      id: "weight",
-      parameter: "Average bird weight",
-      source: `SCALE / ${farm.facility.houseRange}`,
-      value: farm.weight.actualAvgG,
-      unit: "g",
-      boundsLabel: `STD ${formatMeasurement(farm.weight.standardG, "g")}`,
-      status: farm.weight.status,
-    },
-  ];
-
-  return {
-    report: farm.report,
-    platform: farm.platform,
-    facility: {
-      name: farm.facility.name,
-      houseRange: farm.facility.houseRange,
-    },
-    cycle: overview?.cycle ?? farm.cycle,
-    weightStatus: farm.weight.status,
-    incident: {
-      ...incident,
-      houseLabel: houseLabel(incident.houseId),
-    },
-    findings,
-    references: farm.references,
-    archive: farm.archive,
-  };
+  const night = isNightCycle(new Date(), overview?.lighting) ? 1 : 0;
+  const [spread, behavior] = await Promise.all([
+    apiGet<WeightSpread>("/growth/weight-spread").catch(() => NO_SPREAD),
+    apiGet<any>(`/visual/behavior?night=${night}`).catch(() => ({ running: false })),
+  ]);
+  return { overview, spread, behavior };
 });
 
 /** Alerts — list with optional severity / acknowledged filters. */

@@ -13,9 +13,23 @@ import {
   verifyMfaToken,
   generateBackupCodes,
   hashBackupCode,
+  findBackupCode,
+  hashAccessToken,
+  sealSecret,
+  openSecret,
+  isSealed,
 } from "../auth/auth.js";
+import { randomBytes } from "node:crypto";
+import { sendTemporaryPassword } from "../account-mail.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import type { AccessTokenPayload } from "../auth/auth.js";
+
+/**
+ * The version of the Privacy Policy people agree to. Change it whenever the policy
+ * changes in a way that matters (src/routes/privacy.tsx): everyone is then asked to
+ * agree again the next time they sign in.
+ */
+export const PRIVACY_VERSION = "2026-11-02";
 
 const LOCKOUT_AFTER_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 30;
@@ -23,23 +37,27 @@ const LOCKOUT_DURATION_MINUTES = 30;
 /**
  * Session + identity routes.
  *
- * POST /auth/register
+ * POST /auth/register       (ADMIN only: creates an account, does not sign it in)
  * POST /auth/login
  * POST /auth/refresh
  * POST /auth/logout
  * POST /auth/password-reset/request
  * POST /auth/password-reset/confirm
  * GET  /auth/me             (auth required)
+ * GET  /auth/users, PATCH /auth/users/:id, POST /auth/users/:id/password   (ADMIN)
  */
 
 const emailSchema = z.string().email().max(320);
 const passwordSchema = z.string().min(12).max(128);
 
+/** The roles an administrator can give a new account (the catalogue seeded in migration 0001). */
+const ROLE_CODES = ["ADMIN", "FARM_MANAGER", "OPERATOR", "VIEWER"] as const;
+
 const registerBody = z.object({
   email: emailSchema,
   password: passwordSchema,
   fullName: z.string().max(160).optional(),
-  roles: z.array(z.string()).default(["VIEWER"]),
+  roles: z.array(z.enum(ROLE_CODES)).min(1).max(ROLE_CODES.length).default(["VIEWER"]),
 });
 
 /** Account the development-only "admin" / "admin" login maps to (see /login). */
@@ -66,21 +84,16 @@ const passwordChangeBody = z.object({
 const ACCESS_COOKIE = "farm_access_token";
 const REFRESH_COOKIE = "farm_refresh_token";
 
-// Defaults to the previous behaviour (on in production); COOKIE_SECURE=false
-// is what makes plain-HTTP deployments able to authenticate at all.
-const cookieSecure = env.COOKIE_SECURE
-  ? env.COOKIE_SECURE === "true"
-  : env.NODE_ENV === "production";
-
-// Same shape as cookieSecure: unset keeps the original NODE_ENV rule, and
-// DEMO_LOGIN_ENABLED="true" is the one way a production container can opt in.
+// Same shape as cookieSecure (env.COOKIE_SECURE, resolved in config.ts): unset
+// keeps the NODE_ENV rule, and DEMO_LOGIN_ENABLED="true" is the one way a
+// production container can opt in.
 const demoLoginEnabled = env.DEMO_LOGIN_ENABLED
   ? env.DEMO_LOGIN_ENABLED === "true"
   : env.NODE_ENV === "development";
 
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: cookieSecure,
+  secure: env.cookieSecure,
   sameSite: "strict" as const,
   path: "/",
   maxAge: env.JWT_ACCESS_TTL_SECONDS,
@@ -88,7 +101,7 @@ const COOKIE_OPTS = {
 
 const REFRESH_COOKIE_OPTS = {
   httpOnly: true,
-  secure: cookieSecure,
+  secure: env.cookieSecure,
   sameSite: "strict" as const,
   path: "/",
   maxAge: Number(process.env.JWT_REFRESH_TTL_SECONDS ?? 30 * 24 * 60 * 60),
@@ -97,7 +110,7 @@ const REFRESH_COOKIE_OPTS = {
 const MFA_PENDING_COOKIE = "farm_mfa_pending";
 const MFA_COOKIE_OPTS = {
   httpOnly: true,
-  secure: cookieSecure,
+  secure: env.cookieSecure,
   sameSite: "strict" as const,
   path: "/auth/mfa",
   maxAge: 5 * 60, // 5 minutes
@@ -108,7 +121,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   /** Issue a new access/refresh pair for a validated user. */
   async function issueSession(userId: string, ip: string | null, ua: string | null) {
     const user = await app.sqlRead`
-      SELECT u.id, u.email,
+      SELECT u.id, u.email, u.must_change_password,
              COALESCE(array_agg(DISTINCT r.code) FILTER (WHERE r.code IS NOT NULL), '{}') AS roles,
              COALESCE(array_agg(DISTINCT p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permissions
       FROM users u
@@ -117,7 +130,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       LEFT JOIN role_permissions rp ON rp.role_id = r.id
       LEFT JOIN permissions p ON p.id = rp.permission_id
       WHERE u.id = ${userId} AND u.is_active = true
-      GROUP BY u.id, u.email
+      GROUP BY u.id, u.email, u.must_change_password
       LIMIT 1`;
     if (user.count === 0) throw new Error("user_not_found");
     const row = user[0]!;
@@ -136,7 +149,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     await app.sqlWrite`
       INSERT INTO sessions (user_id, access_token, refresh_token, refresh_expires_at, ip_address, user_agent)
-      VALUES (${row.id}, ${accessToken}, ${refreshHash}, ${expiresAt.toISOString()}, ${ip}::inet, ${ua})
+      VALUES (${row.id}, ${hashAccessToken(accessToken)}, ${refreshHash}, ${expiresAt.toISOString()}, ${ip}::inet, ${ua})
     `;
 
     await app.sqlWrite`
@@ -157,6 +170,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         email: row.email,
         roles: row.roles as string[],
         permissions: row.permissions as string[],
+        mustChangePassword: Boolean(row.must_change_password),
       },
     };
   }
@@ -168,7 +182,44 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
   const loginRateLimit = { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } };
 
-  app.post("/register", { ...loginRateLimit }, async (request, reply) => {
+  /* ---- too many wrong tries ------------------------------------------------------------
+   * Five wrong tries in 30 minutes lock the sign-in for that email from that network address
+   * (the second step: for that account, from anywhere). It is kept per address so someone
+   * guessing cannot lock the real person out from their own place, and it counts emails
+   * with no account the same way, so the answers give nothing away about who has one. */
+  const FAIL_LIMIT = 5;
+  const FAIL_WINDOW_MS = 30 * 60 * 1000;
+
+  async function failureState(subject: string, ip: string | null) {
+    const rows = ip
+      ? await app.sqlRead`
+          SELECT failed_at FROM login_failures
+          WHERE subject = ${subject} AND ip_address = ${ip}::inet AND failed_at > now() - interval '30 minutes'
+          ORDER BY failed_at DESC LIMIT ${FAIL_LIMIT}`
+      : await app.sqlRead`
+          SELECT failed_at FROM login_failures
+          WHERE subject = ${subject} AND failed_at > now() - interval '30 minutes'
+          ORDER BY failed_at DESC LIMIT ${FAIL_LIMIT}`;
+    const locked = rows.length >= FAIL_LIMIT;
+    const lockedUntil = locked ? new Date(new Date(rows[FAIL_LIMIT - 1]!.failed_at as string).getTime() + FAIL_WINDOW_MS).toISOString() : null;
+    return { count: rows.length, locked, lockedUntil };
+  }
+
+  async function recordFailure(subject: string, ip: string | null) {
+    await app.sqlWrite`INSERT INTO login_failures (subject, ip_address) VALUES (${subject}, ${ip}::inet)`;
+  }
+
+  async function clearFailures(subject: string, ip: string | null) {
+    if (ip) await app.sqlWrite`DELETE FROM login_failures WHERE subject = ${subject} AND ip_address = ${ip}::inet`;
+    else await app.sqlWrite`DELETE FROM login_failures WHERE subject = ${subject}`;
+  }
+
+  // Checked against when an email has no account, so a wrong email takes as long to refuse as a wrong password.
+  const decoyHash = hashPassword(randomBytes(16).toString("hex"));
+
+  // Only an administrator creates accounts. It used to be open to anyone, with the roles taken from the
+  // request, so anyone could make themselves an ADMIN. The new account is not signed in: the caller keeps their own session.
+  app.post("/register", { ...loginRateLimit, preHandler: [requireAuth, requireRole("ADMIN")] }, async (request, reply) => {
     const parsed = registerBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body", issues: parsed.error.issues });
     const { email, password, fullName, roles } = parsed.data;
@@ -179,10 +230,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const existing = await app.sqlRead`SELECT 1 FROM users WHERE email = ${email}`;
     if (existing.count > 0) return reply.code(409).send({ error: "email_taken" });
 
+    // The password an administrator types is temporary: it expires, and the person must replace it at the first sign-in.
     const passwordHash = await hashPassword(password);
+    const expiresAt = new Date(Date.now() + env.TEMP_PASSWORD_HOURS * 3600_000);
     const inserted = await app.sqlWrite`
-      INSERT INTO users (email, password_hash, full_name)
-      VALUES (${email}, ${passwordHash}, ${fullName ?? null})
+      INSERT INTO users (email, password_hash, full_name, must_change_password, password_expires_at)
+      VALUES (${email}, ${passwordHash}, ${fullName ?? null}, true, ${expiresAt.toISOString()})
       RETURNING id`;
     const userId = inserted[0]!.id as string;
 
@@ -193,9 +246,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       `;
     }
 
-    const session = await issueSession(userId, request.ip, request.headers["user-agent"] ?? null);
-    setSessionCookies(reply, session);
-    return reply.code(201).send({ user: session.user });
+    await app.sqlWrite`
+      INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+      VALUES (${request.authUser!.sub}, ${"user_created"}, ${request.ip}::inet, ${app.sqlWrite.json({ createdUserId: userId, roles })})`;
+    // The email goes out after the account exists; if it cannot be sent the account is still there and the
+    // administrator is told, so they can give the password in person.
+    const mail = await sendTemporaryPassword({ email, password, expiresAt, reason: "new" });
+    return reply.code(201).send({ user: { id: userId, email, roles }, expiresAt: expiresAt.toISOString(), email_sent: mail.sent, email_problem: mail.reason ?? null });
   });
 
   app.post("/login", { ...loginRateLimit }, async (request, reply) => {
@@ -219,55 +276,50 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const parsed = loginBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body", issues: parsed.error.issues });
     const { email, password } = parsed.data;
+    const subject = email.toLowerCase();
 
-    const user = await app.sqlRead`
-      SELECT id, password_hash, is_active, failed_login_attempts, locked_until, mfa_enabled, mfa_secret
-      FROM users WHERE email = ${email}`;
-    if (user.count === 0) {
+    const state = await failureState(subject, request.ip);
+    if (state.locked) {
       await app.sqlWrite`
         INSERT INTO auth_audit (action, ip_address, metadata)
-        VALUES (${"login_failed_unknown"}, ${request.ip}::inet, ${app.sqlWrite.json({ email })})
-      `;
-      return reply.code(401).send({ error: "invalid_credentials" });
-    }
-    const row = user[0]!;
-    if (!row.is_active) return reply.code(403).send({ error: "user_disabled" });
-
-    const lockedUntil = row.locked_until ? new Date(row.locked_until as string) : null;
-    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
-      await app.sqlWrite`
-        INSERT INTO auth_audit (user_id, action, ip_address, metadata)
-        VALUES (${row.id}, ${"login_failed_locked"}, ${request.ip}::inet, ${app.sqlWrite.json({ lockedUntil: row.locked_until })})`;
+        VALUES (${"login_refused_locked"}, ${request.ip}::inet, ${app.sqlWrite.json({ email: subject })})`;
       return reply.code(403).send({
         error: "account_locked",
-        lockedUntil: row.locked_until,
-        message: `Account is locked until ${lockedUntil.toISOString()}.`,
+        lockedUntil: state.lockedUntil,
+        message: `Too many failed attempts. Try again after ${state.lockedUntil}.`,
       });
     }
 
-    const ok = await verifyPassword(password, row.password_hash as string);
-    if (!ok) {
-      const attempts = (row.failed_login_attempts as number) + 1;
-      const locked = attempts >= LOCKOUT_AFTER_FAILED_ATTEMPTS
-        ? new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000).toISOString()
-        : null;
-      await app.sqlWrite`
-        UPDATE users
-        SET failed_login_attempts = ${attempts},
-            locked_until = ${locked}
-        WHERE id = ${row.id}`;
+    const found = await app.sqlRead`
+      SELECT id, password_hash, is_active, mfa_enabled, mfa_secret, must_change_password, password_expires_at
+      FROM users WHERE email = ${email}`;
+    const row = found.count > 0 ? found[0]! : null;
+    // The password is always checked (against a decoy when there is no such account), and a missing account, a
+    // wrong password and a disabled account all get the same answer.
+    const ok = await verifyPassword(password, row ? (row.password_hash as string) : await decoyHash);
+    if (!row || !ok || !row.is_active) {
+      await recordFailure(subject, request.ip);
       await app.sqlWrite`
         INSERT INTO auth_audit (user_id, action, ip_address, metadata)
-        VALUES (${row.id}, ${"login_failed_password"}, ${request.ip}::inet, ${app.sqlWrite.json({ attempts, locked })})`;
+        VALUES (${row ? (row.id as string) : null}, ${!row ? "login_failed_unknown" : !row.is_active ? "login_failed_disabled" : "login_failed_password"},
+                ${request.ip}::inet, ${app.sqlWrite.json({ email: subject, attempts: state.count + 1 })})`;
       return reply.code(401).send({
         error: "invalid_credentials",
-        attemptsRemaining: Math.max(0, LOCKOUT_AFTER_FAILED_ATTEMPTS - attempts),
+        attemptsRemaining: Math.max(0, FAIL_LIMIT - (state.count + 1)),
       });
     }
 
-    // Reset failed attempts on correct password.
-    await app.sqlWrite`
-      UPDATE users SET failed_login_attempts = 0, locked_until = null WHERE id = ${row.id}`;
+    // Correct password: forget the wrong tries from this address.
+    await clearFailures(subject, request.ip);
+
+    // A temporary password nobody used in time. Said only now, to someone who knows the password, so it does not
+    // tell a stranger anything.
+    if (row.must_change_password && row.password_expires_at && new Date(row.password_expires_at as string).getTime() < Date.now()) {
+      await app.sqlWrite`
+        INSERT INTO auth_audit (user_id, action, ip_address)
+        VALUES (${row.id as string}, ${"login_refused_password_expired"}, ${request.ip}::inet)`;
+      return reply.code(403).send({ error: "password_expired", message: "This temporary password has expired. Ask your administrator for a new one." });
+    }
 
     // If MFA is enabled, require a second factor before issuing a full session.
     if (row.mfa_enabled) {
@@ -313,7 +365,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const token = (request as any).cookies?.[ACCESS_COOKIE] ?? request.headers.authorization?.slice(7).trim();
     if (!token) return reply.code(400).send({ error: "missing_token" });
     const deleted = await app.sqlWrite`
-      DELETE FROM sessions WHERE access_token = ${token} RETURNING id`;
+      DELETE FROM sessions WHERE access_token IN (${hashAccessToken(token)}, ${token}) RETURNING id`;
     if (deleted.count === 0) return reply.code(404).send({ error: "session_not_found" });
     reply.clearCookie(ACCESS_COOKIE, { path: "/" });
     reply.clearCookie(REFRESH_COOKIE, { path: "/" });
@@ -327,13 +379,38 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   app.get("/me", { preHandler: [requireAuth] }, async (request) => {
     const user = request.authUser!;
     const row = await app.sqlRead`
-      SELECT id, email, full_name, avatar_url, analysis_language, last_login_at, created_at
+      SELECT id, email, full_name, avatar_url, analysis_language, last_login_at, created_at,
+             must_change_password,
+             EXISTS (
+               SELECT 1 FROM privacy_consents c
+               WHERE c.user_id = users.id AND c.version = ${PRIVACY_VERSION}
+             ) AS privacy_accepted
       FROM users WHERE id = ${user.sub}`;
     return {
       user: row[0],
       roles: user.roles,
       permissions: user.permissions,
     };
+  });
+
+  /**
+   * POST /auth/privacy
+   * The signed-in person agrees to the current Privacy Policy. Saved once per person and
+   * version (agreeing again changes nothing), with the time, and noted in the sign-in log.
+   */
+  app.post("/privacy", { preHandler: [requireAuth] }, async (request, reply) => {
+    const userId = request.authUser!.sub;
+    const saved = await app.sqlWrite`
+      INSERT INTO privacy_consents (user_id, version, ip_address)
+      VALUES (${userId}, ${PRIVACY_VERSION}, ${request.ip}::inet)
+      ON CONFLICT (user_id, version) DO NOTHING
+      RETURNING version`;
+    if (saved.count > 0) {
+      await app.sqlWrite`
+        INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+        VALUES (${userId}, ${"privacy_accepted"}, ${request.ip}::inet, ${app.sqlWrite.json({ version: PRIVACY_VERSION })})`;
+    }
+    return reply.send({ accepted: true, version: PRIVACY_VERSION });
   });
 
   /**
@@ -386,12 +463,22 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       SELECT id, email, mfa_secret FROM users WHERE id = ${userId} AND mfa_enabled = true AND is_active = true`;
     if (row.count === 0) return reply.code(401).send({ error: "mfa_not_enabled" });
 
-    if (!verifyMfaToken(row[0]!.mfa_secret as string, parsed.data.token)) {
+    // Wrong codes are counted per account, from any address: six digits can be guessed otherwise.
+    const mfaSubject = `mfa:${userId}`;
+    const mfaState = await failureState(mfaSubject, null);
+    if (mfaState.locked) return reply.code(429).send({ error: "too_many_attempts", lockedUntil: mfaState.lockedUntil });
+
+    const secret = row[0]!.mfa_secret as string;
+    if (!verifyMfaToken(openSecret(secret), parsed.data.token)) {
+      await recordFailure(mfaSubject, request.ip);
       await app.sqlWrite`
         INSERT INTO auth_audit (user_id, action, ip_address, metadata)
         VALUES (${userId}, ${"mfa_failed"}, ${request.ip}::inet, ${app.sqlWrite.json({})})`;
       return reply.code(401).send({ error: "invalid_mfa_token" });
     }
+    await clearFailures(mfaSubject, null);
+    // A secret saved before secrets were encrypted is encrypted now.
+    if (!isSealed(secret)) await app.sqlWrite`UPDATE users SET mfa_secret = ${sealSecret(secret)} WHERE id = ${userId}`;
 
     // Clear pending cookie, issue full session.
     reply.clearCookie(MFA_PENDING_COOKIE, { path: "/auth/mfa" });
@@ -417,7 +504,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     // Store the secret tentatively (not yet verified). MFA remains disabled
     // until the user proves ownership via /mfa/verify-setup.
     await app.sqlWrite`
-      UPDATE users SET mfa_secret = ${secret} WHERE id = ${userId}`;
+      UPDATE users SET mfa_secret = ${sealSecret(secret)} WHERE id = ${userId}`;
 
     return reply.send({ secret, otpauthUrl, qrDataUrl });
   });
@@ -436,12 +523,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     if (row.count === 0 || !row[0]!.mfa_secret) return reply.code(400).send({ error: "mfa_setup_not_started" });
     if (row[0]!.mfa_enabled) return reply.code(409).send({ error: "mfa_already_enabled" });
 
-    if (!verifyMfaToken(row[0]!.mfa_secret as string, parsed.data.token)) {
+    if (!verifyMfaToken(openSecret(row[0]!.mfa_secret as string), parsed.data.token)) {
       return reply.code(401).send({ error: "invalid_mfa_token" });
     }
 
     const backupCodes = generateBackupCodes();
-    const hashedBackup = backupCodes.map(hashBackupCode);
+    const hashedBackup = backupCodes.map((code) => hashBackupCode(code, userId));
 
     await app.sqlWrite`
       UPDATE users
@@ -486,7 +573,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
    * POST /auth/mfa/backup-code
    * Use a backup code instead of a TOTP token for login-verify.
    */
-  app.post("/mfa/backup-code", async (request, reply) => {
+  app.post("/mfa/backup-code", { ...loginRateLimit }, async (request, reply) => {
     const pendingCookie = (request as any).cookies?.[MFA_PENDING_COOKIE];
     if (!pendingCookie) return reply.code(401).send({ error: "mfa_not_pending" });
     const parsed = z.object({ code: z.string().min(1) }).safeParse(request.body);
@@ -499,10 +586,18 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       SELECT id, mfa_enabled, mfa_backup_codes FROM users WHERE id = ${userId} AND mfa_enabled = true`;
     if (row.count === 0) return reply.code(401).send({ error: "mfa_not_enabled" });
 
-    const hashed = hashBackupCode(parsed.data.code);
+    // Backup codes share the wrong-code count of the second step.
+    const mfaSubject = `mfa:${userId}`;
+    const mfaState = await failureState(mfaSubject, null);
+    if (mfaState.locked) return reply.code(429).send({ error: "too_many_attempts", lockedUntil: mfaState.lockedUntil });
+
     const codes = (row[0]!.mfa_backup_codes as string[]) ?? [];
-    const idx = codes.indexOf(hashed);
-    if (idx === -1) return reply.code(401).send({ error: "invalid_backup_code" });
+    const idx = findBackupCode(codes, parsed.data.code, userId);
+    if (idx === -1) {
+      await recordFailure(mfaSubject, request.ip);
+      return reply.code(401).send({ error: "invalid_backup_code" });
+    }
+    await clearFailures(mfaSubject, null);
 
     // Remove used backup code.
     const remaining = codes.filter((_, i) => i !== idx);
@@ -533,10 +628,15 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     const policy = validatePassword(parsed.data.newPassword);
     if (!policy.ok) return reply.code(400).send({ error: "weak_password", message: policy.reason });
+    if (parsed.data.newPassword === parsed.data.currentPassword) {
+      return reply.code(400).send({ error: "same_password", message: "Choose a password different from the current one." });
+    }
 
     const newHash = await hashPassword(parsed.data.newPassword);
     await app.sqlWrite`
-      UPDATE users SET password_hash = ${newHash}, updated_at = now() WHERE id = ${userId}`;
+      UPDATE users SET password_hash = ${newHash}, updated_at = now(),
+                       must_change_password = false, password_expires_at = null
+      WHERE id = ${userId}`;
 
     // Revoke all sessions for this user.
     await app.sqlWrite`DELETE FROM sessions WHERE user_id = ${userId}`;
@@ -573,7 +673,8 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const { limit, offset } = parsed.data;
 
     const rows = await app.sqlRead`
-      SELECT u.id, u.email,
+      SELECT u.id, u.email, u.full_name AS "fullName", u.is_active AS "isActive", u.last_login_at AS "lastLoginAt",
+             u.must_change_password AS "mustChangePassword", u.password_expires_at AS "passwordExpiresAt",
              COALESCE(
                (SELECT r.code FROM roles r
                 INNER JOIN user_roles ur ON ur.role_id = r.id
@@ -581,13 +682,104 @@ export async function registerAuthRoutes(app: FastifyInstance) {
                 ORDER BY r.code
                 LIMIT 1),
                'VIEWER'
-             ) AS role
+             ) AS role,
+             COALESCE((SELECT array_agg(r.code ORDER BY r.code) FROM roles r
+                       INNER JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = u.id), '{}') AS roles
       FROM users u
       ORDER BY u.created_at DESC
       LIMIT ${limit} OFFSET ${offset}`;
 
     const total = await app.sqlRead`SELECT COUNT(*)::int AS count FROM users`;
     return { users: rows, total: total[0]!.count as number, limit, offset };
+  });
+
+  /**
+   * PATCH /auth/users/:id            (ADMIN) switch an account on or off, or change its roles
+   * POST  /auth/users/:id/password   (ADMIN) give an account a new password
+   *
+   * An administrator cannot change their own account here (so they cannot lock themselves out), and the last
+   * active administrator cannot be switched off or lose the role. Switching an account off, changing its
+   * password or its roles signs it out of every session at once.
+   */
+  const userIdParams = z.object({ id: z.string().uuid() });
+  const userPatchBody = z
+    .object({
+      isActive: z.boolean().optional(),
+      roles: z.array(z.enum(ROLE_CODES)).min(1).max(ROLE_CODES.length).optional(),
+    })
+    .refine((b) => b.isActive !== undefined || b.roles !== undefined, { message: "nothing_to_change" });
+  const adminOnly = { preHandler: [requireAuth, requireRole("ADMIN")] };
+
+  /** True when no other active administrator would be left if this account stopped being one. */
+  async function isLastActiveAdmin(userId: string): Promise<boolean> {
+    const others = await app.sqlRead`
+      SELECT 1 FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      JOIN roles r ON r.id = ur.role_id AND r.code = 'ADMIN'
+      WHERE u.is_active AND u.id <> ${userId}::uuid
+      LIMIT 1`;
+    return others.count === 0;
+  }
+
+  app.patch("/users/:id", adminOnly, async (request, reply) => {
+    const params = userIdParams.safeParse(request.params);
+    const body = userPatchBody.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: "invalid_body" });
+    const { id } = params.data;
+    const adminId = request.authUser!.sub;
+    if (id === adminId) return reply.code(409).send({ error: "cannot_change_own_account" });
+
+    const target = await app.sqlRead`
+      SELECT u.id, u.is_active,
+             COALESCE((SELECT array_agg(r.code) FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = u.id), '{}') AS roles
+      FROM users u WHERE u.id = ${id}::uuid`;
+    if (target.count === 0) return reply.code(404).send({ error: "user_not_found" });
+    const wasAdmin = (target[0]!.roles as string[]).includes("ADMIN");
+    const staysAdmin = (body.data.roles ? body.data.roles.includes("ADMIN") : wasAdmin) && (body.data.isActive ?? (target[0]!.is_active as boolean));
+    if (wasAdmin && !staysAdmin && (await isLastActiveAdmin(id))) {
+      return reply.code(409).send({ error: "last_admin", message: "This is the last active administrator." });
+    }
+
+    if (body.data.isActive !== undefined) {
+      await app.sqlWrite`UPDATE users SET is_active = ${body.data.isActive}, updated_at = now() WHERE id = ${id}::uuid`;
+    }
+    if (body.data.roles) {
+      await app.sqlWrite`DELETE FROM user_roles WHERE user_id = ${id}::uuid`;
+      await app.sqlWrite`
+        INSERT INTO user_roles (user_id, role_id)
+        SELECT ${id}::uuid, r.id FROM roles r WHERE r.code = ANY(${body.data.roles})`;
+    }
+    // Whatever changed, the account signs in again to get what it now has.
+    await app.sqlWrite`DELETE FROM sessions WHERE user_id = ${id}::uuid`;
+    await app.sqlWrite`
+      INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+      VALUES (${adminId}, ${"user_changed"}, ${request.ip}::inet, ${app.sqlWrite.json({ targetUserId: id, ...body.data })})`;
+    return reply.send({ updated: true, id });
+  });
+
+  app.post("/users/:id/password", { ...adminOnly, ...loginRateLimit }, async (request, reply) => {
+    const params = userIdParams.safeParse(request.params);
+    const body = z.object({ newPassword: passwordSchema }).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: "invalid_body" });
+    const { id } = params.data;
+    if (id === request.authUser!.sub) return reply.code(409).send({ error: "use_change_password", message: "Change your own password from your account." });
+    const policy = validatePassword(body.data.newPassword);
+    if (!policy.ok) return reply.code(400).send({ error: "weak_password", message: policy.reason });
+
+    // Like a new account: the password is temporary, must be replaced at the next sign-in, and expires.
+    const expiresAt = new Date(Date.now() + env.TEMP_PASSWORD_HOURS * 3600_000);
+    const done = await app.sqlWrite`
+      UPDATE users SET password_hash = ${await hashPassword(body.data.newPassword)}, updated_at = now(),
+                       must_change_password = true, password_expires_at = ${expiresAt.toISOString()}
+      WHERE id = ${id}::uuid RETURNING email::text AS email`;
+    if (done.count === 0) return reply.code(404).send({ error: "user_not_found" });
+    await app.sqlWrite`DELETE FROM sessions WHERE user_id = ${id}::uuid`;
+    await app.sqlWrite`DELETE FROM login_failures WHERE subject = ${(done[0]!.email as string).toLowerCase()}`;
+    await app.sqlWrite`
+      INSERT INTO auth_audit (user_id, action, ip_address, metadata)
+      VALUES (${request.authUser!.sub}, ${"password_reset_by_admin"}, ${request.ip}::inet, ${app.sqlWrite.json({ targetUserId: id })})`;
+    const mail = await sendTemporaryPassword({ email: done[0]!.email as string, password: body.data.newPassword, expiresAt, reason: "reset" });
+    return reply.send({ changed: true, id, expiresAt: expiresAt.toISOString(), email_sent: mail.sent, email_problem: mail.reason ?? null });
   });
 
   /**

@@ -111,6 +111,9 @@ services:
       # one, so the camera routes now point there. cerebroil-stream keeps
       # serving the Kinect depth view on host port 5050.
       VISION_SERVICE_URL: http://vision:5000
+      # The DHT22 pen sensor is read by the Pi's camera service (/sensors), not by
+      # the vision container, so the sensor monitor is pointed there.
+      SENSOR_SOURCE_URL: http://stream:5000
       VISION_SERVICE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
       # Only used to answer "where does the link come from" when Settings holds
       # none: the pages get it masked (Settings > Camera).

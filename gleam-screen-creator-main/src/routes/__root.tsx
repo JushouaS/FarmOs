@@ -14,6 +14,9 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider, useAuth } from "../lib/auth-context";
+import { AppSkeleton } from "@/components/farm/AppSkeleton";
+import { PrivacyGate } from "@/components/farm/PrivacyGate";
+import { ChangePasswordGate } from "@/components/farm/ChangePasswordGate";
 import { LanguageProvider, tr } from "@/lib/i18n";
 
 function NotFoundComponent() {
@@ -164,63 +167,19 @@ function RootComponent() {
 
 /* ── Auth guard: every page except /login requires a signed-in user ── */
 function AuthGuard({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
   if (location.pathname.startsWith("/login")) return <>{children}</>;
-  // Hold the splash during session hydration so a signed-in refresh
+  // The Privacy Policy is for anyone to read, signed in or not.
+  if (location.pathname.startsWith("/privacy")) return <>{children}</>;
+  // Hold the page outline during session hydration so a signed-in refresh
   // doesn't bounce to /login before /auth/me resolves.
-  if (isLoading) return <AuthSplash />;
+  if (isLoading) return <AppSkeleton />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Signed in with a temporary password: choose their own first.
+  if (user?.mustChangePassword) return <ChangePasswordGate />;
+  // Until the person has agreed to the current Privacy Policy, nothing else opens (the Contact page stays reachable from it).
+  if (user?.privacyAccepted === false && !location.pathname.startsWith("/contact")) return <PrivacyGate />;
   return <>{children}</>;
-}
-
-/* Branded placeholder shown while the session is being restored. */
-function AuthSplash() {
-  return (
-    <div
-      className="flex min-h-screen flex-col items-center justify-center gap-5"
-      style={{ background: "var(--surface-page)" }}
-    >
-      <div className="flex items-center gap-3 animate-spring-in">
-        <div
-          className="flex h-11 w-11 items-center justify-center rounded-xl elevation-1"
-          style={{
-            background:
-              "linear-gradient(135deg, var(--sidebar-active-text), color-mix(in srgb, var(--sidebar-active-text) 75%, #059669))",
-          }}
-        >
-          <svg
-            className="h-6 w-6"
-            style={{ color: "#020617" }}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.2}
-            viewBox="0 0 24 24"
-          >
-            <circle cx="12" cy="12" r="4" />
-            <path strokeLinecap="round" d="M3 9l2-3h14l2 3M3 9v9a2 2 0 002 2h14a2 2 0 002-2V9" />
-            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-          </svg>
-        </div>
-        <div>
-          <div className="font-display text-xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            {tr("Cerebroil")}
-          </div>
-          <div className="text-[11px] tracking-wide" style={{ color: "var(--text-tertiary)" }}>
-            {tr("Flock Monitor")}
-          </div>
-        </div>
-      </div>
-      <span
-        className="h-5 w-5 animate-spin rounded-full border-2 border-solid"
-        style={{
-          borderColor: "var(--border-default)",
-          borderTopColor: "var(--brand)",
-        }}
-        role="status"
-        aria-label={tr("Restoring session")}
-      />
-    </div>
-  );
 }

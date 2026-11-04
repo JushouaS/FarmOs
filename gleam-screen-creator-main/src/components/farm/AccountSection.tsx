@@ -14,7 +14,7 @@ import { LANGUAGES, tr, useLanguage } from "@/lib/i18n";
 const roleName = (role: string) => role.toLowerCase().split("_").map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" ");
 
 /** The same rules the server applies (auth.ts validatePassword), so a weak one is caught before it is sent. */
-function weaknesses(pw: string): string[] {
+export function weaknesses(pw: string): string[] {
   const out: string[] = [];
   if (pw.length < 12) out.push("at least 12 characters");
   if (!/[A-Z]/.test(pw)) out.push("an uppercase letter");
@@ -209,7 +209,7 @@ function PasswordBlock() {
       <Block>
         <Label>{tr("Password")}</Label>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{tr("Changing it signs you out everywhere.")}</p>
-        <button type="button" onClick={() => setOpen(true)} className="tap mt-3 text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>
+        <button type="button" onClick={() => setOpen(true)} className="tap mt-3 inline-flex min-h-6 items-center text-sm font-semibold hover:underline" style={{ color: "var(--brand)" }}>
           {tr("Change password")}
         </button>
       </Block>

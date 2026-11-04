@@ -28,6 +28,8 @@ import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { registerVisionProxyRoutes } from "./routes/vision-proxy.js";
 import { startBehaviorMonitor } from "./behavior-monitor.js";
+import { startSensorMonitor } from "./sensor-monitor.js";
+import { startHousekeeping } from "./housekeeping.js";
 import { registerVisionZoneRoutes } from "./routes/vision-zones.js";
 import { registerVisionVideoRoutes } from "./routes/vision-video.js";
 import { startBehaviorSampler } from "./sampler.js";
@@ -120,6 +122,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerSettingsRoutes, { prefix: "/settings" });
 
   startBehaviorMonitor(app);
+  startSensorMonitor(app);
+  startHousekeeping(app);
 
   // Behaviour sampling. Deliberately here rather than in the vision service:
   // the thresholds, the night rule and the write all live on this side, so the

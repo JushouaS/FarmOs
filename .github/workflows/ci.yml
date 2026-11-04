@@ -1,99 +1,120 @@
-# CereBroiler — continuous integration.
-#
-# Three jobs, each one a command that has already been run by hand on this
-# machine, so a red run means the code changed rather than the recipe:
-#   web     — the dashboard typechecks and builds through Nitro's node-server
-#   api     — the Fastify routes typecheck (tsc needs no database)
-#   vision  — detector, behaviour policy, clip store and weight maths tests
-#
-# The API's own tests are not here: they sign in and write rows against a real
-# PostgreSQL, so they stay on a development machine until a service container
-# and a disposable database are wired up for them.
-
+# Checks every push and pull request: the website, the API (with a real PostgreSQL), the public-link gateway and the
+# behavior engine. It has not been run on GitHub yet; the commands are the ones that pass on the developer's computer.
 name: CI
 
 on:
   push:
-    branches: [main, responsive-login-local-db]
   pull_request:
-  workflow_dispatch:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   web:
-    name: Website — typecheck and build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gleam-screen-creator-main
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      # No `cache: npm`: the app folder is pinned with bun.lock and ships no
-      # package-lock.json, so npm resolves fresh here exactly as it does inside
-      # Dockerfile.web.
-      - name: Install
-        working-directory: gleam-screen-creator-main
-        run: npm install --include=dev --no-audit --no-fund
-
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
       - name: Typecheck
-        working-directory: gleam-screen-creator-main
-        run: npx tsc --noEmit
-
+        run: bunx tsc --noEmit
+      - name: Tests
+        run: bun test src
       - name: Build
-        working-directory: gleam-screen-creator-main
+        run: bunx vite build
         env:
-          NODE_ENV: production
-        run: npm run build
+          NITRO_PRESET: node-server
 
   api:
-    name: API — typecheck
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gleam-screen-creator-main/packages/api
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cerebroil
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_DB: cerebroil
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cerebroil"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://cerebroil:ci-password@127.0.0.1:5432/cerebroil
+      JWT_SECRET: ci-only-secret-at-least-thirty-two-characters-long
+      VISION_SERVICE_TOKEN: ci-only-token
+      NODE_ENV: development
+      SENSOR_MONITOR: "off"
+      BEHAVIOR_MONITOR: "off"
     steps:
       - uses: actions/checkout@v4
-
+      - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-
-      - name: Install
+          node-version: 22
+      - run: bun install --frozen-lockfile
         working-directory: gleam-screen-creator-main
-        run: npm install --include=dev --no-audit --no-fund
-
       - name: Typecheck
-        working-directory: gleam-screen-creator-main
-        run: npm run typecheck --workspace=@farm-os/api
+        run: bunx tsc --noEmit
+      - name: Migrate the database and make the administrator the tests sign in as
+        run: |
+          bun run db:migrate
+          npx tsx scripts/seed-admin.ts > /dev/null
+      - name: Tests
+        run: bun test --timeout 30000
+      - name: Test that needs Node (a closed connection)
+        run: npm run test:node
 
-  vision:
-    name: Vision — unit tests
+  gateway:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gleam-screen-creator-main
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run test:gateway
 
+  behavior-engine:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cerebroil-stream
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest test_behavior
+
+  vision:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gleam-screen-creator-main/packages/vision
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: gleam-screen-creator-main/packages/vision/requirements.txt
-
       # cv2 keeps its own needs on the side: glib for the loader and OpenMP for
       # the math kernel. The vision Dockerfile installs the same two packages.
       - name: System libraries for OpenCV
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libglib2.0-0 libgomp1
-
       - name: Install
-        working-directory: gleam-screen-creator-main/packages/vision
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest
-
       # `python -m pytest`, not `pytest`: the modules under test are imported by
       # bare name (`import video`), which only resolves with the working
       # directory on sys.path.
       - name: Test
-        working-directory: gleam-screen-creator-main/packages/vision
         run: python -m pytest tests -q

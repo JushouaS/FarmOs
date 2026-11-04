@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Info, ListChecks, OctagonAlert } from "lucide-react";
 import { AppShell } from "@/components/farm/AppShell";
 import { getAlerts, acknowledgeAlertFn } from "@/lib/farm/repository";
 import { removeUnacknowledgedAlert } from "@/lib/alert-store";
 import { T, localeTag, tr } from "@/lib/i18n";
-import { alertKindLabel, alertMessage } from "@/lib/farm/alert-text";
+import { alertKindTitle, alertMessage } from "@/lib/farm/alert-text";
 
 export const Route = createFileRoute("/alerts")({
   head: () => ({ meta: [{ title: tr("Alerts — Cerebroil") }] }),
@@ -58,141 +58,119 @@ interface RowProps {
   justRead: boolean;
 }
 
+/** A colour mixed into the card surface, so a tint stays readable in both themes. */
+const wash = (color: string, pct: number) => `color-mix(in srgb, ${color} ${pct}%, var(--surface-card))`;
+
 function AlertRow({ a, expanded, setExpanded, busy, onRead, justRead }: RowProps) {
   const isCrit = a.severity === "critical";
   const isWarn = a.severity === "warning" || a.severity === "deviation";
   const help = HELP[a.kind];
   const isExp = expanded === a.id;
-  const accentColor = isCrit ? "var(--status-red)" : isWarn ? "var(--status-amber)" : "var(--status-blue)";
-  const rest = a.acknowledged ? "transparent" : `${accentColor}06`;
+  const unread = !a.acknowledged;
+  const accent = isCrit ? "var(--status-red)" : isWarn ? "var(--status-amber)" : "var(--status-blue)";
+  const accentText = isCrit ? "var(--status-red-text)" : isWarn ? "var(--status-amber-text)" : "var(--status-blue-text)";
+  const Icon = isCrit ? OctagonAlert : isWarn ? AlertTriangle : Info;
+  const label = isCrit ? tr("Critical") : isWarn ? tr("Warning") : tr("Info");
+  const raised = new Date(a.raisedAt);
+  const when = raised.toLocaleString(localeTag(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className={justRead ? "animate-spring-in" : undefined}>
-      {/* Below md each alert stacks as a card (severity + type,
-          message, then time and actions); from md it is a table row. */}
-      <div
-        className="flex flex-col gap-2 px-4 py-3.5 transition-colors cursor-default md:grid md:grid-cols-12 md:items-center md:gap-3 md:px-5"
-        style={{
-          borderLeft: `3px solid ${a.acknowledged ? "transparent" : accentColor}`,
-          background: justRead ? "var(--status-green-bg)" : rest,
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-raised)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = rest)}
+    <article
+      className={`relative grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 overflow-hidden rounded-2xl border px-4 py-4 transition-colors duration-300 hover:border-[var(--border-strong)] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:px-5 ${justRead ? "animate-spring-in" : ""}`}
+      style={{
+        borderColor: unread ? wash(accent, 35) : "var(--border-subtle)",
+        background: justRead ? "var(--status-green-bg)" : unread ? wash(accent, 7) : "var(--surface-card)",
+      }}
+    >
+      {/* A bar on the edge for what is still unread */}
+      {unread && <span className="absolute inset-y-0 left-0 w-1" style={{ background: accent }} aria-hidden="true" />}
+
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+        style={{ background: wash(accent, 16), color: accentText }}
+        aria-hidden="true"
       >
-        {/* Icon */}
-        <div className="hidden md:block md:col-span-1">
-          <div
-            className="h-8 w-8 rounded-lg flex items-center justify-center font-mono text-[10px] font-bold"
-            style={{
-              background: isCrit ? "var(--status-red-bg)" : isWarn ? "var(--status-amber-bg)" : "var(--status-blue-bg)",
-              color:      isCrit ? "var(--status-red-text)" : isWarn ? "var(--status-amber-text)" : "var(--status-blue-text)",
-            }}
+        <Icon className="h-5 w-5" />
+      </span>
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h3
+            className="text-base font-semibold leading-snug"
+            style={{ color: unread ? "var(--text-primary)" : "var(--text-secondary)" }}
           >
-            {a.kind.slice(0, 2).toUpperCase()}
-          </div>
+            {alertKindTitle(a.kind)}
+          </h3>
+          <span className={isCrit ? "badge-red" : isWarn ? "badge-amber" : "badge-blue"}>{label}</span>
         </div>
-
-        {/* Severity + type share a line on phones; md:contents
-            dissolves the wrapper so both become grid cells. */}
-        <div className="flex min-w-0 flex-wrap items-center gap-2 md:contents">
-          <div className="flex shrink-0 items-center gap-1.5 md:col-span-2">
-            <span className={isCrit ? "badge-red" : isWarn ? "badge-amber" : "badge-blue"}>
-              {isCrit ? tr("Critical") : isWarn ? tr("Warning") : tr("Info")}
-            </span>
-          </div>
-
-          <div className="min-w-0 md:col-span-3">
-            <p className="text-sm font-semibold" style={{ color: a.acknowledged ? "var(--text-secondary)" : "var(--text-primary)" }}>
-              {alertKindLabel(a.kind)}
-            </p>
-          </div>
-        </div>
-
-        {/* Message */}
-        <div className="md:col-span-4">
-          <p className="text-xs line-clamp-3 md:line-clamp-2" style={{ color: "var(--text-secondary)" }}>
-            {alertMessage(a.message)}
-          </p>
-        </div>
-
-        {/* Time and actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-2 md:flex-col md:items-end md:gap-1.5">
-          <p className="font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-            {new Date(a.raisedAt).toLocaleString(localeTag(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-          </p>
-          <div className="flex items-center gap-2">
-            {!a.acknowledged && (
-              <button
-                onClick={() => onRead(a.id)}
-                disabled={busy}
-                className="btn-ghost tap text-[11px] py-0.5 px-2"
-              >
-                {busy ? "…" : tr("Mark read")}
-              </button>
-            )}
-            {help && (
-              <button
-                onClick={() => setExpanded((p) => (p === a.id ? null : a.id))}
-                aria-expanded={isExp}
-                className="tap px-1 text-[11px] font-medium hover:underline"
-                style={{ color: "var(--brand)" }}
-              >
-                {isExp ? tr("Hide") : tr("Details")}
-              </button>
-            )}
-          </div>
-        </div>
+        <p className="mt-1 text-sm leading-relaxed line-clamp-3" style={{ color: "var(--text-secondary)" }}>
+          {alertMessage(a.message)}
+        </p>
+        <time dateTime={raised.toISOString()} className="mt-1.5 block text-xs" style={{ color: "var(--text-tertiary)" }}>
+          {when}
+        </time>
       </div>
 
-      {/* Expanded detail */}
+      <div className="col-start-2 flex flex-wrap items-center gap-2 sm:col-start-3 sm:flex-col sm:items-stretch sm:justify-center">
+        {unread && (
+          <button onClick={() => onRead(a.id)} disabled={busy} className="btn-ghost tap gap-1.5 text-sm">
+            <Check className="h-4 w-4" aria-hidden="true" />
+            {busy ? "…" : tr("Mark read")}
+          </button>
+        )}
+        {help && (
+          <button
+            onClick={() => setExpanded((p) => (p === a.id ? null : a.id))}
+            aria-expanded={isExp}
+            className="tap inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1 text-sm font-medium hover:underline"
+            style={{ color: "var(--brand)" }}
+          >
+            {isExp ? tr("Hide") : tr("Details")}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isExp ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
+      {/* Why it matters, and what to do about it */}
       {isExp && help && (
-        <div
-          className="px-4 pb-4 pt-3 space-y-3 md:px-5"
-          style={{ background: "var(--surface-raised)", borderLeft: `3px solid ${accentColor}` }}
-        >
-          <div>
-            <p className="label-section mb-1">{tr("Why it matters")}</p>
-            <p className="text-sm" style={{ color: "var(--text-primary)" }}>{tr(help.why)}</p>
+        <div className="col-span-full grid animate-spring-in gap-3 border-t pt-4 sm:grid-cols-2" style={{ borderColor: "var(--border-subtle)" }}>
+          <div className="rounded-xl p-3.5" style={{ background: "var(--surface-raised)" }}>
+            <p className="label-section mb-1.5 flex items-center gap-1.5">
+              <Info className="h-3.5 w-3.5" aria-hidden="true" />
+              {tr("Why it matters")}
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>{tr(help.why)}</p>
           </div>
-          <div>
-            <p className="label-section mb-1">{tr("Recommended action")}</p>
-            <p className="text-sm" style={{ color: "var(--text-primary)" }}>{tr(help.action)}</p>
+          <div className="rounded-xl p-3.5" style={{ background: "var(--surface-raised)" }}>
+            <p className="label-section mb-1.5 flex items-center gap-1.5">
+              <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
+              {tr("Recommended action")}
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>{tr(help.action)}</p>
+            {isCrit && (
+              <Link
+                to="/visuals"
+                className="tap mt-2 inline-flex items-center gap-1.5 text-sm font-semibold hover:underline"
+                style={{ color: "var(--cv-accent)" }}
+              >
+                {tr("Open Live Camera →")}
+              </Link>
+            )}
           </div>
-          {isCrit && (
-            <Link
-              to="/visuals"
-              className="tap inline-flex items-center gap-1.5 text-xs font-semibold hover:underline"
-              style={{ color: "var(--cv-accent)" }}
-            >
-              {tr("Open Live Camera →")}
-            </Link>
-          )}
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
-/** The column headings, and the rows under them. */
+/** The alerts as a list of cards, one each. */
 function AlertTable({ list, ...row }: { list: any[] } & Omit<RowProps, "a" | "busy" | "justRead"> & { busyIds: Record<string, boolean>; justReadId: string | null }) {
   const { busyIds, justReadId, ...shared } = row;
   return (
-    <div className="cb-card overflow-hidden">
-      <div
-        className="hidden md:grid grid-cols-12 gap-3 px-5 py-3 font-mono text-[10px] font-semibold uppercase tracking-wide"
-        style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-tertiary)" }}
-      >
-        <div className="col-span-1" />
-        <div className="col-span-2">{tr("Sev.")}</div>
-        <div className="col-span-3">{tr("Type")}</div>
-        <div className="col-span-4">{tr("Message")}</div>
-        <div className="col-span-2">{tr("Time")}</div>
-      </div>
-      <div className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
-        {list.map((a) => (
-          <AlertRow key={a.id} a={a} busy={busyIds[a.id] ?? false} justRead={justReadId === a.id} {...shared} />
-        ))}
-      </div>
+    <div className="space-y-2.5">
+      {list.map((a) => (
+        <AlertRow key={a.id} a={a} busy={busyIds[a.id] ?? false} justRead={justReadId === a.id} {...shared} />
+      ))}
     </div>
   );
 }
@@ -200,7 +178,7 @@ function AlertTable({ list, ...row }: { list: any[] } & Omit<RowProps, "a" | "bu
 function Count({ n, tone }: { n: number; tone: "red" | "muted" }) {
   return (
     <span
-      className="rounded-full px-2 py-0.5 font-mono text-[11px] font-bold leading-none"
+      className="rounded-full px-2 py-0.5 font-mono text-xs font-bold leading-none"
       style={
         tone === "red" && n > 0
           ? { background: "var(--status-red-bg)", color: "var(--status-red-text)", border: "1px solid var(--status-red-border)" }
@@ -341,7 +319,7 @@ function AlertsPage() {
             {t.label}
             {t.count > 0 && (
               <span
-                className="rounded-full px-1.5 py-0.5 font-mono text-[10px] font-bold leading-none"
+                className="rounded-full px-1.5 py-0.5 font-mono text-xs font-bold leading-none"
                 style={filter === t.id
                   ? { background: "rgba(255,255,255,0.22)", color: "var(--text-inverse)" }
                   : { background: "var(--surface-raised)", color: "var(--text-tertiary)" }}
@@ -384,7 +362,7 @@ function AlertsPage() {
           {/* ── UNREAD: what still needs attention ── */}
           <section aria-labelledby="alerts-unread">
             <div className="mb-2 flex items-center gap-2">
-              <h2 id="alerts-unread" className="label-section text-[11px] font-bold tracking-widest">{tr("Unread")}</h2>
+              <h2 id="alerts-unread" className="label-section text-xs font-bold tracking-widest">{tr("Unread")}</h2>
               <Count n={unreadList.length} tone="red" />
             </div>
             {unreadList.length === 0 ? (
@@ -413,14 +391,14 @@ function AlertsPage() {
               onClick={() => setShowRead((v) => !v)}
               aria-expanded={showRead}
               aria-controls="alerts-read-list"
-              className="tap mb-2 flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              className="tap mb-2 flex min-h-6 items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             >
               <ChevronDown
                 className={`h-4 w-4 transition-transform ${showRead ? "" : "-rotate-90"}`}
                 style={{ color: "var(--text-tertiary)" }}
                 aria-hidden="true"
               />
-              <span id="alerts-read" className="label-section text-[11px] font-bold tracking-widest">{tr("Read")}</span>
+              <span id="alerts-read" className="label-section text-xs font-bold tracking-widest">{tr("Read")}</span>
               <Count n={readList.length} tone="muted" />
             </button>
             <div id="alerts-read-list" hidden={!showRead}>

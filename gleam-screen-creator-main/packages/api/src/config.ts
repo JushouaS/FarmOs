@@ -21,6 +21,13 @@ const schema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
   API_HOST: z.string().default("127.0.0.1"),
+  // Which proxy in front of the API to believe about the client's address (X-Forwarded-For). "false" (the
+  // default) trusts nobody, so the address cannot be faked with a header. Behind a reverse proxy, give its
+  // address, for example "10.0.0.5" or "10.0.0.0/8"; "true" trusts every hop and is only for a closed network.
+  TRUST_PROXY: z.preprocess((v) => (v === "" ? undefined : v), z.string().default("false")),
+  // Whether the sign-in cookies are marked Secure (sent over HTTPS only). "auto" means yes in production.
+  // Over plain http on a local network a Secure cookie is never sent back, so leave it "auto" there.
+  COOKIE_SECURE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["auto", "true", "false"]).default("auto")),
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_CORS_ORIGINS: z
     .string()
@@ -40,10 +47,8 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be >= 32 bytes"),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(15 * 60),
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(30 * 24 * 60 * 60),
-  // "true" only when the app is served over TLS. Left unset, it follows
-  // NODE_ENV — which breaks plain-HTTP deployments (a Secure cookie is never
-  // sent back over http), so container setups pin it explicitly.
-  COOKIE_SECURE: z.enum(["true", "false"]).optional(),
+  // "true" only when the app is served over TLS, "false" for plain HTTP. "auto" (the default) follows
+  // NODE_ENV; container setups pin it explicitly instead of relying on that.
   // The sign-in page advertises "admin / admin", but POST /auth/login only
   // accepts it under NODE_ENV=development — which a container deployment is
   // not. Setting this to "true" opts in explicitly; left unset, the shortcut
@@ -76,6 +81,16 @@ const schema = z.object({
   VIDEO_MAX_SECONDS: z.coerce.number().positive().default(600),
   VIDEO_SWEEP_SAMPLES: z.coerce.number().int().positive().max(120).default(30),
 
+  // How long the temporary password an administrator hands out keeps working if the person has not signed in.
+  TEMP_PASSWORD_HOURS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(336).default(48)),
+
+  // Where kinect_seg.py (the chicken outlines on the Kinect picture) runs: this computer, next to the Kinect.
+  KINECT_SEG_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("http://127.0.0.1:8182")),
+
+  // Shared with the Kinect bridge (its KINECT_BRIDGE_KEY): the API hands signed-in viewers a short-lived ticket made
+  // from it, and the bridge only streams depth frames to a viewer with one. Unset = the bridge needs no ticket.
+  KINECT_BRIDGE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),
+
   // SUS questionnaire / "Report a problem" form (routes/feedback.ts).
   // Every response is written to a local CSV. When BOTH script settings are
   // set, each response is also sent to the owner's Google Apps Script, which
@@ -106,6 +121,16 @@ const schema = z.object({
   BEHAVIOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
   BEHAVIOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(30)),
 
+  // Live sensor monitor (sensor-monitor.ts): every SENSOR_POLL_SECONDS the API asks the camera service for
+  // the DHT22's newest temperature and humidity and stores them. "off" disables it.
+  // Its /sensors endpoint lives on the Pi's camera service (cerebroil-stream), which is not always the same
+  // process that answers /analyze: SENSOR_SOURCE_URL names it explicitly, and unset falls back to VISION_SERVICE_URL.
+  SENSOR_SOURCE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
+  SENSOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
+  SENSOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(60)),
+  // A "Sensor Offline" alert is raised when a sensor that has worked has sent nothing for this many minutes.
+  SENSOR_OFFLINE_MINUTES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(2).default(10)),
+
   // Groq AI (Intelligence engine) — https://console.groq.com/keys
   // Optional at startup; required only when intelligence routes are hit.
   GROQ_API_KEY: z.string().optional(),
@@ -121,5 +146,8 @@ if (!parsed.success) {
 
 export const env = Object.freeze({
   ...parsed.data,
+  cookieSecure: parsed.data.COOKIE_SECURE === "auto" ? parsed.data.NODE_ENV === "production" : parsed.data.COOKIE_SECURE === "true",
+  /** Fastify's trustProxy setting: false, true, or a list of addresses. */
+  trustProxy: ((v: string) => (v === "false" ? false : v === "true" ? true : v.split(",").map((x) => x.trim()).filter(Boolean)))(parsed.data.TRUST_PROXY),
   databaseWriteUrl: parsed.data.DATABASE_WRITE_URL ?? parsed.data.DATABASE_URL,
 } as const);

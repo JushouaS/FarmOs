@@ -2,7 +2,9 @@
  * Turns a camera scan into plain-language tips for a broiler farmer, in
  * English, Filipino (Tagalog) or Cebuano.
  *
- * What the scan actually measures: the camera service compares consecutive
+ * What the scan measures: when the trained chicken detector is available it counts the birds
+ * and the groups packed together, and it always reports movement. Without it (the model is not
+ * installed) it falls back to motion only, below. Motion: the camera service compares consecutive
  * pictures and reports how much of the picture moved, how many separate areas
  * moved, and whether many of those areas sit together. It is motion analysis,
  * not a trained detector, so every finding is worded as a hint to check, never
@@ -70,42 +72,61 @@ export function buildFindings(result: ScanResult, night: boolean): Finding[] {
     out.push({ id: "activity", severity: "warn", key: "activity_low_day" });
   }
 
-  // Crowding comes from the huddle verdict, which already ignores birds inside
-  // the feeder zones an operator marked. A cluster warning is only worth
-  // raising when the flock was actually visible: many small moving areas with
-  // almost no movement overall is night-vision grain, not a crowd.
-  const huddleStatus = behaviour?.huddling_status;
-  if (huddleStatus === "critical" || huddleStatus === "warning") {
-    out.push({
-      id: "crowding",
-      severity: huddleStatus === "critical" ? "alert" : "warn",
-      key: "crowding",
-      params: { count: behaviour?.huddled_count || result.detection_count },
-    });
-  } else if (behaviour?.reason === "too_few_outside_zones") {
-    // Nearly every bird is at a feeder. Explaining that is more useful than
-    // claiming there is no crowding.
-    out.push({
-      id: "crowding",
-      severity: "ok",
-      key: "crouching_at_feeders",
-      params: { count: behaviour.zone_count ?? result.detection_count },
-    });
-  } else if (huddleStatus === "nominal" && behaviour?.reliable) {
-    out.push({ id: "crowding", severity: "ok", key: "crowding_none" });
-  } else if (!behaviour) {
+  // The trained detector counts real birds and the groups of them packed
+  // together, so when it ran, its verdict is the one to report.
+  if (result.detector?.source === "model") {
+    if (result.detection_count === 0) {
+      out.push({ id: "birds", severity: "info", key: "birds_none" });
+    }
     if (result.cluster_count > 0) {
-      if (movement > LOW_MOVEMENT) {
-        out.push({
-          id: "crowding",
-          severity: "warn",
-          key: "crowding",
-          params: { count: result.detection_count },
-        });
-      }
+      const packed = result.clusters.reduce((n, c) => n + (c.birds ?? 0), 0);
+      // Birds bunched at the feeder look the same in one picture, so only a large share of the flock is a warning.
+      out.push({
+        id: "crowding",
+        severity: behaviour?.huddling_status === "warning" ? "warn" : "info",
+        key: "crowding_birds",
+        params: { count: packed },
+      });
     } else {
+      out.push({ id: "crowding", severity: "ok", key: "crowding_none_birds" });
+    }
+  } else if (behaviour) {
+    // Rows written before the detector existed fall back to the huddle verdict,
+    // which already ignores birds inside the feeder zones an operator marked.
+    const huddleStatus = behaviour.huddling_status;
+    if (huddleStatus === "critical" || huddleStatus === "warning") {
+      out.push({
+        id: "crowding",
+        severity: huddleStatus === "critical" ? "alert" : "warn",
+        key: "crowding",
+        params: { count: behaviour.huddled_count || result.detection_count },
+      });
+    } else if (behaviour.reason === "too_few_outside_zones") {
+      // Nearly every bird is at a feeder. Explaining that is more useful than
+      // claiming there is no crowding.
+      out.push({
+        id: "crowding",
+        severity: "ok",
+        key: "crouching_at_feeders",
+        params: { count: behaviour.zone_count ?? result.detection_count },
+      });
+    } else if (huddleStatus === "nominal" && behaviour.reliable) {
       out.push({ id: "crowding", severity: "ok", key: "crowding_none" });
     }
+    // A cluster warning is only worth raising when the flock was actually
+    // visible: many small moving areas with almost no movement overall is
+    // night-vision grain, not a crowd.
+  } else if (result.cluster_count > 0) {
+    if (movement > LOW_MOVEMENT) {
+      out.push({
+        id: "crowding",
+        severity: "warn",
+        key: "crowding",
+        params: { count: result.detection_count },
+      });
+    }
+  } else {
+    out.push({ id: "crowding", severity: "ok", key: "crowding_none" });
   }
 
   const fights = behaviour?.aggression_events ?? 0;
@@ -139,6 +160,8 @@ interface Messages {
     basis: string;
     movement: string;
     areas: string;
+    birds: string;
+    basis_model: string;
     status_ok: string;
     status_warn: string;
     status_alert: string;
@@ -161,6 +184,7 @@ export const CHROME = {
   err_unavailable: T("The camera service is not reachable. Start cerebroil-stream and try again."),
   err_noFrame: T("The camera has no picture right now. Check the camera connection and try again."),
   err_session: T("Your session ended. Sign in again."),
+  err_forbidden: T("Your account can watch the camera but cannot start checks. Ask an administrator for the Operator role."),
   err_generic: T("The analysis could not finish. Try again."),
 } as const;
 
@@ -171,6 +195,9 @@ const en: Messages = {
     basis: "Based on movement in the camera picture over about 3 seconds. Treat it as a hint, not a diagnosis.",
     movement: "Movement",
     areas: "Moving areas",
+    birds: "Birds seen",
+    basis_model:
+      "Based on the trained chicken detector and the movement in the camera picture over about 3 seconds. Treat it as a hint, not a diagnosis.",
     status_ok: "Looks normal",
     status_warn: "Needs a check",
     status_alert: "Check now",
@@ -243,6 +270,24 @@ const en: Messages = {
       detail: "No unusual group of movement was found.",
       tips: [],
     },
+    crowding_birds: {
+      title: "Birds packed together",
+      detail: "{count} birds were packed closely together in one spot.",
+      tips: [],
+    },
+    crowding_none_birds: {
+      title: "No crowding spotted",
+      detail: "No group of birds packed together was found.",
+      tips: [],
+    },
+    birds_none: {
+      title: "No birds seen",
+      detail: "The detector found no birds in the picture.",
+      tips: [
+        "Check that the camera points at the birds and the lens is clean.",
+        "Check that the lights are on and nothing blocks the view.",
+      ],
+    },
     aggression: {
       title: "Possible fighting or pecking",
       detail: "The scan flagged {n} possible aggressive event(s).",
@@ -280,6 +325,9 @@ const tl: Messages = {
     basis: "Batay sa galaw na nakita sa larawan ng camera sa loob ng mga 3 segundo. Gawing gabay ito, hindi diagnosis.",
     movement: "Galaw",
     areas: "Mga lugar na gumagalaw",
+    birds: "Mga manok na nakita",
+    basis_model:
+      "Batay sa sinanay na detector ng manok at sa galaw na nakita sa larawan ng camera sa loob ng mga 3 segundo. Gawing gabay ito, hindi diagnosis.",
     status_ok: "Mukhang normal",
     status_warn: "Kailangang tingnan",
     status_alert: "Tingnan agad",
@@ -353,6 +401,24 @@ const tl: Messages = {
       detail: "Walang hindi karaniwang grupo ng galaw na nakita.",
       tips: [],
     },
+    crowding_birds: {
+      title: "Magkakadikit ang mga manok",
+      detail: "{count} manok ang magkakadikit sa iisang lugar.",
+      tips: [],
+    },
+    crowding_none_birds: {
+      title: "Walang nakitang siksikan",
+      detail: "Walang grupo ng magkakadikit na manok na nakita.",
+      tips: [],
+    },
+    birds_none: {
+      title: "Walang manok na nakita",
+      detail: "Walang manok na natukoy ng detector sa larawan.",
+      tips: [
+        "Tiyaking nakaturo ang camera sa mga manok at malinis ang lente.",
+        "Tiyaking bukas ang ilaw at walang humaharang sa tanaw.",
+      ],
+    },
     aggression: {
       title: "Posibleng pag-aaway o pagtutuka",
       detail: "May {n} na posibleng agresibong pangyayari na natukoy.",
@@ -390,6 +456,9 @@ const ceb: Messages = {
     basis: "Gibase sa lihok nga nakita sa hulagway sa camera sulod sa mga 3 segundo. Gamita kini isip giya, dili diagnosis.",
     movement: "Lihok",
     areas: "Mga lugar nga naglihok",
+    birds: "Mga manok nga nakita",
+    basis_model:
+      "Gibase sa gibansay nga detector sa manok ug sa lihok nga nakita sa hulagway sa camera sulod sa mga 3 segundo. Gamita kini isip giya, dili diagnosis.",
     status_ok: "Murag normal",
     status_warn: "Kinahanglan susihon",
     status_alert: "Susiha dayon",
@@ -463,6 +532,24 @@ const ceb: Messages = {
       detail: "Walay dili kasagarang grupo sa lihok nga nakita.",
       tips: [],
     },
+    crowding_birds: {
+      title: "Nagdikit ang mga manok",
+      detail: "{count} ka manok ang nagdikit sa usa ka lugar.",
+      tips: [],
+    },
+    crowding_none_birds: {
+      title: "Walay nakitang siksik",
+      detail: "Walay grupo sa nagdikit nga manok nga nakit-an.",
+      tips: [],
+    },
+    birds_none: {
+      title: "Walay manok nga nakita",
+      detail: "Walay manok nga nakit-an sa detector sa hulagway.",
+      tips: [
+        "Siguroha nga ang camera nagtutok sa mga manok ug limpyo ang lente.",
+        "Siguroha nga bukas ang suga ug walay nagbabag sa tan-aw.",
+      ],
+    },
     aggression: {
       title: "Posibleng pag-away o pagtuka",
       detail: "Adunay {n} ka posibleng agresibo nga panghitabo nga nakit-an.",
@@ -492,6 +579,9 @@ const ceb: Messages = {
     },
   },
 };
+
+// A crowding hint reads the same whether the groups were found by motion or by the trained detector.
+for (const m of [en, tl, ceb]) m.findings.crowding_birds.tips = m.findings.crowding.tips;
 
 const MESSAGES: Record<Lang, Messages> = { en, tl, ceb };
 

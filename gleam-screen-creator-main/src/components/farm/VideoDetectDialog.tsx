@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Film, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { AlertTriangle, CheckCircle2, Film, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,8 +8,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ApiError, DEMO_VIDEO_MAX_MB, convertVideo, detectVideo, type VideoDetection } from "@/lib/api-client";
-import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
+import { VIDEO_WEIGHT_ERROR_PERCENT, estimateVideoWeights, type VideoWeights } from "@/lib/farm/video-weight";
 import { T, tr } from "@/lib/i18n";
 
 /* "Test video" on Live Camera: pick a clip from this device, the trained
@@ -61,6 +72,8 @@ function errorText(err: unknown, wasCut: boolean): string {
     if (err.message === "video_too_large" || err.status === 413) return tr("That video is over {mb} MB.", { mb: DEMO_VIDEO_MAX_MB });
     if (err.message === "vision_service_unavailable" || err.status === 503) return tr("The camera computer is not reachable.");
     if (err.status === 401) return tr("Your session ended. Sign in again.");
+    if (err.status === 403) return tr("Your account can watch the camera but cannot start checks. Ask an administrator for the Operator role.");
+    if (err.status === 429) return tr("Another video is being checked. Try again in a minute.");
   }
   return tr("Could not check the video. Try again.");
 }
@@ -82,7 +95,7 @@ function frameAt(frames: VideoDetection["frames"], t: number): number {
   return found;
 }
 
-export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: LightingHours }) {
+export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING, standardG = 1000 }: { lighting?: LightingHours; standardG?: number }) {
   const [open, setOpen] = useState(false);
   // Was the clip filmed with the lights off? Still birds are then resting, not inactive.
   const [night, setNight] = useState(false);
@@ -92,13 +105,25 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
   const [stage, setStage] = useState<"converting" | "checking" | null>(null);
   const [cutFrom, setCutFrom] = useState<number | null>(null); // size of the original when it was over the limit
   const [needsConvert, setNeedsConvert] = useState(false);
+  // What was chosen, as it was (the file in state changes when it is cut or converted), and how long it plays.
+  const [original, setOriginal] = useState<{ name: string; bytes: number } | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
+  const [lengthFailed, setLengthFailed] = useState(false);
+  // Asked once per file: "this is not ideal, use it anyway?"
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const acknowledged = useRef(false);
+  const converted = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VideoDetection | null>(null);
   // Birds in the frame on screen: [all, inactive, huddling]
   const [inFrame, setInFrame] = useState<[number, number, number]>([0, 0, 0]);
+  const weightsRef = useRef<VideoWeights | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Full screen is for the video AND the readings drawn over it, so it is this box that goes full screen.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     if (!file) {
@@ -109,6 +134,39 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
     setUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [file]);
+
+  // A rough weight for each bird, from the size of its box around the standard weight for the grow-out day.
+  const weights = useMemo(
+    () => (result ? estimateVideoWeights(result.frames, result.width, result.height, standardG) : null),
+    [result, standardG],
+  );
+  weightsRef.current = weights;
+
+  // The video's own full screen button (beside the volume) is the one to use. On its own it would make only the video
+  // full screen, and the boxes and weights drawn over it would be lost, so the request is moved to the box that holds
+  // both. Pressing the button again while the box is full screen leaves full screen.
+  const lastFullscreen = useRef<Element | null>(null);
+  useEffect(() => {
+    const onChange = () => {
+      const now = document.fullscreenElement;
+      const before = lastFullscreen.current;
+      lastFullscreen.current = now;
+      const video = videoRef.current;
+      if (now && now === video) {
+        if (before && before === stageRef.current) void document.exitFullscreen().catch(() => {});
+        else {
+          // If the box cannot go full screen, the video goes (without the readings) rather than nothing happening.
+          void document
+            .exitFullscreen()
+            .then(() => stageRef.current?.requestFullscreen())
+            .catch(() => video.requestFullscreen().catch(() => {}));
+        }
+      }
+      setFullscreen(now != null && now === stageRef.current);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
 
   // Draw the boxes of the sampled frame that matches the video's current time.
   useEffect(() => {
@@ -131,7 +189,10 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
       ctx.clearRect(0, 0, w, h);
       const idx = video.currentTime <= result.analyzed_seconds + 0.5 ? frameAt(result.frames, video.currentTime) : -1;
       const boxes = idx >= 0 ? result.frames[idx].boxes : [];
-      const scale = w / result.width;
+      // The video is fitted inside this box (with bars at the sides or top in full screen); the boxes follow it.
+      const scale = Math.min(w / result.width, h / result.height);
+      const offX = (w - result.width * scale) / 2;
+      const offY = (h - result.height * scale) / 2;
       ctx.lineWidth = 2;
       ctx.font = "12px ui-monospace, monospace";
       let inactive = 0;
@@ -151,7 +212,23 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
         const color = STATE_COLORS[state] ?? STATE_COLORS[0];
         ctx.strokeStyle = color;
         ctx.lineWidth = state >= 2 ? 3 : 2;
-        ctx.strokeRect(x * scale, y * scale, bw * scale, bh * scale);
+        ctx.strokeRect(x * scale + offX, y * scale + offY, bw * scale, bh * scale);
+        // The bird's estimated weight, in the middle of its box.
+        const grams = id != null ? weightsRef.current?.byId.get(id) : undefined;
+        if (grams != null) {
+          const text = `${grams} g`;
+          ctx.font = "bold 12px ui-monospace, monospace";
+          ctx.textAlign = "center";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(0,0,0,0.85)";
+          ctx.strokeText(text, (x + bw / 2) * scale + offX, (y + bh / 2) * scale + offY + 4);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(text, (x + bw / 2) * scale + offX, (y + bh / 2) * scale + offY + 4);
+          ctx.textAlign = "left";
+          ctx.font = "12px ui-monospace, monospace";
+          ctx.strokeStyle = color;
+          ctx.lineWidth = state >= 2 ? 3 : 2;
+        }
         // Moving birds only get their number, and a group (huddle, resting, flock inactivity) one label, so the picture stays readable.
         let label = "";
         if (state === 0 || id == null) label = `${id != null ? `#${id} ` : ""}${Math.round(conf * 100)}%`;
@@ -159,11 +236,11 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
         else label = `#${id} ${tr(STATE_NAMES[state])}`;
         if (!label) continue;
         const tw = ctx.measureText(label).width + 8;
-        const ly = Math.max(0, y * scale - 16);
+        const ly = Math.max(0, y * scale + offY - 16);
         ctx.fillStyle = "rgba(0,0,0,0.75)";
-        ctx.fillRect(x * scale, ly, tw, 16);
+        ctx.fillRect(x * scale + offX, ly, tw, 16);
         ctx.fillStyle = color;
-        ctx.fillText(label, x * scale + 4, ly + 12);
+        ctx.fillText(label, x * scale + offX + 4, ly + 12);
       }
       const key = `${boxes.length}/${inactive}/${huddling}`;
       if (key !== shown) {
@@ -181,6 +258,12 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
     setStage(null);
     setCutFrom(null);
     setNeedsConvert(false);
+    setOriginal(null);
+    setDuration(null);
+    setLengthFailed(false);
+    setConfirmOpen(false);
+    acknowledged.current = false;
+    converted.current = false;
     setNight(false);
     setError(null);
     setResult(null);
@@ -208,6 +291,11 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
     setInFrame([0, 0, 0]);
     setError(null);
     setNight(guessNight(picked.name, lighting));
+    setOriginal({ name: picked.name, bytes: picked.size });
+    setDuration(null);
+    setLengthFailed(false);
+    acknowledged.current = false;
+    converted.current = false;
     // A file over the limit is cut to exactly the limit, so only that part is uploaded.
     const tooBig = picked.size > MAX_BYTES;
     setCutFrom(tooBig ? picked.size : null);
@@ -222,11 +310,12 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
     setResult(null);
     try {
       let current = file;
-      let converted = false;
+      let didConvert = false;
       const convert = async () => {
         setStage("converting");
         current = await convertVideo(file);
-        converted = true;
+        didConvert = true;
+        converted.current = true;
         setFile(current);
         setNeedsConvert(false);
       };
@@ -236,7 +325,7 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
         setResult(await detectVideo(current, night));
       } catch (err) {
         // The camera computer may not be able to decode this codec (H.265, VP9, ...): convert once and try again.
-        if (converted || !(err instanceof ApiError) || err.message !== "unreadable_video") throw err;
+        if (didConvert || !(err instanceof ApiError) || err.message !== "unreadable_video") throw err;
         await convert();
         setStage("checking");
         setResult(await detectVideo(current, night));
@@ -247,6 +336,41 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
       setBusy(false);
       setStage(null);
     }
+  };
+
+  // What is not ideal about the file that was chosen. A good file (MP4 or WebM, under the size limit, no longer than
+  // the part that is checked) has none, and then nothing is asked.
+  const ext = original ? (original.name.match(/\.([A-Za-z0-9]+)$/)?.[1] ?? "").toUpperCase() : "";
+  const sizeMb = original ? Math.max(1, Math.round(original.bytes / 1048576)) : 0;
+  const longClip = duration != null && duration > ANALYZED_SECONDS + 0.5;
+  const checklist = original
+    ? [
+        PLAYABLE.test(original.name)
+          ? { ok: true, text: tr("Format: {ext}", { ext }) }
+          : { ok: false, text: tr("Format: {ext}. It is converted first, which adds time on the camera computer.", { ext: ext || "?" }) },
+        original.bytes <= MAX_BYTES
+          ? { ok: true, text: tr("Size: {size} MB", { size: sizeMb }) }
+          : { ok: false, text: tr("Size: {size} MB. Only the first {mb} MB are used, and an MP4 whose index is at the end cannot be cut that way and will fail.", { size: sizeMb, mb: DEMO_VIDEO_MAX_MB }) },
+        duration == null
+          ? {
+              ok: true,
+              text: lengthFailed
+                ? tr("Length: could not be read from the file")
+                : PLAYABLE.test(original.name)
+                  ? tr("Length: reading it…")
+                  : tr("Length: not known until it is converted"),
+            }
+          : longClip
+            ? { ok: false, text: tr("Length: {n} seconds. Only the first {seconds} seconds are checked.", { n: Math.round(duration), seconds: ANALYZED_SECONDS }) }
+            : { ok: true, text: tr("Length: {n} seconds", { n: Math.max(1, Math.round(duration)) }) },
+      ]
+    : [];
+  const issues = checklist.filter((row) => !row.ok).map((row) => row.text);
+
+  /** "Check video": a file that is not ideal gets one question first, with the cost and a way back. */
+  const requestCheck = () => {
+    if (issues.length > 0 && !acknowledged.current) setConfirmOpen(true);
+    else void check();
   };
 
   const className = result ? result.names["0"] ?? "item" : "";
@@ -274,6 +398,9 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
           <DialogDescription>
             {tr("Choose a short video clip. The trained model checks it and marks what it finds. Nothing is saved.")}
           </DialogDescription>
+          <p className="text-sm text-[var(--text-secondary)]">
+            {tr("Best: an MP4 or WebM clip under {mb} MB and {seconds} seconds or shorter. Other files still work, but take longer.", { mb: DEMO_VIDEO_MAX_MB, seconds: ANALYZED_SECONDS })}
+          </p>
         </DialogHeader>
 
         <input ref={inputRef} type="file" accept="video/*,.mkv,.avi" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={onPick} />
@@ -289,7 +416,7 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
           </button>
           <button
             type="button"
-            onClick={check}
+            onClick={requestCheck}
             disabled={!file || busy}
             className="tap inline-flex items-center gap-2 rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
@@ -326,13 +453,19 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
           ))}
         </div>
 
-        {cutFrom != null && (
-          <p className="text-xs text-[var(--text-tertiary)]">
-            {tr("This file is {size} MB. Only the first {mb} MB are used.", { size: Math.round(cutFrom / 1048576), mb: DEMO_VIDEO_MAX_MB })}
-          </p>
-        )}
-        {needsConvert && !busy && !result && (
-          <p className="text-xs text-[var(--text-tertiary)]">{tr("This video is converted first so it can play here.")}</p>
+        {original && !result && (
+          <ul aria-label={tr("What was chosen")} className="space-y-1 text-xs">
+            {checklist.map((row) => (
+              <li key={row.text} className="flex items-start gap-1.5" style={{ color: row.ok ? "var(--text-secondary)" : "var(--status-amber-text)" }}>
+                {row.ok ? (
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--status-green)]" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                )}
+                <span>{row.text}</span>
+              </li>
+            ))}
+          </ul>
         )}
         {busy && (
           <p role="status" className="text-sm text-[var(--text-secondary)]">
@@ -348,15 +481,27 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
         )}
 
         {url && (
-          <div className="relative overflow-hidden rounded-xl border border-[var(--border-default)] bg-black">
+          <div
+            ref={stageRef}
+            className={`relative overflow-hidden bg-black ${fullscreen ? "" : "rounded-xl border border-[var(--border-default)]"}`}
+          >
             <video
               ref={videoRef}
               src={url}
               controls
+              disablePictureInPicture
               playsInline
               muted
-              className="block max-h-[50vh] w-full"
-              onError={() => setNeedsConvert(true)}
+              className={fullscreen ? "block h-full w-full object-contain" : "block max-h-[50vh] w-full"}
+              onLoadedMetadata={(e) => {
+                // How long the file the person chose plays (a converted copy is shorter, so it does not count).
+                const seconds = e.currentTarget.duration;
+                if (!converted.current && Number.isFinite(seconds)) setDuration(seconds);
+              }}
+              onError={() => {
+                if (!converted.current) setLengthFailed(true);
+                setNeedsConvert(true);
+              }}
             />
             {result && <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 h-full w-full" />}
           </div>
@@ -431,6 +576,27 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
                 </p>
               </>
             )}
+            {result &&
+              (weights ? (
+                <>
+                  <p className="font-medium text-[var(--text-primary)]">
+                    {tr("Estimated weights: {n} birds, average {avg} g, from {min} g to {max} g. One bird can be off by about {pct}%.", {
+                      n: weights.n,
+                      avg: weights.averageG,
+                      min: weights.minG,
+                      max: weights.maxG,
+                      pct: VIDEO_WEIGHT_ERROR_PERCENT,
+                    })}
+                  </p>
+                  <p className="text-xs text-[var(--text-tertiary)]">
+                    {tr("Each weight comes from the size of the bird's box, around the standard weight for the grow-out day in Settings. Birds of a different age shift together, and a bird nearer the camera looks heavier, so treat them as a rough guide.")}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {tr("Too few birds were followed to estimate weights (at least 5 are needed).")}
+                </p>
+              ))}
             {partly && (
               <p className="text-xs text-[var(--text-tertiary)]">
                 {tr("Only the first {seconds} seconds were checked.", { seconds: Math.round(result.analyzed_seconds) })}
@@ -441,6 +607,34 @@ export function VideoDetectDialog({ lighting = DEFAULT_LIGHTING }: { lighting?: 
             </p>
           </div>
         )}
+
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{tr("This video is not ideal")}</AlertDialogTitle>
+              <AlertDialogDescription>{tr("It can still be checked, but:")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--text-secondary)]">
+              {issues.map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+            <p className="text-sm text-[var(--text-secondary)]">
+              {tr("This can take a few minutes on the camera computer. For a quick check, use an MP4 or WebM clip under {mb} MB and {seconds} seconds or shorter.", { mb: DEMO_VIDEO_MAX_MB, seconds: ANALYZED_SECONDS })}
+            </p>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => inputRef.current?.click()}>{tr("Choose another video")}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  acknowledged.current = true;
+                  void check();
+                }}
+              >
+                {tr("Use it anyway")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

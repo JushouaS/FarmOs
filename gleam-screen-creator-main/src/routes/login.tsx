@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useAuth, MfaRequiredError, type LoginError } from "@/lib/auth-context";
 import { CerebroilLogo } from "@/components/farm/SideNav";
@@ -152,6 +152,7 @@ function LoginPage() {
       const msgs: Record<string, string> = {
         invalid_credentials: tr("Incorrect username or password."),
         user_disabled: tr("This account is disabled. Contact your administrator."),
+        password_expired: tr("This temporary password has expired. Ask your administrator for a new one."),
         account_locked: tr("Account temporarily locked due to too many failed attempts."),
         rate_limit_exceeded: tr("Too many attempts. Wait a minute and try again."),
         invalid_body: tr("That sign-in didn't match what the server expects. Use your email address, not a short username."),
@@ -182,7 +183,9 @@ function LoginPage() {
           ? tr("Incorrect code. Try again.")
           : code === "invalid_backup_code"
             ? tr("Incorrect backup code.")
-            : tr("Verification failed. Try again."),
+            : code === "too_many_attempts"
+              ? tr("Account temporarily locked due to too many failed attempts.")
+              : tr("Verification failed. Try again."),
       );
       setShaking(true);
     } finally {
@@ -265,12 +268,6 @@ function LoginPage() {
                 <h1 className="font-display text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
                   {tr("Sign in")}
                 </h1>
-                <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  {tr("Demo access")}{" "}
-                  <span className="font-mono text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                    {tr("admin / admin")}
-                  </span>
-                </p>
 
                 {error && (
                   <div
@@ -280,7 +277,7 @@ function LoginPage() {
                   >
                     <p className="font-medium" style={{ color: "var(--status-red-text)" }}>{error}</p>
                     {hint && (
-                      <p className="mt-0.5 font-mono text-[11px] tabular-nums" style={{ color: "var(--status-red)" }}>
+                      <p className="mt-0.5 font-mono text-xs tabular-nums" style={{ color: "var(--status-red)" }}>
                         {hint}
                       </p>
                     )}
@@ -449,6 +446,13 @@ function LoginPage() {
               </a>
             </p>
           )}
+
+          {/* Anyone can read the policy before signing in; the agreement itself comes after sign-in. */}
+          <p className="mt-3 text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
+            <Link to="/privacy" className="font-medium hover:underline" style={{ color: "var(--text-secondary)" }}>
+              {tr("Privacy Policy")}
+            </Link>
+          </p>
         </div>
       </main>
     </div>

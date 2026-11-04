@@ -186,7 +186,7 @@ export function AlertPopups() {
               </span>
 
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>
                   {tr(label)}
                 </p>
                 <p className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">{alertKindTitle(alert.kind)}</p>

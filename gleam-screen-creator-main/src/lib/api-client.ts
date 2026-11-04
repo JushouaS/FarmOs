@@ -9,12 +9,17 @@
  * optimistically update without a full page reload.
  */
 
+import { NO_SPREAD, type WeightSpread } from "@/lib/farm/weights";
+
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
-  // Same host that served the page, so LAN devices reach this machine's API.
   (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    ? window.location.protocol === "https:"
+      ? // A public https address (see scripts/public-gateway.mjs): the API is behind the same address, under /api.
+        `${window.location.origin}/api`
+      : // Same host that served the page, so LAN devices reach this machine's API.
+        `${window.location.protocol}//${window.location.hostname}:4000`
     : "http://localhost:4000");
 
 export class ApiError extends Error {
@@ -230,6 +235,46 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Accounts (administrator)                                                  */
+/* -------------------------------------------------------------------------- */
+
+export interface AccountRow {
+  id: string;
+  email: string;
+  fullName: string | null;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  mustChangePassword: boolean;
+  passwordExpiresAt: string | null;
+  role: string;
+  roles: string[];
+}
+
+/** What came back after an account was made or its password reset: when the password stops working and whether the email went out. */
+export interface AccountMail {
+  expiresAt: string;
+  email_sent: boolean;
+  email_problem: string | null;
+}
+
+export async function listAccounts(): Promise<AccountRow[]> {
+  const res = await apiFetch<{ users: AccountRow[] }>("/auth/users?limit=100");
+  return res.users;
+}
+
+export async function createAccount(email: string, password: string, role: string): Promise<AccountMail> {
+  return apiFetch<AccountMail>("/auth/register", { method: "POST", body: JSON.stringify({ email, password, roles: [role] }) });
+}
+
+export async function setAccountActive(id: string, isActive: boolean): Promise<void> {
+  await apiFetch(`/auth/users/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ isActive }) });
+}
+
+export async function resetAccountPassword(id: string, newPassword: string): Promise<AccountMail> {
+  return apiFetch<AccountMail>(`/auth/users/${encodeURIComponent(id)}/password`, { method: "POST", body: JSON.stringify({ newPassword }) });
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Notifications                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -400,7 +445,10 @@ export interface VisionWeight {
 export interface VisionCluster {
   label: string;
   risk: number;
-  box: string;
+  /** "roi" from a motion-only scan, or the group's rectangle when the trained detector ran. */
+  box: string | { x: number; y: number; width: number; height: number };
+  /** How many birds are in this group (detector scans only). */
+  birds?: number;
 }
 
 export interface AnalysisResult {
@@ -517,6 +565,90 @@ export async function analyzeFrame(cameraId: string): Promise<AnalysisResult> {
   return apiFetch<AnalysisResult>(`/visual/analyze/${encodeURIComponent(cameraId)}`, {
     method: "POST",
   });
+}
+
+/** A short-lived ticket for the Kinect depth stream, or null when the bridge asks for none. */
+export async function fetchKinectTicket(): Promise<string | null> {
+  const res = await apiFetch<{ ticket: string | null }>("/visual/kinect-ticket");
+  return res.ticket;
+}
+
+/** One chicken the Kinect picture shows: where it is, as shares (0 to 1) of the picture's width and height. */
+export interface KinectChicken {
+  confidence: number;
+  box: [number, number, number, number];
+  polygon: [number, number][];
+  /** Grams, estimated from the bird's size on the depth picture (about 18 % off for one bird), or null when it cannot be estimated. */
+  weightG: number | null;
+}
+
+export interface KinectChickens {
+  ok: boolean;
+  /** Why there is no answer: "starting", "waiting_for_picture", "bridge_unreachable", "model_not_installed", "not_running", "error". */
+  status?: string;
+  message?: string;
+  at?: number;
+  width?: number;
+  height?: number;
+  count?: number;
+  birds?: KinectChicken[];
+  /** "ok", "no_depth" (no depth picture came), "model_not_installed" or "no_birds". */
+  weightStatus?: string;
+  /** The flock's average from the birds that have an estimate. It is much closer than one bird's estimate. */
+  weight?: { n: number; meanG: number; medianG: number; errorPercent: number } | null;
+}
+
+/** The newest chicken outlines on the Kinect picture. Never throws: a program that is not running comes back as `ok: false`. */
+export async function fetchKinectChickens(): Promise<KinectChickens> {
+  try {
+    return await apiFetch<KinectChickens>("/visual/kinect-chickens");
+  } catch (err) {
+    return { ok: false, status: err instanceof ApiError && err.status === 503 ? "not_running" : "error" };
+  }
+}
+
+/** What the live behavior monitor on the camera computer sees right now (it is off unless LIVE_BEHAVIOR=1 there). */
+export interface LiveBehavior {
+  running: boolean;
+  reason?: string;
+  birds?: number;
+  night?: boolean;
+  inactive?: { id: number; still_seconds: number }[];
+  flock_inactive?: { still_seconds: number } | null;
+  huddle?: { birds: number; fdi: number; seconds: number; warning: boolean } | null;
+}
+
+/** The live monitor's picture. Never throws: a camera computer that is off or has the monitor off comes back as `running: false`. */
+export async function fetchLiveBehavior(night: boolean): Promise<LiveBehavior> {
+  try {
+    return await apiFetch<LiveBehavior>(`/visual/behavior?night=${night ? 1 : 0}`);
+  } catch {
+    return { running: false, reason: "unreachable" };
+  }
+}
+
+export interface SensorDay {
+  /** YYYY-MM-DD, the database's day. */
+  day: string;
+  avg: number;
+  min: number;
+  max: number;
+  n: number;
+}
+
+export interface SensorHistory {
+  days: number;
+  temperature: SensorDay[];
+  humidity: SensorDay[];
+}
+
+/** The DHT22's stored readings, one point per day that has any. Empty lists when there are none or the API is away. */
+export async function fetchSensorHistory(days = 7): Promise<SensorHistory> {
+  try {
+    return await apiFetch<SensorHistory>(`/operations/sensor-history?days=${days}`);
+  } catch {
+    return { days, temperature: [], humidity: [] };
+  }
 }
 
 /** Build the MJPEG stream URL for a given camera (served via Fastify proxy). */
@@ -736,6 +868,8 @@ export async function submitReport(body: ReportSubmission): Promise<void> {
 /* -------------------------------------------------------------------------- */
 
 export interface CameraScan extends AnalysisResult {
+  /** What found the birds: the trained detector (`model`) or motion only, when the model is not installed. */
+  detector?: { source: "model" | "motion"; model?: string };
   scan?: { samples: number; movement_min: number; movement_max: number; movement_mean: number };
 }
 
@@ -807,6 +941,15 @@ export async function fetchPreviousWeights(day: number): Promise<{ birdId: strin
 
 export async function saveActualWeight(input: { birdId: string; day: number; actualG: number; estimatedG?: number }): Promise<unknown> {
   return apiFetch("/growth/actual-weights", { method: "PUT", body: JSON.stringify(input) });
+}
+
+/** The weights typed in for the newest grow-out day that has any (NO_SPREAD-shaped when none, or when the API is away). */
+export async function fetchWeightSpread(): Promise<WeightSpread> {
+  try {
+    return await apiFetch<WeightSpread>("/growth/weight-spread");
+  } catch {
+    return NO_SPREAD;
+  }
 }
 
 export async function deleteActualWeight(birdId: string, day: number): Promise<unknown> {

@@ -5,6 +5,7 @@ import { AppShell } from "@/components/farm/AppShell";
 import { deleteActualWeight, fetchActualWeights, fetchPreviousWeights, saveActualWeight } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { getOperationsOverview } from "@/lib/farm/repository";
+import { standardForToday } from "@/lib/farm/weights";
 import { T, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/flock-monitoring")({
@@ -16,11 +17,16 @@ export const Route = createFileRoute("/flock-monitoring")({
 type Filter = "all" | "weighed" | "missing";
 type SortKey = "id" | "actual" | "vsStd";
 
-/* The weight a person measures is typed in kilograms, with at most 3 decimals, once a
- * day, and kept in grams. These are the limits the API accepts. */
+/* The weight a person measures is typed in kilograms, with at most 3 decimals, once a day,
+ * and kept in grams. The Dashboard's average weight is the mean of the weights typed in for a day.
+ * These are the limits the API accepts. */
 const MIN_G = 20;
 const MAX_G = 8000;
 const kgText = (g: number) => (g / 1000).toFixed(3);
+
+/** The most birds the sheet lists; bird ids are B-001 and up, and the API takes four digits. */
+const MAX_BIRDS = 2000;
+const birdId = (n: number) => `B-${String(n).padStart(3, "0")}`;
 
 /** What a person has typed, cut down to a weight in kg: digits and one point, at most 3 decimals. */
 function cleanKg(text: string): string {
@@ -28,28 +34,6 @@ function cleanKg(text: string): string {
   const dot = t.indexOf(".");
   if (dot === -1) return t.slice(0, 1);
   return `${t.slice(0, dot).slice(0, 1)}.${t.slice(dot + 1).replace(/\./g, "").slice(0, 3)}`;
-}
-/** Within this share of the day's standard counts as on target (green), within the second as fair (amber). */
-const CLOSE_PCT = 5;
-const FAIR_PCT = 10;
-/** This far below the standard reads as an underweight bird, so the row is flagged. */
-const LOW_PCT = FAIR_PCT;
-/** A spread taken from fewer birds than this says more about the sample than about the flock. */
-const MIN_SPREAD_N = 5;
-/** A pen holds thousands of birds, so the list arrives a page at a time. */
-const PAGE_SIZE = 100;
-
-const offColor = (pct: number) =>
-  Math.abs(pct) <= CLOSE_PCT ? "var(--status-green)" : Math.abs(pct) <= FAIR_PCT ? "var(--status-amber)" : "var(--status-red)";
-
-/** How far a typed weight is from the breed's standard for that day, in percent. */
-const vsStandard = (actualG: number, standardG: number) => ((actualG - standardG) / standardG) * 100;
-
-/** The standard deviation of the weights typed so far, or null while there are too few to mean anything. */
-function spreadG(weights: number[]): number | null {
-  if (weights.length < MIN_SPREAD_N) return null;
-  const mean = weights.reduce((s, w) => s + w, 0) / weights.length;
-  return Math.round(Math.sqrt(weights.reduce((s, w) => s + (w - mean) ** 2, 0) / weights.length));
 }
 
 /** How much a bird has gained since the last day it was weighed. */
@@ -59,14 +43,25 @@ function Gain({ actualG, previous }: { actualG: number | undefined; previous: { 
   return (
     <span className="font-mono text-xs font-semibold" style={{ color: gain >= 0 ? "var(--status-green)" : "var(--status-red)" }}>
       {gain > 0 ? "+" : ""}{(gain / 1000).toFixed(3)} kg
-      <span className="block text-[10px] font-normal" style={{ color: "var(--text-tertiary)" }}>{tr("since Day {day}", { day: previous.day })}</span>
+      <span className="block text-xs font-normal" style={{ color: "var(--text-tertiary)" }}>{tr("since Day {day}", { day: previous.day })}</span>
+    </span>
+  );
+}
+
+/** How far a bird's weight is above (+) or below (−) the breed standard for the day. */
+function VsStandard({ actualG, stdG }: { actualG: number | undefined; stdG: number | null }) {
+  if (actualG === undefined || !stdG) return <span className="font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>—</span>;
+  const delta = ((actualG - stdG) / stdG) * 100;
+  return (
+    <span className="font-mono text-xs font-semibold" style={{ color: delta >= 0 ? "var(--status-green)" : "var(--status-red)" }}>
+      {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
     </span>
   );
 }
 
 /** The box a person types a bird's weight in. It saves when they leave the box or press Enter. */
 function WeightInput({
-  birdId,
+  birdId: id,
   value,
   disabled,
   onCommit,
@@ -103,7 +98,7 @@ function WeightInput({
         disabled={disabled}
         placeholder="0.000"
         maxLength={5}
-        aria-label={tr("Actual weight of {id} in kg", { id: birdId })}
+        aria-label={tr("Actual weight of {id} in kg", { id })}
         onChange={(e) => setText(cleanKg(e.target.value))}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -115,9 +110,9 @@ function WeightInput({
         }}
         className="cb-input w-24 font-mono text-sm disabled:opacity-60"
       />
-      <span className="font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>kg</span>
+      <span className="font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>kg</span>
       {saved && (
-        <span role="status" className="inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold" style={{ color: "var(--status-green)" }}>
+        <span role="status" className="inline-flex items-center gap-0.5 font-mono text-xs font-semibold" style={{ color: "var(--status-green)" }}>
           <Check className="h-3 w-3" aria-hidden="true" />
           {tr("Saved")}
         </span>
@@ -129,7 +124,7 @@ function WeightInput({
 /* ── Mobile card view (< md) ──────────────────────────────── */
 function BirdCard({
   id,
-  standardG,
+  stdG,
   day,
   actualG,
   previous,
@@ -137,24 +132,18 @@ function BirdCard({
   onCommit,
 }: {
   id: string;
-  standardG: number | null;
+  stdG: number | null;
   day: number;
   actualG: number | undefined;
   previous: { day: number; actualG: number } | undefined;
   canEdit: boolean;
   onCommit: (text: string) => Promise<boolean>;
 }) {
-  // A bird has no figure of its own until it is weighed, so the card shows nothing rather than a guess.
-  const pct = actualG !== undefined && standardG !== null ? vsStandard(actualG, standardG) : null;
-  const low = pct !== null && pct <= -LOW_PCT;
   return (
-    <div className="cb-card p-4 space-y-3" style={low ? { borderLeft: "3px solid var(--status-amber)" } : {}}>
-      {/* Header row */}
+    <div className="cb-card p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-mono text-base font-bold" style={{ color: "var(--cv-accent)" }}>{id}</span>
-        {low && <span className="badge-amber">{tr("LOW W")}</span>}
       </div>
-      {/* Data rows */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
         <div>
           <p className="label-section">{tr("Actual Weight")}</p>
@@ -164,13 +153,7 @@ function BirdCard({
         </div>
         <div>
           <p className="label-section">{tr("vs Day {day} Std", { day })}</p>
-          {pct === null ? (
-            <p className="mt-2 font-mono font-semibold" style={{ color: "var(--text-tertiary)" }}>—</p>
-          ) : (
-            <p className="mt-2 font-mono font-semibold" style={{ color: offColor(pct) }}>
-              {pct > 0 ? "+" : ""}{pct.toFixed(1)}%
-            </p>
-          )}
+          <p className="mt-2"><VsStandard actualG={actualG} stdG={stdG} /></p>
         </div>
         <div className="col-span-2">
           <p className="label-section">{tr("Gain")}</p>
@@ -182,22 +165,14 @@ function BirdCard({
 }
 
 function FlockTrackingPage() {
-  // The flock comes from the pen the facility has, not from a sample: the only
-  // per-bird number on this page is the weight a person put on the scale.
   const overview = Route.useLoaderData() as any;
-  // The pen is the one the live camera watches — the same house Settings writes
-  // the flock size into, and the one the Dashboard counts. The first house in the
-  // list is only the first house on the farm, so reading it here listed another
-  // house's flock (thousands of birds) whatever number was set for this pen.
-  const houses = (overview?.houses ?? []) as { id: string; label: string; population: number }[];
-  const house = houses.find((h) => h.id === overview?.cluster?.houseId) ?? houses[0] ?? null;
-  const population = Number(house?.population ?? 0);
-  const cycle = overview?.cycle as { day: number; startDay: number; endDay: number } | null | undefined;
-  const day = Number(cycle?.day ?? 0);
-  const endDay = Number(cycle?.endDay ?? 0);
-  // The breed's target for this exact day, read off the stored standard curve.
-  const standardG: number | null =
-    (overview?.weight?.standardCurve as { day: number; standardG: number }[] | undefined)?.find((p) => p.day === day)?.standardG ?? null;
+  const day = Number(overview?.cycle?.day ?? 0);
+  const endDay = Number(overview?.cycle?.endDay ?? overview?.cycle?.lengthDays ?? 45);
+  const stdG = standardForToday(overview);
+  // The sheet lists the birds of the house the camera watches: B-001 up to the flock size.
+  const house = ((overview?.houses ?? []) as { id: string; label?: string; population: number | string }[]).find((h) => h.id === overview?.cluster?.houseId);
+  const population = Math.min(MAX_BIRDS, Math.max(0, Math.round(Number(house?.population ?? 0)) || 0));
+  const birds = useMemo(() => Array.from({ length: population }, (_, i) => ({ id: birdId(i + 1) })), [population]);
   const { user } = useAuth();
   // Entering weights is for the people who work with the flock.
   const canEdit = Boolean(user?.roles?.some((r) => r === "ADMIN" || r === "FARM_MANAGER" || r === "OPERATOR"));
@@ -206,9 +181,6 @@ function FlockTrackingPage() {
   const [sortAsc, setSortAsc] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  // How many rows are on screen; a pen's flock does not fit in one page.
-  const [limit, setLimit] = useState(PAGE_SIZE);
-  useEffect(() => setLimit(PAGE_SIZE), [filter, search]);
   // The weights entered for today, in grams, by bird.
   const [actuals, setActuals] = useState<Record<string, number>>({});
   // What the database holds for each bird, as far as this page knows, and the saves still waiting
@@ -226,7 +198,6 @@ function FlockTrackingPage() {
   const [previous, setPrevious] = useState<Record<string, { day: number; actualG: number }>>({});
 
   useEffect(() => {
-    if (!day) return;
     let alive = true;
     setPrevious({});
     fetchPreviousWeights(day)
@@ -238,7 +209,6 @@ function FlockTrackingPage() {
   }, [day]);
 
   useEffect(() => {
-    if (!day) return;
     let alive = true;
     setActuals({});
     stored.current = {};
@@ -255,12 +225,6 @@ function FlockTrackingPage() {
       alive = false;
     };
   }, [day]);
-
-  // B-001 to the pen's flock size: the birds the farm says are in the house.
-  const birds = useMemo(
-    () => Array.from({ length: population }, (_, i) => `B-${String(i + 1).padStart(3, "0")}`),
-    [population],
-  );
 
   /** Saves what was typed for a bird. Returns false when the text was refused. */
   const commit = (id: string) => async (text: string): Promise<boolean> => {
@@ -287,7 +251,6 @@ function FlockTrackingPage() {
         }
         if (value === before) return true;
         put(value);
-        // Only the weight is sent. There is no estimate to compare it with any more.
         await enqueue(id, () => saveActualWeight({ birdId: id, day, actualG: value }));
         stored.current[id] = value;
       }
@@ -300,36 +263,28 @@ function FlockTrackingPage() {
     }
   };
 
-  /** How far a bird is from the standard, or null while it has not been weighed. */
-  const offPct = (id: string): number | null =>
-    actuals[id] === undefined || standardG === null ? null : vsStandard(actuals[id]!, standardG);
+  const vsStd = (id: string): number | null => (actuals[id] === undefined || !stdG ? null : ((actuals[id]! - stdG) / stdG) * 100);
 
-  const sorted = birds
-    .filter((id) => filter === "all" || (filter === "weighed") === (actuals[id] !== undefined))
-    .filter((id) => !search || id.toLowerCase().includes(search.toLowerCase()))
+  const sorted = [...birds]
+    .filter((b) => filter === "all" || (filter === "weighed") === (actuals[b.id] !== undefined))
+    .filter((b) => !search || b.id.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       let cmp = 0;
-      if (sortKey === "id") cmp = a.localeCompare(b);
-      else if (sortKey === "actual") cmp = (actuals[a] ?? Infinity) - (actuals[b] ?? Infinity);
-      else cmp = (offPct(a) ?? Infinity) - (offPct(b) ?? Infinity);
+      if (sortKey === "id") cmp = a.id.localeCompare(b.id);
+      else if (sortKey === "actual") cmp = (actuals[a.id] ?? Infinity) - (actuals[b.id] ?? Infinity);
+      else cmp = (vsStd(a.id) ?? Infinity) - (vsStd(b.id) ?? Infinity);
       if (Number.isNaN(cmp)) cmp = 0;
       return sortAsc ? cmp : -cmp;
     });
-  // Only the rows on screen are built: a pen has thousands of birds.
-  const shown = sorted.slice(0, limit);
 
   const handleSort = (k: SortKey) => {
     if (k === sortKey) setSortAsc((v) => !v);
     else { setSortKey(k); setSortAsc(true); }
   };
 
-  const weighedIds = birds.filter((id) => actuals[id] !== undefined);
-  const typed = weighedIds.map((id) => actuals[id]!);
-  // The mean of what was put on the scale, and only of that.
-  const meanG = typed.length ? Math.round(typed.reduce((s, w) => s + w, 0) / typed.length) : null;
-  const spread = spreadG(typed);
-  // How the flock's own average sits against the breed's target for the day.
-  const meanOffPct = meanG !== null && standardG !== null ? vsStandard(meanG, standardG) : null;
+  const weighed = birds.filter((b) => actuals[b.id] !== undefined);
+  const avgWeight = weighed.length ? Math.round(weighed.reduce((s, b) => s + actuals[b.id]!, 0) / weighed.length) : null;
+  const avgVs = stdG && avgWeight !== null ? ((avgWeight - stdG) / stdG) * 100 : null;
 
   return (
     <AppShell>
@@ -340,10 +295,9 @@ function FlockTrackingPage() {
             {tr("Flock Tracking")}
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-            {population.toLocaleString()} {tr("birds")}
-            {house ? ` · ${house.label}` : ""} · {tr("Day")}{" "}
+            {population} {tr("birds")} · {house?.label ?? tr("Pen 1")} · {tr("Day")}{" "}
             <span className="font-mono" style={{ color: "var(--cv-accent)" }}>{day}</span>
-            {endDay ? `/${endDay}` : ""}
+            {`/${endDay}`}
           </p>
         </div>
       </div>
@@ -351,26 +305,10 @@ function FlockTrackingPage() {
       {/* One summary card */}
       <div className="cb-card mb-3 grid grid-cols-2 sm:grid-cols-4 sm:divide-x divide-[color:var(--border-subtle)]">
         {[
-          {
-            label: tr("Weighed Today"),
-            value: `${weighedIds.length}/${population.toLocaleString()}`,
-            color: weighedIds.length ? "var(--status-green)" : "var(--text-tertiary)",
-          },
-          {
-            label: tr("Avg Weight"),
-            value: meanG === null ? "—" : `${(meanG / 1000).toFixed(3)} kg`,
-            color: meanG === null ? "var(--text-tertiary)" : "var(--brand)",
-          },
-          {
-            label: tr("vs Standard"),
-            value: meanOffPct === null ? "—" : `${meanOffPct > 0 ? "+" : ""}${meanOffPct.toFixed(1)}%`,
-            color: meanOffPct === null ? "var(--text-tertiary)" : offColor(meanOffPct),
-          },
-          {
-            label: tr("Spread"),
-            value: spread === null ? "—" : `${(spread / 1000).toFixed(3)} kg`,
-            color: spread === null ? "var(--text-tertiary)" : "var(--text-primary)",
-          },
+          { label: tr("Total Birds"), value: String(population), color: "var(--cv-accent)" },
+          { label: tr("Avg Weight"), value: avgWeight === null ? "—" : `${(avgWeight / 1000).toFixed(3)} kg`, color: avgWeight === null ? "var(--text-tertiary)" : "var(--brand)" },
+          { label: tr("Weighed Today"), value: `${weighed.length}/${population}`, color: weighed.length ? "var(--status-green)" : "var(--text-tertiary)" },
+          { label: tr("Avg vs Standard"), value: avgVs === null ? "—" : `${avgVs >= 0 ? "+" : ""}${avgVs.toFixed(1)}%`, color: avgVs === null ? "var(--text-tertiary)" : avgVs >= 0 ? "var(--status-green)" : "var(--status-red)" },
         ].map((k, i) => (
           <div
             key={k.label}
@@ -381,14 +319,9 @@ function FlockTrackingPage() {
           </div>
         ))}
       </div>
-      <p className="mb-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-        {tr("Type each bird's weight in kg (up to 3 decimals, like 0.946) and press Enter or click away. It saves by itself for Day {day}; there is no submit button. Nothing here is estimated: a bird shows a weight only once someone has weighed it, and the vs Standard figure compares that weight with the breed's target for the day (within {close}% green, within {fair}% amber, more red). Each new day starts with empty boxes; the earlier days stay saved, and each bird's Gain compares it with its last weighing.", { day, close: CLOSE_PCT, fair: FAIR_PCT })}
+      <p className="mb-5 text-xs" style={{ color: "var(--text-tertiary)" }}>
+        {tr("Weigh birds on a scale and type each weight in kg (up to 3 decimals, like 0.946), then press Enter or click away. It saves by itself for Day {day}; there is no submit button. The average of the weights you type in for a day is the weight the Dashboard shows for the flock. Each new day starts with empty boxes; the earlier days stay saved, and each bird's Gain compares it with its last weighing.", { day })}
       </p>
-      {spread === null && (
-        <p className="mb-5 text-xs" style={{ color: "var(--text-tertiary)" }}>
-          {tr("The spread appears once at least {n} birds have been weighed today; fewer than that describes the sample, not the flock.", { n: MIN_SPREAD_N })}
-        </p>
-      )}
       {!canEdit && (
         <p className="mb-3 text-xs" style={{ color: "var(--status-amber-text)" }}>{tr("Only an administrator, farm manager or operator can enter weights.")}</p>
       )}
@@ -396,140 +329,111 @@ function FlockTrackingPage() {
         <p role="alert" className="mb-3 text-sm" style={{ color: "var(--status-red-text)" }}>{problem}</p>
       )}
 
-      {population === 0 && (
-        <p className="mb-3 text-sm" style={{ color: "var(--text-secondary)" }}>{tr("No pen is set up yet, so there are no birds to list.")}</p>
-      )}
+      {population === 0 ? (
+        <p className="cb-card p-5 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {tr("The flock size of this pen is not set, so there are no birds to list. An administrator can set it in Settings.")}
+        </p>
+      ) : (
+        <>
+          {/* Which birds to show */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {(["all", "weighed", "missing"] as Filter[]).map((f) => {
+                const n = f === "all" ? birds.length : f === "weighed" ? weighed.length : birds.length - weighed.length;
+                const label = f === "all" ? tr("All ({length})", { length: n }) : f === "weighed" ? tr("Weighed ({n})", { n }) : tr("Not weighed ({n})", { n });
+                return (
+                  <button key={f} onClick={() => setFilter(f)}
+                    aria-pressed={filter === f}
+                    className="tap rounded-full px-3 py-1 font-mono text-xs font-semibold transition-all"
+                    style={filter === f
+                      ? { background: "var(--brand)", color: "var(--text-inverse)" }
+                      : { background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="relative w-full sm:w-56">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                style={{ color: "var(--text-tertiary)" }}
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={tr("Search")}
+                aria-label={tr("Search birds by ID")}
+                className="cb-input w-full pl-9 font-mono text-sm"
+              />
+            </div>
+          </div>
 
-      {/* Which birds to show */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {(["all", "weighed", "missing"] as Filter[]).map((f) => {
-            const n = f === "all" ? birds.length : f === "weighed" ? weighedIds.length : birds.length - weighedIds.length;
-            const label = f === "all" ? tr("All ({length})", { length: n }) : f === "weighed" ? tr("Weighed ({n})", { n }) : tr("Not weighed ({n})", { n });
-            return (
-              <button key={f} onClick={() => setFilter(f)}
-                aria-pressed={filter === f}
-                className="tap rounded-full px-3 py-1 font-mono text-[11px] font-semibold transition-all"
-                style={filter === f
-                  ? { background: "var(--brand)", color: "var(--text-inverse)" }
-                  : { background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="relative w-full sm:w-56">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
-            style={{ color: "var(--text-tertiary)" }}
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={tr("Search")}
-            aria-label={tr("Search birds by ID")}
-            className="cb-input w-full pl-9 font-mono text-sm"
-          />
-        </div>
-      </div>
+          {/* ── Mobile card list (< md) ─────────────────────────── */}
+          <div className="md:hidden space-y-3">
+            {sorted.map((b) => (
+              <BirdCard key={b.id} id={b.id} stdG={stdG} day={day} actualG={actuals[b.id]} previous={previous[b.id]} canEdit={canEdit} onCommit={commit(b.id)} />
+            ))}
+            <p className="text-xs text-right pt-1" style={{ color: "var(--text-tertiary)" }}>{tr("{length} of {length2} birds", { length: sorted.length, length2: birds.length })}</p>
+          </div>
 
-      {/* ── Mobile card list (< md) ─────────────────────────── */}
-      <div className="md:hidden space-y-3">
-        {shown.map((id) => (
-          <BirdCard key={id} id={id} standardG={standardG} day={day} actualG={actuals[id]} previous={previous[id]} canEdit={canEdit} onCommit={commit(id)} />
-        ))}
-      </div>
-
-      {/* ── Desktop table (>= md) ──────────────────────────── */}
-      <div className="hidden md:block overflow-x-auto rounded-xl"
-        style={{ border: "1px solid var(--border-default)" }}>
-        <table className="w-full table-fixed" style={{ minWidth: "760px" }}>
-          <thead>
-            <tr style={{ background: "var(--surface-raised)", borderBottom: "1px solid var(--border-subtle)" }}>
-              {([
-                ["id",       T("Bird ID"),       "w-[16%]"],
-                ["actual",   T("Actual Weight"), "w-[26%]"],
-                [null,       T("Gain"),          "w-[20%]"],
-                ["vsStd",    T("vs Standard"),   "w-[22%]"],
-                [null,       T("Flag"),          "w-[10%]"],
-              ] as [SortKey | null, string, string][]).map(([k, label, w]) => (
-                <th key={label} className={`${w} px-4 py-3 text-left`}>
-                  {k ? (
-                    <button onClick={() => handleSort(k)}
-                      className="tap flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition-colors hover:text-[color:var(--text-primary)]"
-                      style={{ color: "var(--text-tertiary)" }}>
-                      {tr(label)}
-                      <span style={{ color: sortKey === k ? "var(--brand)" : "var(--text-disabled)" }}>
-                        {sortKey === k ? (sortAsc ? "↑" : "↓") : "↕"}
-                      </span>
-                    </button>
-                  ) : (
-                    <span className="font-mono text-[10px] font-semibold uppercase tracking-wide"
-                      style={{ color: "var(--text-tertiary)" }}>{tr(label)}</span>
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ background: "var(--surface-card)", borderColor: "var(--border-subtle)" }}>
-            {shown.map((id) => {
-              const actual = actuals[id];
-              const pct = offPct(id);
-              const low = pct !== null && pct <= -LOW_PCT;
-              const rowBg = low ? "rgba(251,191,36,0.05)" : undefined;
-              return (
-                <tr key={id}
-                  style={{ background: rowBg ?? "transparent" }}
-                  onMouseEnter={(e) => { if (!rowBg) e.currentTarget.style.background = "var(--surface-raised)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = rowBg ?? "transparent"; }}>
-                  {/* ID */}
-                  <td className="px-4 py-2.5">
-                    <span className="font-mono text-sm font-bold" style={{ color: "var(--cv-accent)" }}>
-                      {id}
-                    </span>
-                  </td>
-                  {/* The weight someone put on the scale */}
-                  <td className="px-4 py-2.5">
-                    <WeightInput birdId={id} value={actual} disabled={!canEdit} onCommit={commit(id)} />
-                  </td>
-                  {/* Gain since the last day it was weighed */}
-                  <td className="px-4 py-2.5">
-                    <Gain actualG={actual} previous={previous[id]} />
-                  </td>
-                  {/* vs the breed's target for the day */}
-                  <td className="px-4 py-2.5">
-                    {pct === null ? (
-                      <span className="font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>—</span>
-                    ) : (
-                      <span className="font-mono text-xs font-semibold" style={{ color: offColor(pct) }}>
-                        {pct > 0 ? "+" : ""}{pct.toFixed(1)}%
-                      </span>
-                    )}
-                  </td>
-                  {/* Flag */}
-                  <td className="px-4 py-2.5">
-                    {low && <span className="badge-amber">{tr("LOW W")}</span>}
-                  </td>
+          {/* ── Desktop table (>= md) ──────────────────────────── */}
+          <div className="hidden md:block overflow-x-auto rounded-xl"
+            style={{ border: "1px solid var(--border-default)" }}>
+            <table className="w-full table-fixed" style={{ minWidth: "560px" }}>
+              <thead>
+                <tr style={{ background: "var(--surface-raised)", borderBottom: "1px solid var(--border-subtle)" }}>
+                  {([
+                    ["id",     T("Bird ID"),       "w-[20%]"],
+                    ["actual", T("Actual Weight"), "w-[34%]"],
+                    [null,     T("Gain"),          "w-[26%]"],
+                    ["vsStd",  T("vs Standard"),   "w-[20%]"],
+                  ] as [SortKey | null, string, string][]).map(([k, label, w]) => (
+                    <th key={label} className={`${w} px-4 py-3 text-left`}>
+                      {k ? (
+                        <button onClick={() => handleSort(k)}
+                          className="tap flex items-center gap-1 font-mono text-xs font-semibold uppercase tracking-wide transition-colors hover:text-[color:var(--text-primary)]"
+                          style={{ color: "var(--text-tertiary)" }}>
+                          {tr(label)}
+                          <span style={{ color: sortKey === k ? "var(--brand)" : "var(--text-disabled)" }}>
+                            {sortKey === k ? (sortAsc ? "↑" : "↓") : "↕"}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="font-mono text-xs font-semibold uppercase tracking-wide"
+                          style={{ color: "var(--text-tertiary)" }}>{tr(label)}</span>
+                      )}
+                    </th>
+                  ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody className="divide-y" style={{ background: "var(--surface-card)", borderColor: "var(--border-subtle)" }}>
+                {sorted.map((b) => (
+                  <tr key={b.id}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-raised)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                    <td className="px-4 py-2.5">
+                      <span className="font-mono text-sm font-bold" style={{ color: "var(--cv-accent)" }}>{b.id}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <WeightInput birdId={b.id} value={actuals[b.id]} disabled={!canEdit} onCommit={commit(b.id)} />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Gain actualG={actuals[b.id]} previous={previous[b.id]} />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <VsStandard actualG={actuals[b.id]} stdG={stdG} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-        <span>{tr("{length} of {length2} birds", { length: shown.length, length2: sorted.length })}</span>
-        {shown.length < sorted.length && (
-          <button
-            onClick={() => setLimit((n) => n + PAGE_SIZE)}
-            className="tap rounded-full px-3 py-1 font-mono text-[11px] font-semibold"
-            style={{ background: "var(--surface-raised)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
-            {tr("Show {n} more", { n: Math.min(PAGE_SIZE, sorted.length - shown.length) })}
-          </button>
-        )}
-      </div>
+          <p className="mt-3 text-xs text-right" style={{ color: "var(--text-tertiary)" }}>{tr("{length} of {length2} birds", { length: sorted.length, length2: birds.length })}</p>
+        </>
+      )}
     </AppShell>
   );
 }

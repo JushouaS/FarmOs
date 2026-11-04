@@ -16,65 +16,36 @@ import {
  *
  * Authentication is carried in httpOnly, Secure, SameSite=Strict cookies
  * issued by the API. The frontend never stores tokens in localStorage.
- * Exception: the opt-in offline admin account (below) persists its session
- * profile (not a token) so a page refresh keeps the user signed in while
- * no backend is running.
  */
 const API_BASE =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
   (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    ? window.location.protocol === "https:"
+      ? // A public https address (see scripts/public-gateway.mjs): the API is behind the same address, under /api.
+        `${window.location.origin}/api`
+      : `${window.location.protocol}//${window.location.hostname}:4000`
     : "http://localhost:4000");
 
 const fetchOpts: RequestInit = { credentials: "include" };
 
-/* ── Offline admin account (opt-in) ─────────────────────────────
- * A browser cannot authenticate anyone. This account only exists so the
- * dashboard opens when the API is unreachable, and it is compiled in only
- * when VITE_OFFLINE_ADMIN=1 at build time: "admin"/"admin" sitting in the
- * shipped bundle is not a credential, it is a door held open. Off by default,
- * so a normal build refuses the pair like any other wrong password.
- *
- * While the API is up it must not apply even then — the API knows nothing of
- * this session, so every data loader would 401 and bounce back to /login. */
-const OFFLINE_ADMIN_ENABLED = Boolean((import.meta as any).env?.VITE_OFFLINE_ADMIN);
-const LOCAL_USERNAME = "admin";
-const LOCAL_PASSWORD = "admin";
-const SESSION_KEY = "cb-auth-session";
-
-function readLocalSession(): AuthUser | null {
-  // A session persisted by a build that had the account enabled must not
-  // survive into one that does not.
-  if (!OFFLINE_ADMIN_ENABLED) return null;
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AuthUser;
-    if (parsed && typeof parsed.id === "string" && typeof parsed.email === "string") {
-      return parsed;
-    }
-  } catch {
-    /* corrupt or unavailable storage — treat as no session */
-  }
-  return null;
-}
-
-function writeLocalSession(user: AuthUser | null) {
-  try {
-    // The remove branch still runs when the account is off: that is what signs
-    // a browser out of a session an earlier build left in storage.
-    if (user && OFFLINE_ADMIN_ENABLED) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    else localStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* storage unavailable — session just won't survive a refresh */
-  }
+/* An older version of this app could sign in an offline "admin" with no server behind it. Nothing accepts that any
+ * more, so any session or agreement it left in this browser is removed. */
+try {
+  localStorage.removeItem("cb-auth-session");
+  localStorage.removeItem("cb-privacy-accepted");
+} catch {
+  /* no storage here (server render, or blocked): nothing to remove */
 }
 
 export interface AuthUser {
   id: string;
   email: string;
   fullName?: string | null;
+  /** Whether this person has agreed to the current Privacy Policy. Unknown (undefined) until the server says. */
+  privacyAccepted?: boolean;
+  /** Signed in with a temporary password: the next thing they must do is choose their own. */
+  mustChangePassword?: boolean;
   /** The language the Live Camera analysis shows in (Settings > Account). */
   analysisLanguage?: "en" | "tl" | "ceb";
   roles: string[];
@@ -112,6 +83,8 @@ interface AuthState {
   verifyMfaBackupCode: (code: string) => Promise<number>;
   logout: () => Promise<void>;
   refresh: () => Promise<boolean>;
+  /** Record that the signed-in person agrees to the current Privacy Policy. */
+  acceptPrivacy: () => Promise<void>;
   /** Change the signed-in person's name and/or analysis language. */
   updateProfile: (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => Promise<void>;
 }
@@ -140,6 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ...prev,
               fullName: data.user.full_name ?? prev.fullName ?? null,
               analysisLanguage: data.user.analysis_language ?? prev.analysisLanguage,
+              privacyAccepted: data.user.privacy_accepted ?? prev.privacyAccepted,
+              mustChangePassword: data.user.must_change_password ?? prev.mustChangePassword,
             }
           : prev,
       );
@@ -167,21 +142,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: data.user.email,
             fullName: data.user.full_name ?? data.user.fullName ?? null,
             analysisLanguage: data.user.analysis_language ?? undefined,
+            privacyAccepted: data.user.privacy_accepted ?? undefined,
+            mustChangePassword: data.user.must_change_password ?? undefined,
             roles: data.roles,
             permissions: data.permissions,
           });
           setIsLoading(false);
           return;
         }
-        // API is up but has no session for us — any local session is stale.
-        writeLocalSession(null);
+        // API is up but has no session for us.
         setIsLoading(false);
         return;
       } catch {
-        // Network down — fall through to the local session.
+        // The API cannot be reached: nobody is signed in.
       }
-      const local = readLocalSession();
-      if (local) setUser(local);
       setIsLoading(false);
     })();
   }, []);
@@ -196,23 +170,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
     } catch {
-      // API unreachable. With the offline account compiled in, it is the way
-      // in; without it there is nothing to fall back to, and saying so is the
-      // honest answer rather than a silent client-side bypass.
-      if (!OFFLINE_ADMIN_ENABLED) throw new Error("login_failed");
-      const username = email.trim().toLowerCase();
-      if (username === LOCAL_USERNAME && password === LOCAL_PASSWORD) {
-        const adminUser: AuthUser = {
-          id: "admin",
-          email: "admin",
-          fullName: "Farm Administrator",
-          roles: ["ADMIN"],
-          permissions: [],
-        };
-        writeLocalSession(adminUser);
-        setUser(adminUser);
-        return;
-      }
       throw new Error("login_failed");
     }
 
@@ -232,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.user.email,
       roles: data.user.roles,
       permissions: data.user.permissions,
+      mustChangePassword: Boolean(data.user.mustChangePassword),
     });
     void loadProfile();
   }, []);
@@ -253,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.user.email,
       roles: data.user.roles,
       permissions: data.user.permissions,
+      mustChangePassword: Boolean(data.user.mustChangePassword),
     });
     void loadProfile();
   }, []);
@@ -274,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.user.email,
       roles: data.user.roles,
       permissions: data.user.permissions,
+      mustChangePassword: Boolean(data.user.mustChangePassword),
     });
     void loadProfile();
     return data.backupCodesRemaining ?? 0;
@@ -288,7 +248,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* swallow — server cookie clearing is best-effort */
     }
-    writeLocalSession(null);
     setUser(null);
   }, []);
 
@@ -306,6 +265,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return false;
     }
+  }, []);
+
+  const acceptPrivacy = useCallback(async () => {
+    const send = () => fetch(`${API_BASE}/auth/privacy`, { method: "POST", credentials: "include" });
+    let res = await send();
+    if (res.status === 401) {
+      const renewed = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" }).catch(() => null);
+      if (renewed?.ok) res = await send();
+    }
+    if (!res.ok) throw new Error("privacy_not_saved");
+    setUser((prev) => (prev ? { ...prev, privacyAccepted: true } : prev));
   }, []);
 
   const updateProfile = useCallback(async (patch: { fullName?: string; analysisLanguage?: "en" | "tl" | "ceb" }) => {
@@ -345,9 +315,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyMfaBackupCode,
       logout,
       refresh,
+      acceptPrivacy,
       updateProfile,
     }),
-    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh, updateProfile],
+    [user, isLoading, login, verifyMfa, verifyMfaBackupCode, logout, refresh, acceptPrivacy, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

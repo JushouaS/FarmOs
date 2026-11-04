@@ -1,15 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
-import { BehaviorReading } from "@/components/farm/BehaviorReading";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
 import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
-import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import { getOperationsOverview } from "@/lib/farm/repository";
-import { fetchActualWeights } from "@/lib/api-client";
-import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, weightBandFor } from "@/lib/farm/weight-scale";
+import { freshReading, silentFor } from "@/lib/farm/pen-sensors";
+import { fetchLiveBehavior, visionStreamUrl, type KinectChickens, type LiveBehavior } from "@/lib/api-client";
+import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, standardForToday, weightCategoryFor } from "@/lib/farm/weights";
 import { localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/visuals")({
@@ -19,6 +19,23 @@ export const Route = createFileRoute("/visuals")({
 });
 
 type ViewLayout = "dual" | "dahua" | "kinect";
+
+/** One live reading with how it stands against its limits. */
+function PenValue({ text, status }: { text: string; status: string }) {
+  const label =
+    status === "critical" ? (
+      <span className="text-xs font-semibold text-[var(--status-red)]">{tr("(Critical)")}</span>
+    ) : status === "warning" ? (
+      <span className="text-xs font-semibold text-[var(--status-amber)]">{tr("(Warning)")}</span>
+    ) : (
+      <span className="text-xs font-semibold text-[var(--status-green)]">{tr("(Nominal)")}</span>
+    );
+  return (
+    <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
+      {text} {label}
+    </span>
+  );
+}
 
 /* The menu button needs the app shell's controls, which only exist for
  * components rendered INSIDE <AppShell>. VisualsDashboardPage creates the
@@ -44,33 +61,63 @@ function ShellButtons() {
 }
 
 export function VisualsDashboardPage() {
-  // Everything on the right rail is a reading the system actually holds: the pen's
-  // sensors for the environment, the day's typed weights for the bands, and the
-  // camera's own behaviour reading. There is no modelled flock here.
   const overview = Route.useLoaderData() as any;
-  const house = (overview?.houses?.[0] ?? null) as { label: string } | null;
-  const day = Number(overview?.cycle?.day ?? 0);
-  const standardG: number | null =
-    (overview?.weight?.standardCurve as { day: number; standardG: number }[] | undefined)?.find((p) => p.day === day)?.standardG ?? null;
-  const readings = (overview?.readings ?? []) as { parameter: string; value: number; unit: string; status?: string }[];
-  const readingOf = (parameter: string) => readings.find((r) => r.parameter === parameter) ?? null;
-  // The day's weigh-ins, so the three bands count birds someone actually put on a scale.
-  const [weighed, setWeighed] = useState<number[]>([]);
+  // The breed standard for today, to sort the weighed birds into under, optimal and over.
+  const standardG = standardForToday(overview) ?? 0;
+  // The pen's real air from the DHT22, when it has reported in the last few minutes. The page asks again
+  // every 30 seconds so the numbers keep up.
+  const router = useRouter();
   useEffect(() => {
-    if (!day) return;
-    let alive = true;
-    fetchActualWeights(day)
-      .then((rows) => alive && setWeighed(rows.map((r) => r.actualG)))
-      .catch(() => alive && setWeighed([]));
-    return () => {
-      alive = false;
-    };
-  }, [day]);
+    const timer = window.setInterval(() => void router.invalidate(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [router]);
+  const penTemperature = freshReading(overview, "temperature");
+  const penHumidity = freshReading(overview, "humidity");
+  // A sensor that worked and then went quiet is "offline", not just "no reading": someone should look at its wires.
+  const quietFor = (parameter: "temperature" | "humidity") => {
+    const ms = silentFor(overview, parameter);
+    if (ms === null) return null;
+    const min = Math.round(ms / 60_000);
+    if (min < 60) return tr("{n} min", { n: min });
+    const hours = Math.round(min / 60);
+    return hours < 48 ? tr("{n} h", { n: hours }) : tr("{n} days", { n: Math.round(hours / 24) });
+  };
+  const noReading = (parameter: "temperature" | "humidity") => {
+    const ago = quietFor(parameter);
+    return ago ? (
+      <span className="font-mono text-xs text-[var(--status-amber)]">{tr("Sensor offline · last reading {ago} ago", { ago })}</span>
+    ) : (
+      <span className="font-mono text-xs text-[var(--text-tertiary)]">{tr("No reading")}</span>
+    );
+  };
   // When the day starts and the night starts comes from Settings.
   const lighting: LightingHours = overview?.lighting ?? DEFAULT_LIGHTING;
   const [layout, setLayout] = useState<ViewLayout>("dual");
   const [dahuaError, setDahuaError] = useState(false);
-  const [kinectError, setKinectError] = useState(false);
+  // A camera picture is one long connection. When the API restarts, the camera computer restarts or the network drops
+  // for a moment, the browser leaves the picture frozen and never asks again. So every 10 seconds the page asks whether
+  // the camera path works and, when it works again after being away, opens the pictures anew.
+  const [streamKey, setStreamKey] = useState(0);
+  useEffect(() => {
+    const healthUrl = visionStreamUrl("CAM-01").replace(/[/]visual[/]stream[/].*$/, "/visual/health");
+    let away = false;
+    const check = async () => {
+      try {
+        const res = await fetch(healthUrl, { cache: "no-store", credentials: "include" });
+        if (res.status === 401) return;                       // not signed in: nothing to learn
+        if (!res.ok) throw new Error("camera path is down");
+        if (away) {
+          away = false;
+          setDahuaError(false);
+          setStreamKey((k) => k + 1);
+        }
+      } catch {
+        away = true;
+      }
+    };
+    const timer = window.setInterval(() => void check(), 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
   // The clock drives the day/night cycle: day is 05:00 to 16:59, and birds
   // count as sleeping the rest of the time (isNightCycle). Null until mounted so the server render and
   // the first client render match.
@@ -82,32 +129,56 @@ export function VisualsDashboardPage() {
   }, []);
   const nightModeActive = now ? isNightCycle(now, lighting) : false;
 
-  // Vision service (cerebroil-stream) on the host that served this page, so a
-  // phone on the LAN gets this machine's feed instead of its own localhost. Set
-  // after mount: the server render can't know that host, and a guessed src
-  // would mismatch on hydration.
+  // What the page shows comes from real sources only: the Kinect weights, the live behavior monitor and the DHT22.
+  const [flock, setFlock] = useState<KinectChickens | null>(null);
+  const [liveBehavior, setLiveBehavior] = useState<LiveBehavior | null>(null);
+  useEffect(() => {
+    let stop = false;
+    const ask = async () => {
+      const answer = await fetchLiveBehavior(nightModeActive);
+      if (!stop) setLiveBehavior(answer);
+    };
+    void ask();
+    const timer = window.setInterval(() => void ask(), 10_000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [nightModeActive]);
+
+  // The feeds come through the API (it signs in the viewer and holds the camera service's token), so the
+  // camera service itself is not opened to the page. Only its address is kept, for the "not answering"
+  // message below. Set after mount: the server render can't know the host.
   const [feedOrigin, setFeedOrigin] = useState<string | null>(null);
   useEffect(() => {
     // VITE_VISION_ORIGIN points the page at a camera service on another machine
-    // (the Raspberry Pi), for example http://192.168.1.20:5000. Without it the
-    // feed is on this machine, at the port docker-compose publishes the stream
-    // on (VITE_VISION_PORT, 5050 in the compose file — not 5000, which another
-    // stack on the same machine often owns).
+    // (the Raspberry Pi), for example http://192.168.1.20:5000.
+    // On a public https address the visitor is not on the farm's network, so the message names the address
+    // they are using, never the camera computer's private one.
+    if (window.location.protocol === "https:") {
+      setFeedOrigin(window.location.origin);
+      return;
+    }
     const configured = import.meta.env.VITE_VISION_ORIGIN as string | undefined;
-    const port = (import.meta.env.VITE_VISION_PORT as string | undefined)?.trim() || "5000";
-    setFeedOrigin(configured?.trim().replace(/\/+$/, "") || `${window.location.protocol}//${window.location.hostname}:${port}`);
+    setFeedOrigin(configured?.trim().replace(/\/+$/, "") || `${window.location.protocol}//${window.location.hostname}:5000`);
   }, []);
-  const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "the camera service";
+  const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "port 5000";
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const bands = weighed.reduce(
-    (acc, g) => {
-      if (standardG !== null) acc[weightBandFor(g, standardG)]++;
-      return acc;
-    },
-    { Underweight: 0, Optimal: 0, Overweight: 0 },
-  );
+  // Birds the Kinect weighed in its newest picture, sorted into under, optimal and over the standard for the day.
+  const weighed =
+    standardG > 0 && flock?.ok && flock.birds && Date.now() / 1000 - (flock.at ?? 0) < 15 ? flock.birds.filter((b) => b.weightG != null) : [];
+  const weightCounts = { Underweight: 0, Optimal: 0, Overweight: 0 };
+  for (const b of weighed) weightCounts[weightCategoryFor(b.weightG as number, standardG)]++;
+  const weighedAverage = flock?.weight?.meanG ?? (weighed.length ? Math.round(weighed.reduce((n, b) => n + (b.weightG as number), 0) / weighed.length) : 0);
+
+  // What the live monitor sees: birds followed, birds that stayed still, and birds huddled.
+  const monitor = liveBehavior?.running ? liveBehavior : null;
+  const monitorBirds = monitor?.birds ?? 0;
+  const monitorStill = monitor?.flock_inactive ? monitorBirds : (monitor?.inactive?.length ?? 0);
+  const monitorHuddled = monitor?.huddle?.birds ?? 0;
+  const monitorActive = Math.max(0, monitorBirds - monitorStill - monitorHuddled);
 
   const handleFullscreenToggle = () => {
     if (!document.fullscreenElement) {
@@ -144,7 +215,7 @@ export function VisualsDashboardPage() {
             {/* Farm & Pen Info Tag */}
             <div className="hidden items-center gap-1.5 text-xs text-[var(--text-secondary)] xl:flex">
               <span className="rounded bg-[var(--surface-raised)] px-2 py-0.5 font-medium">
-                {house?.label ?? tr("No pen")}
+                {overview?.cluster?.houseLabel ?? ""}
               </span>
               <span className="text-[var(--text-tertiary)]">/</span>
               <span>{overview?.facility?.name ?? ""}</span>
@@ -198,7 +269,7 @@ export function VisualsDashboardPage() {
             </div>
 
             {/* Try the trained detector on an uploaded video */}
-            <VideoDetectDialog lighting={lighting} />
+            <VideoDetectDialog lighting={lighting} standardG={standardG || undefined} />
 
             {/* Fullscreen Trigger Button */}
             <button
@@ -244,7 +315,8 @@ export function VisualsDashboardPage() {
                     {!dahuaError ? (
                       feedOrigin && (
                         <img
-                          src={`${feedOrigin}/video_feed/dahua`}
+                          key={`dahua-${streamKey}`}
+                          src={`${visionStreamUrl("CAM-01")}?k=${streamKey}`}
                           alt={tr("Live camera feed of the broilers' behavior")}
                           className="h-full w-full object-contain"
                           onError={() => setDahuaError(true)}
@@ -259,9 +331,9 @@ export function VisualsDashboardPage() {
                             <line x1="12" y1="16" x2="12.01" y2="16" />
                           </svg>
                         </div>
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                           {tr("Vision service not reachable")}
-                        </h3>
+                        </h2>
                         {/* Only shown when the service itself is down; with the
                             service up but the camera off it streams a placeholder. */}
                         <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("Nothing is answering at {feedHost}. Start cerebroil-stream, then retry.", { feedHost })}</p>
@@ -297,42 +369,23 @@ export function VisualsDashboardPage() {
                   {/* Video Viewport Container — 16:9 box when the page scrolls,
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
-                    <KinectDepthView fallback={<>
-                    {!kinectError ? (
-                      feedOrigin && (
-                        <img
-                          src={`${feedOrigin}/video_feed/kinect`}
-                          alt={tr("Microsoft Kinect 3D depth sensor station feed")}
-                          className="h-full w-full object-contain"
-                          onError={() => setKinectError(true)}
-                        />
-                      )
-                    ) : (
+                    {/* While the bridge is not running the view keeps asking for it, so this needs no button. It never
+                        shows a stand-in picture: the camera service's simulated depth image is not the weighing station. */}
+                    <KinectDepthView onFlock={setFlock} fallback={
                       <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
                         <div className="mb-2 rounded-full bg-[var(--status-blue-bg)] p-3 text-[var(--status-blue-text)]">
-                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                             <polygon points="12 2 2 7 12 12 22 7 12 2" />
                             <polyline points="2 17 12 22 22 17" />
                             <polyline points="2 12 12 17 22 12" />
                           </svg>
                         </div>
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                          {tr("Depth station not reachable")}
-                        </h3>
-                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("No depth feed from {feedHost}. Start cerebroil-stream, then recheck.", { feedHost })}</p>
-                        <button
-                          type="button"
-                          onClick={() => setKinectError(false)}
-                          className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
-                        >
-                          {tr("Recheck Sensor")}
-                        </button>
+                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">{tr("Kinect is not connected")}</h2>
+                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">
+                          {tr("The Kinect picture and the bird weights appear when the Kinect bridge is running on the computer it is plugged into. This page keeps trying.")}
+                        </p>
                       </div>
-                    )}
-
-                    {/* No depth-target boxes: the boxes that used to sit here were
-                        sample data, not sensor output. */}
-                    </>} />
+                    } />
                   </div>
                 </div>
               )}
@@ -344,16 +397,14 @@ export function VisualsDashboardPage() {
           <aside className="grid gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 sm:grid-cols-2 sm:p-4 lg:flex lg:w-72 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-t-0 lg:border-l lg:p-3">
             <CameraAnalysis lighting={lighting} />
 
-            {/* Behavior State Breakdown Widget */}
+            {/* What the live monitor on the camera computer sees. It is off until LIVE_BEHAVIOR=1 is set there. */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
               <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-subtle)]">
-                <span className="flex items-center gap-2">
-                  <span className="label-section text-[11px] tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
-                </span>
+                <span className="label-section text-xs tracking-widest font-bold">{tr("Behavior Breakdown")}</span>
                 <time
                   dateTime={now?.toISOString()}
                   title={tr("Local time. Day runs from {value} until {value2}, night is the rest. It is {value3} now.", { value: clock12(lighting.dayStart), value2: clock12(lighting.nightStart), value3: nightModeActive ? tr("night") : tr("day") })}
-                  className="-my-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[var(--text-secondary)]"
+                  className="-my-2 rounded bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-xs tabular-nums text-[var(--text-secondary)]"
                 >
                   {now
                     ? `${now.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit", second: "2-digit" })} · ${nightModeActive ? tr("Night") : tr("Day")}`
@@ -361,96 +412,97 @@ export function VisualsDashboardPage() {
                 </time>
               </div>
 
-              {/* What the camera counted, and only that. The modelled breakdown that
-                  used to sit above this was invented for the sample flock. */}
-              <BehaviorReading />
-            </div>
-
-            {/* Weight Category Distribution */}
-            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
-              <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-                {tr("Weight Classification")}
-              </span>
-
-              {standardG === null || weighed.length === 0 ? (
-                <p className="mt-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  {tr("No bird has been weighed on Day {day} yet. These bands count the weights typed on Flock Tracking, not a model.", { day })}
-                </p>
+              {monitor ? (
+                <div className="mt-3.5 space-y-3 text-xs">
+                  {[
+                    { label: tr("Active / Standing"), n: monitorActive, text: "text-[var(--text-primary)]", bar: "bg-[var(--status-green)]" },
+                    { label: tr("Inactivity Alert"), n: monitorStill, text: "text-[var(--status-red)]", bar: "bg-[var(--status-red)]" },
+                    { label: tr("Huddling Cluster"), n: monitorHuddled, text: "text-[var(--status-amber)]", bar: "bg-[var(--status-amber)]" },
+                  ].map((row) => (
+                    <div key={row.label}>
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className="text-[var(--text-secondary)]">{row.label}</span>
+                        <span className={`font-mono font-semibold tabular-nums ${row.text}`}>{row.n}</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-[var(--surface-raised)] overflow-hidden">
+                        <div
+                          className={`h-full ${row.bar} transition-all duration-300`}
+                          style={{ width: `${monitorBirds ? (row.n / monitorBirds) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-xs text-[var(--text-tertiary)]">{tr("{n} birds followed by the live monitor.", { n: monitorBirds })}</p>
+                </div>
               ) : (
-                <>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                      <div className="text-[11px] font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
-                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                        {bands.Underweight}
-                      </div>
-                      <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(standardG * UNDERWEIGHT_RATIO)}</div>
-                    </div>
-
-                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                      <div className="text-[11px] font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
-                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                        {bands.Optimal}
-                      </div>
-                      <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{rangeLabel(standardG * UNDERWEIGHT_RATIO, standardG * HEAVY_RATIO)}</div>
-                    </div>
-
-                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
-                      <div className="text-[11px] font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
-                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">
-                        {bands.Overweight}
-                      </div>
-                      <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(standardG * HEAVY_RATIO)}</div>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px]" style={{ color: "var(--text-tertiary)" }}>
-                    {tr("{n} birds weighed on Day {day}, against the {std} g standard", { n: weighed.length, day, std: standardG.toLocaleString() })}
-                  </p>
-                </>
+                <p className="mt-3.5 text-xs leading-relaxed text-[var(--text-tertiary)]">
+                  {tr("Behavior monitoring is off. Turn it on at the camera computer (LIVE_BEHAVIOR=1) to see this.")}
+                </p>
               )}
             </div>
 
-            {/* Quick Environment Telemetry — straight from the pen's sensors */}
+            {/* The birds the Kinect weighed in its newest picture, against the standard weight for the day. */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
-              <span className="label-section text-[11px] tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
+              <span className="label-section text-xs tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
+                {tr("Weight Classification")}
+              </span>
+
+              {weighed.length > 0 ? (
+                <>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-xs font-semibold text-[var(--status-amber)]">{tr("Under")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Underweight}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&lt;{fmtW(standardG * UNDERWEIGHT_RATIO)}</div>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-xs font-semibold text-[var(--brand)]">{tr("Optimal")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Optimal}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{rangeLabel(standardG * UNDERWEIGHT_RATIO, standardG * HEAVY_RATIO)}</div>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-raised)] p-3">
+                      <div className="text-xs font-semibold text-[var(--status-blue)]">{tr("Over")}</div>
+                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[var(--text-primary)]">{weightCounts.Overweight}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] mt-0.5">&gt;{fmtW(standardG * HEAVY_RATIO)}</div>
+                    </div>
+                  </div>
+                  <p className="mt-2.5 text-xs text-[var(--text-secondary)]">
+                    {tr("{n} birds weighed from the Kinect picture. Average {avg} g.", { n: weighed.length, avg: weighedAverage })}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                    {tr("Rough estimate: one bird can be off by about {pct}%", { pct: flock?.weight?.errorPercent ?? 18 })}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-3 text-xs leading-relaxed text-[var(--text-tertiary)]">
+                  {tr("No weights yet. They appear when the Kinect picture is open and chickens are in view.")}
+                </p>
+              )}
+            </div>
+
+            {/* The pen's air, from the DHT22 on the camera computer. With no recent reading it says so, never a made-up number. */}
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
+              <span className="label-section text-xs tracking-widest font-bold flex items-center gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
                 {tr("Pen Sensor Telemetry")}
               </span>
 
               <div className="mt-3 space-y-2.5 text-xs">
-                {[
-                  { label: tr("Temperature:"), parameter: "temperature" },
-                  { label: tr("Humidity:"), parameter: "humidity" },
-                  { label: tr("Ammonia (NH3):"), parameter: "nh3" },
-                ].map((row) => {
-                  const r = readingOf(row.parameter);
-                  return (
-                    <div key={row.parameter} className="flex items-center justify-between gap-2">
-                      <span className="text-[var(--text-secondary)] text-xs">{row.label}</span>
-                      {r ? (
-                        <span className="font-mono font-medium tabular-nums text-[var(--text-primary)] text-xs">
-                          {r.value} {r.unit}
-                          {r.status && (
-                            <span
-                              className="text-[11px] font-semibold ml-1"
-                              style={{
-                                color:
-                                  r.status === "critical"
-                                    ? "var(--status-red-text)"
-                                    : r.status === "warning"
-                                      ? "var(--status-amber-text)"
-                                      : "var(--status-green)",
-                              }}
-                            >
-                              ({r.status})
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="font-mono text-xs" style={{ color: "var(--text-tertiary)" }}>{tr("not connected")}</span>
-                      )}
-                    </div>
-                  );
-                })}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--text-secondary)] text-xs">{tr("Temperature:")}</span>
+                  {penTemperature ? (
+                    <PenValue text={`${penTemperature.value.toFixed(1)}°C`} status={penTemperature.status} />
+                  ) : (
+                    noReading("temperature")
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--text-secondary)] text-xs">{tr("Humidity:")}</span>
+                  {penHumidity ? (
+                    <PenValue text={`${Math.round(penHumidity.value)}%`} status={penHumidity.status} />
+                  ) : (
+                    noReading("humidity")
+                  )}
+                </div>
               </div>
             </div>
           </aside>

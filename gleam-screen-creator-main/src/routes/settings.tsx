@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { AccountSection } from "@/components/farm/AccountSection";
+import { AccountsSection } from "@/components/farm/AccountsSection";
 import { FlockSizeSection } from "@/components/farm/FlockSizeSection";
 import { FeederZonesSection } from "@/components/farm/FeederZonesSection";
 import { VideoTestSection } from "@/components/farm/VideoTestSection";
@@ -21,7 +22,7 @@ import {
 } from "@/lib/api-client";
 import { PushError, disablePush, enablePush, pushSupported } from "@/lib/push";
 import { useAuth } from "@/lib/auth-context";
-import { DEFAULT_LIGHTING } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING } from "@/lib/farm/lighting";
 import { getNotificationPreferences, getOperationsOverview } from "@/lib/farm/repository";
 import { T, localeTag, tr } from "@/lib/i18n";
 
@@ -371,6 +372,7 @@ function SettingsPage() {
   const house = houses.find((h) => h.id === overview?.cluster?.houseId) ?? houses[0] ?? null;
   // Farm-wide settings are for administrators and farm managers; everyone can change their own account.
   const canManage = Boolean(user?.roles?.some((r) => r === "ADMIN" || r === "FARM_MANAGER"));
+  const isAdmin = Boolean(user?.roles?.includes("ADMIN"));
 
   return (
     <AppShell>
@@ -406,6 +408,13 @@ function SettingsPage() {
           <NotificationsSection stored={prefs} />
         </div>
       </div>
+
+      {/* Only an administrator sees this */}
+      {isAdmin && (
+        <div className="mt-6">
+          <AccountsSection />
+        </div>
+      )}
     </AppShell>
   );
 }

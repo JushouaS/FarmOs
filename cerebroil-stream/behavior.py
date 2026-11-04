@@ -148,6 +148,44 @@ def _state(still: bool | None, in_huddle: bool, flock_moving: float | None, nigh
     return MOVING
 
 
+def huddle_groups(
+    dets: list[tuple[float, float, float, float]], frame_area: float, min_birds: int = HUDDLE_MIN_BIRDS
+) -> list[tuple[list[int], tuple[float, float, float, float]]]:
+    """Groups of birds that look like a huddle in ONE picture: enough birds touching, filling their patch of
+    floor densely, and denser than the flock overall. dets are (centre x, centre y, w, h). Returns
+    [(indexes into dets, (centre x, centre y, w, h) of the group)]. Whether a group STAYS together long enough
+    to count is the Engine's job."""
+    if len(dets) < min_birds:
+        return []
+    items = [(di, d[0], d[1], d[2], d[3]) for di, d in enumerate(dets)]
+    global_cov = sum(d[2] * d[3] for d in dets) / frame_area
+    found: list[tuple[list[int], tuple[float, float, float, float]]] = []
+    for group in _groups(items):
+        if len(group) < min_birds:
+            continue
+        x0 = min(dets[i][0] - dets[i][2] / 2 for i in group)
+        y0 = min(dets[i][1] - dets[i][3] / 2 for i in group)
+        x1 = max(dets[i][0] + dets[i][2] / 2 for i in group)
+        y1 = max(dets[i][1] + dets[i][3] / 2 for i in group)
+        area = max(1.0, (x1 - x0) * (y1 - y0))
+        coverage = sum(dets[i][2] * dets[i][3] for i in group) / area
+        if coverage < HUDDLE_COVERAGE or coverage < HUDDLE_DENSITY_RATIO * global_cov:
+            continue
+        found.append((group, ((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0)))
+    return found
+
+
+def snapshot_huddles(boxes: list[list[float]], frame_area: float) -> list[dict[str, Any]]:
+    """What the Live Camera scan sees in one picture: groups of birds packed together like a huddle.
+    boxes: [[x, y, w, h, ...], ...] with x, y the top left corner. A scan lasts about 3 seconds, so this
+    says "packed together now", not "has been huddling for minutes" (that is the live monitor's job)."""
+    dets = [(b[0] + b[2] / 2, b[1] + b[3] / 2, b[2], b[3]) for b in boxes]
+    return [
+        {"birds": len(group), "box": [round(r[0] - r[2] / 2, 1), round(r[1] - r[3] / 2, 1), round(r[2], 1), round(r[3], 1)]}
+        for group, r in huddle_groups(dets, frame_area)
+    ]
+
+
 class Engine:
     """Follows the birds frame by frame. Feed it each frame with update(); read the
     states from its return value and the summary or live status afterwards."""
@@ -224,35 +262,21 @@ class Engine:
         # Huddles: groups of touching birds that are much denser than the flock and stay together.
         in_huddle: set[int] = set()
         active_huddle: dict[str, Any] | None = None
-        if len(dets) >= self.min_birds:
-            items = [(di, d[0], d[1], d[2], d[3]) for di, d in enumerate(dets)]
-            global_cov = sum(d[2] * d[3] for d in dets) / frame_area
-            for group in _groups(items):
-                if len(group) < self.min_birds:
-                    continue
-                x0 = min(dets[i][0] - dets[i][2] / 2 for i in group)
-                y0 = min(dets[i][1] - dets[i][3] / 2 for i in group)
-                x1 = max(dets[i][0] + dets[i][2] / 2 for i in group)
-                y1 = max(dets[i][1] + dets[i][3] / 2 for i in group)
-                area = max(1.0, (x1 - x0) * (y1 - y0))
-                coverage = sum(dets[i][2] * dets[i][3] for i in group) / area
-                if coverage < HUDDLE_COVERAGE or coverage < HUDDLE_DENSITY_RATIO * global_cov:
-                    continue
-                rect = ((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0)
-                best = None
-                for h in self.huddles:
-                    if t - h["last"] <= 1.5 and _iou(h["rect"], rect) >= 0.3:
-                        best = h
-                        break
-                if best is None:
-                    best = {"start": t, "last": t, "rect": rect, "peak": len(group), "fdi_peak": 0.0}
-                    self.huddles.append(best)
-                best["last"], best["rect"] = t, rect
-                best["peak"] = max(best["peak"], len(group))
-                if t - best["start"] >= self.huddle_seconds:
-                    in_huddle.update(group)
-                    best["confirmed"] = True
-                    active_huddle = best
+        for group, rect in huddle_groups(dets, frame_area, self.min_birds):
+            best = None
+            for h in self.huddles:
+                if t - h["last"] <= 1.5 and _iou(h["rect"], rect) >= 0.3:
+                    best = h
+                    break
+            if best is None:
+                best = {"start": t, "last": t, "rect": rect, "peak": len(group), "fdi_peak": 0.0}
+                self.huddles.append(best)
+            best["last"], best["rect"] = t, rect
+            best["peak"] = max(best["peak"], len(group))
+            if t - best["start"] >= self.huddle_seconds:
+                in_huddle.update(group)
+                best["confirmed"] = True
+                active_huddle = best
 
         fdi = len(in_huddle) / len(dets) if dets else 0.0
         if in_huddle:

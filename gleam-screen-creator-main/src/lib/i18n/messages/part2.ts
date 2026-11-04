@@ -137,7 +137,6 @@ export const part2: Messages = {
   ],
   "Day starts": ["Simula ng araw", "Sugod sa adlaw"],
   "Delete photo": ["Burahin ang larawan", "Papason ang hulagway"],
-  "Demo access": ["Pag-access para sa demo", "Pag-access alang sa demo"],
   "Depth station not reachable": ["Hindi maabot ang depth station", "Dili maabot ang depth station"],
   "Depth-scan precision": ["Katumpakan ng depth-scan", "Katukma sa depth-scan"],
   "Describe the problem and the page where it happened.": ["Ilarawan ang problema at ang pahinang pinangyarihan nito.", "Isaysay ang problema ug ang panid diin kini nahitabo."],

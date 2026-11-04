@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Camera, ClipboardList, ImagePlus, LogOut, MessageSquareWarning, Trash2 } from "lucide-react";
+import { Camera, ClipboardList, ImagePlus, LogOut, MessageSquareWarning, ShieldCheck, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "./UserAvatar";
 import { ReportDialog } from "./ReportDialog";
@@ -236,6 +236,10 @@ export function AccountMenu() {
             <ClipboardList className="h-4 w-4 shrink-0" style={{ color: "var(--text-secondary)" }} />
             {tr("Usability survey")}
           </button>
+          <Link to="/privacy" className={rowClass} onClick={() => setOpen(false)}>
+            <ShieldCheck className="h-4 w-4 shrink-0" style={{ color: "var(--text-secondary)" }} />
+            {tr("Privacy Policy")}
+          </Link>
           <button type="button" className={rowClass} onClick={onSignOut}>
             <LogOut className="h-4 w-4 shrink-0" style={{ color: "var(--text-secondary)" }} />
             {tr("Sign out")}

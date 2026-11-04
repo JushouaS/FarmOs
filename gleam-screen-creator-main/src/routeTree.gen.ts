@@ -16,6 +16,7 @@ import { Route as FlockMonitoringRouteImport } from './routes/flock-monitoring'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TelemetryRouteImport } from './routes/telemetry'
 import { Route as VisualsRouteImport } from './routes/visuals'
@@ -55,6 +56,11 @@ const NotificationsRoute = NotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/intelligence': typeof IntelligenceRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/telemetry': typeof TelemetryRoute
   '/visuals': typeof VisualsRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/intelligence': typeof IntelligenceRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/telemetry': typeof TelemetryRoute
   '/visuals': typeof VisualsRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/intelligence': typeof IntelligenceRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/telemetry': typeof TelemetryRoute
   '/visuals': typeof VisualsRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/intelligence'
     | '/login'
     | '/notifications'
+    | '/privacy'
     | '/settings'
     | '/telemetry'
     | '/visuals'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/intelligence'
     | '/login'
     | '/notifications'
+    | '/privacy'
     | '/settings'
     | '/telemetry'
     | '/visuals'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/intelligence'
     | '/login'
     | '/notifications'
+    | '/privacy'
     | '/settings'
     | '/telemetry'
     | '/visuals'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   IntelligenceRoute: typeof IntelligenceRoute
   LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
+  PrivacyRoute: typeof PrivacyRoute
   SettingsRoute: typeof SettingsRoute
   TelemetryRoute: typeof TelemetryRoute
   VisualsRoute: typeof VisualsRoute
@@ -211,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -243,6 +263,7 @@ const rootRouteChildren: RootRouteChildren = {
   IntelligenceRoute: IntelligenceRoute,
   LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
+  PrivacyRoute: PrivacyRoute,
   SettingsRoute: SettingsRoute,
   TelemetryRoute: TelemetryRoute,
   VisualsRoute: VisualsRoute,

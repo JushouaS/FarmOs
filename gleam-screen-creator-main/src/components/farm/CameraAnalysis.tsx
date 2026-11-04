@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Info, Loader2, OctagonAlert, ScanSearch } from "lucide-react";
 import { ApiError, scanCamera } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
-import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/dataset";
+import { DEFAULT_LIGHTING, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import {
   CHROME,
   buildFindings,
@@ -29,11 +29,12 @@ const SEVERITY_STYLE: Record<Severity, { color: string; bg: string; border: stri
   alert: { color: "var(--status-red-text)", bg: "var(--status-red-bg)", border: "var(--status-red-border)", Icon: OctagonAlert },
 };
 
-type ErrorKey = "err_unavailable" | "err_noFrame" | "err_session" | "err_generic";
+type ErrorKey = "err_unavailable" | "err_noFrame" | "err_session" | "err_forbidden" | "err_generic";
 
 function errorKeyFor(err: unknown): ErrorKey {
   if (err instanceof ApiError) {
     if (err.status === 401) return "err_session";
+    if (err.status === 403) return "err_forbidden";
     // The API answers "vision_service_unavailable" when it cannot reach the camera
     // service, and "analyze_error" with a 503 when the service has no frame.
     if (err.message === "vision_service_unavailable") return "err_unavailable";
@@ -83,7 +84,7 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
       className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1"
     >
       <div className="border-b border-[var(--border-subtle)] pb-2.5">
-        <h2 id="analysis-title" className="label-section text-[11px] font-bold tracking-widest">
+        <h2 id="analysis-title" className="label-section text-xs font-bold tracking-widest">
           {tr(CHROME.title)}
         </h2>
       </div>
@@ -131,20 +132,20 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
               })()}
               {ui(lang, statusKey)}
             </span>
-            <span className="text-[11px] text-[var(--text-tertiary)]">
+            <span className="text-xs text-[var(--text-tertiary)]">
               {ui(lang, "scannedAt", { time: scan.at.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit" }) })}
             </span>
           </div>
 
           <dl className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg bg-[var(--surface-raised)] p-2">
-              <dt className="text-[10px] text-[var(--text-tertiary)]">{ui(lang, "movement")}</dt>
+              <dt className="text-xs text-[var(--text-tertiary)]">{ui(lang, "movement")}</dt>
               <dd className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--text-primary)]">
                 {((scan.result.behaviour?.movement_index ?? 0) * 100).toFixed(1)}%
               </dd>
             </div>
             <div className="rounded-lg bg-[var(--surface-raised)] p-2">
-              <dt className="text-[10px] text-[var(--text-tertiary)]">{ui(lang, "areas")}</dt>
+              <dt className="text-xs text-[var(--text-tertiary)]">{ui(lang, scan.result.detector?.source === "model" ? "birds" : "areas")}</dt>
               <dd className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--text-primary)]">
                 {scan.result.detection_count}
               </dd>
@@ -168,7 +169,7 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
                   </div>
                   {text.tips.length > 0 && (
                     <div className="mt-2 pl-6">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                         {ui(lang, "tips")}
                       </p>
                       <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-relaxed text-[var(--text-secondary)]">
@@ -183,7 +184,9 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
             })}
           </ul>
 
-          <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">{ui(lang, "basis")}</p>
+          <p className="text-xs leading-relaxed text-[var(--text-tertiary)]">
+            {ui(lang, scan.result.detector?.source === "model" ? "basis_model" : "basis")}
+          </p>
         </div>
       )}
     </section>

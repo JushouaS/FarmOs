@@ -147,7 +147,7 @@ function NotificationsPage() {
               >
                 {tr(f.label)}
                 {f.value === "unread" && unreadCount > 0 && (
-                  <span className="ml-1.5 rounded-full bg-error px-1.5 py-0.5 text-[10px] text-white">
+                  <span className="ml-1.5 rounded-full bg-error px-1.5 py-0.5 text-xs text-white">
                     {unreadCount}
                   </span>
                 )}
@@ -243,20 +243,20 @@ function NotificationFeed({
             {/* Content */}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h3 className={`text-sm ${isUnread ? "font-semibold text-on-surface" : "text-on-surface-variant"}`}>
+                <h2 className={`text-sm ${isUnread ? "font-semibold text-on-surface" : "text-on-surface-variant"}`}>
                   {notif.title}
-                </h3>
-                <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-[10px] text-on-surface-variant">
+                </h2>
+                <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-xs text-on-surface-variant">
                   {channelLabel}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tone.chip}`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone.chip}`}>
                   {sev}
                 </span>
               </div>
               <p className="mt-0.5 text-sm leading-relaxed text-on-surface-variant">
                 {alertMessage(notif.body)}
               </p>
-              <span className="mt-1.5 block text-[11px] text-on-surface-variant/70">
+              <span className="mt-1.5 block text-xs text-on-surface-variant/70">
                 {formatDateTimeUtc(notif.createdAt)}
               </span>
             </div>
@@ -276,7 +276,7 @@ function NotificationFeed({
                   <Icon name="done" size={18} />
                 </button>
               ) : (
-                <span className="flex items-center gap-1 text-[11px] text-on-surface-variant/60">
+                <span className="flex items-center gap-1 text-xs text-on-surface-variant/60">
                   <Icon name="done_all" size={14} />
                   {notif.readAt ? formatTime(notif.readAt) : ""}
                 </span>
