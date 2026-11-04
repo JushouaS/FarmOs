@@ -185,6 +185,28 @@ export async function registerVisionProxyRoutes(app: FastifyInstance) {
   );
 
   // -----------------------------------------------------------------------
+  // GET /visual/behavior — what the live behavior monitor on the camera
+  // computer sees right now. Always answers 200: a monitor that is off, stale
+  // or unreachable comes back as `running: false`, so the page can say so.
+  // -----------------------------------------------------------------------
+  app.get("/behavior", { preHandler: [requireAuth] }, async (request, reply) => {
+    const night = (request.query as { night?: string }).night === "1" ? 1 : 0;
+    try {
+      const res = await fetch(`${VISION_BASE}/behavior/status?night=${night}`, {
+        headers: visionHeaders(),
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (!res.ok) return reply.send({ running: false, reason: "unreachable" });
+      const status = (await res.json()) as { running?: boolean; age_seconds?: number | null };
+      // A monitor that has not looked at a frame for a minute is not telling us about now.
+      if (status.running && (status.age_seconds ?? 0) > 60) return reply.send({ running: false, reason: "stale" });
+      return reply.send(status);
+    } catch {
+      return reply.send({ running: false, reason: "unreachable" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // GET /visual/cameras — list configured camera sources
   // -----------------------------------------------------------------------
   app.get("/cameras", { preHandler: [requireAuth] }, async (_request, reply) => {

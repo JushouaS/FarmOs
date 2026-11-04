@@ -42,7 +42,7 @@ const PRIVATE_NETWORK_ORIGIN =
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: env.LOG_LEVEL },
-    trustProxy: true,
+    trustProxy: env.trustProxy,
   });
 
   await app.register(cors, {
@@ -74,6 +74,11 @@ export async function buildApp(): Promise<FastifyInstance> {
       },
     },
     crossOriginEmbedderPolicy: false,
+    // The page and the API run on different ports (8080 and 4000), so the browser treats the camera
+    // pictures as cross-origin. helmet's default, same-origin, made it refuse them and the Live
+    // Camera page showed "not reachable". same-site lets this site's own pages show them and still
+    // refuses any other site.
+    crossOriginResourcePolicy: { policy: "same-site" },
     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   });
   await app.register(rateLimit, {
