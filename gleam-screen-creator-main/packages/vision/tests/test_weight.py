@@ -315,7 +315,7 @@ def _post_bird_weights(clip_id, query):
 
 def test_the_bird_weights_route_needs_a_believable_average_weight(tmp_path, monkeypatch):
     clip = _clip_of(tmp_path, monkeypatch, colour_footage())
-    for query in ("t=1", "t=1&mean_g=abc", "t=1&mean_g=5", "t=1&mean_g=99999"):
+    for query in ("t=1&mean_g=abc", "t=1&mean_g=5", "t=1&mean_g=99999"):
         response = _post_bird_weights(clip.id, query)
         assert response.status_code == 400, query
         assert response.get_json()["error"] == "invalid_mean_weight"
@@ -334,3 +334,114 @@ def test_the_bird_weights_route_returns_each_bird_and_the_picture_with_the_weigh
     assert [b["weight_g"] is not None for b in body["birds"]] == [True, True]
     assert body["summary"]["weighed"] == 2 and body["content_type"] == "image/jpeg" and len(body["image"]) > 100
     video._clips.clear()
+
+
+# ---------------------------------------------------------------------------
+# The scale of a camera position, recognised from the video
+# ---------------------------------------------------------------------------
+
+def test_the_scale_of_a_camera_position_gives_absolute_weights_and_the_average_is_a_result():
+    boxes = [(100, 100, 60, 60), (400, 100, 120, 60)]
+    result = weight.size_weights(boxes, (1280, 720), grams_per_unit=0.002)
+    small, big = (b["weight_g"] for b in result["birds"])
+    assert small == pytest.approx(0.002 * 3600 ** 1.5, rel=0.001)
+    assert big / small == pytest.approx(2 ** 1.5, rel=0.01)
+    assert result["summary"]["mean_g"] == pytest.approx((small + big) / 2, abs=0.2)
+
+
+def test_a_bird_has_the_same_size_whatever_resolution_the_clip_was_saved_at():
+    assert weight.size_unit((10, 10, 60, 60), (1280, 720)) == pytest.approx(weight.size_unit((10, 10, 120, 120), (2560, 1440)), rel=1e-6)
+
+
+def test_size_weights_needs_a_scale_or_an_average():
+    with pytest.raises(ValueError):
+        weight.size_weights([(100, 100, 60, 60)], FRAME)
+
+
+def _scene(seed):
+    import cv2
+
+    rng = np.random.default_rng(seed)
+    img = np.zeros((108, 192, 3), np.uint8)
+    img[:, :96] = (60, 90, 180)
+    img[:, 96:] = (170, 180, 60)
+    img[20:60, 30:150] = (230, 230, 230)
+    return np.clip(img + rng.integers(0, 6, img.shape), 0, 255).astype(np.uint8), cv2
+
+
+def _calibration():
+    import base64
+
+    import cv2
+
+    other = np.zeros((108, 192, 3), np.uint8)
+    other[:54] = (200, 40, 40)
+    other[54:, 100:] = (30, 200, 200)
+    refs = {"P": weight.background_signature([_scene(1)[0]]), "Q": weight.background_signature([other])}
+    return {
+        "setups": {
+            name: {
+                "days": [1, 2],
+                "grams_per_size_unit": k,
+                "scale_spread_percent": 3.0,
+                "_refs": [sig],
+                "backgrounds": [base64.b64encode(cv2.imencode(".png", sig)[1].tobytes()).decode()],
+            }
+            for (name, sig), k in zip(refs.items(), (0.002, 0.005))
+        }
+    }
+
+
+def test_a_scene_is_matched_to_its_own_camera_position_and_a_stranger_is_not():
+    calibration = _calibration()
+    name, best, runner = weight.identify_setup(weight.background_signature([_scene(2)[0]]), calibration)
+    assert name == "P" and best > 0.9 and best - runner > weight.CLEAR_MARGIN
+    flat = np.full((108, 192, 3), (60, 160, 60), np.uint8)
+    assert weight.identify_setup(weight.background_signature([flat]), calibration)[0] is None
+
+
+def test_the_birds_in_the_picture_do_not_change_which_position_it_is():
+    # The background is the median of several frames, so birds that move between them drop out.
+    frames = [_scene(3)[0].copy() for _ in range(5)]
+    for i, f in enumerate(frames):
+        f[10:30, 10 + 30 * i: 40 + 30 * i] = (255, 255, 255)
+    name, best, runner = weight.identify_setup(weight.background_signature(frames), _calibration())
+    assert name == "P"
+
+
+def test_the_bird_weights_route_uses_the_scale_of_the_recognised_camera_position(tmp_path, monkeypatch):
+    import app as service
+
+    frame = _scene(2)[0]
+    big = cv2_resize(frame, (480, 270))
+    clip = _clip_of(tmp_path, monkeypatch, big)
+    monkeypatch.setattr(service, "detector", _StubDetector())
+    monkeypatch.setattr(weight, "load_calibration", lambda path=None: _calibration())
+    response = _post_bird_weights(clip.id, "t=1")
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["mean_g"] is None and body["calibration"]["mode"] == "camera_position" and body["calibration"]["position"] == "P"
+    # absolute weights: the scale of position P times each bird's size, in a 480x270 picture rescaled to 1280x720
+    first = body["birds"][0]["weight_g"]
+    expected = 0.002 * weight.size_unit((10, 10, 20, 20), (480, 270))
+    assert first == pytest.approx(expected, rel=0.01)
+    video._clips.clear()
+
+
+def test_the_bird_weights_route_asks_for_an_average_when_the_camera_position_is_unknown(tmp_path, monkeypatch):
+    import app as service
+
+    clip = _clip_of(tmp_path, monkeypatch, np.full((80, 120, 3), (60, 160, 60), np.uint8))  # a plain picture resembles no camera position
+    monkeypatch.setattr(service, "detector", _StubDetector())
+    monkeypatch.setattr(weight, "load_calibration", lambda path=None: _calibration())
+    response = _post_bird_weights(clip.id, "t=1")
+    assert response.status_code == 422 and response.get_json()["error"] == "camera_position_unknown"
+    typed = _post_bird_weights(clip.id, "t=1&mean_g=1100")
+    assert typed.status_code == 200 and typed.get_json()["calibration"]["mode"] == "typed_average"
+    video._clips.clear()
+
+
+def cv2_resize(img, size):
+    import cv2
+
+    return cv2.resize(img, size, interpolation=cv2.INTER_AREA)

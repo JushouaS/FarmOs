@@ -544,11 +544,29 @@ Nothing from a test clip is saved to the flock's history.
 
 **The two boxes.** Both show the video frame with their readings drawn on it, and a slider to pick the moment.
 **Behaviour** draws the detector's boxes and gives the counts, inactive and huddled birds. **Weight** gives a rough weight for each
-bird from an ordinary colour video: a bird's mass is taken as its box area to the power 1.5, scaled so the weighed birds average
-the **flock's average weight that you type in** (a scale reading of a few birds, or the breed standard for the grow-out day). So
-the average on screen is the one you typed, never a finding, and the estimates only compare the birds' sizes with each other.
-A bird whose box overlaps another, or touches the edge of the picture, is drawn grey with a dash and left out. It is a guide:
-on the sample video one bird's estimate can be well off (a spread of about 30 % where a real flock varies about 10 to 15 %).
+bird from an ordinary colour video, with nothing typed in. A bird's mass is taken as its box area to the power 1.5, and the
+grams-per-size scale depends on how high the camera is, so the vision service works out the **camera position** from the video
+(the background left after the moving birds are removed is compared with the stored ones) and uses the scale learned for that
+position. The average on screen is then a result. A bird whose box overlaps another, or touches the edge of the picture, is
+drawn grey with a dash and left out.
+
+Where the scales come from: `packages\vision\size_calibration.json`, built from the labelled colour frames (Day 24 to Day 40,
+25 frames a day) by `python tools\build_size_calibration.py --frames <folder of DayNN_..._rgb.png>`. Measured on them: the camera
+was moved between Day 25 and Day 26 (a bird looks about 3.5 times larger for 6 % growth), so there are two positions, **A** (Day 24
+to 25, scale steady to 3 % day by day) and **B** (Day 26 to 40, steady to 7 %). With each day left out in turn, all 15 days were
+matched to the right position (the closest call by 0.04), and the flock average predicted from the other days' scale was within about
+6 to 7 % of the breed standard (A: 6 %, B: 7 %, the worst day 14 %). Your sample video (2026-08-27, Day 24) is position A.
+
+What that does and does not mean. The scales were learned against the **breed standard**, taking the flock to have been at the
+standard on those days, so it is a calibration and not a weighing: rebuild it from birds weighed on a scale when there are some.
+One moment's flock average moves a lot (904 to 1,361 g across 12 moments of the sample hour, median 1,106 g), because only birds
+that overlap nothing are weighed, and one bird's estimate is rougher still (a spread of about 30 % where a real flock varies 10 to
+15 %). Use it as a guide, take the median over several moments, and keep the Kinect depth weight for anything you report.
+
+A video from a **new** camera position (the camera moved again) is not recognised: the box then says so and asks for the flock's
+average weight, and calibrates to that instead. Add the new position by running the tool with its labelled frames and
+`--setups A:24-25,B:26-40,C:41-45`.
+
 The earlier Kinect depth test (`WeightTestSection.tsx`, route `/visual/video/:id/weights`) is still in the code but no longer on the page.
 
 Limits for both Test clip boxes: **1 hour** (`VIDEO_MAX_SECONDS`, default 3600, set on the vision package and the API) and

@@ -418,8 +418,13 @@ def video_frame(clip_id: str):
 @app.route("/video/<clip_id>/bird-weights", methods=["POST"])
 def video_bird_weights(clip_id: str):
     """
-    Per-bird weights from an ordinary colour picture at one moment: the size of each bird's box, calibrated to the flock's
-    average weight given in `mean_g` (grams). A rough guide, see weight.size_weights. Nothing is stored.
+    Per-bird weights from an ordinary colour picture at one moment, from the size of each bird's box.
+
+    The scale (grams per unit of size) depends on how high the camera is, so it comes from the camera position: the clip's
+    background is compared with the references stored in size_calibration.json, and the matching position's scale is used. The
+    weights are then absolute and their average is a result. When the position is not one of the stored ones the answer is
+    camera_position_unknown, and the caller can give `mean_g` (the flock's average weight, grams) to calibrate by instead; then
+    the average is an input. A rough guide, see weight.size_weights. Nothing is stored.
     """
     clip, missing = _clip_or_404(clip_id)
     if missing:
@@ -428,15 +433,17 @@ def video_bird_weights(clip_id: str):
     t = _time_param()
     if t is None:
         return jsonify({"error": "invalid_time"}), 400
-    try:
-        mean_g = float(request.args.get("mean_g", ""))
-    except (TypeError, ValueError):
-        mean_g = float("nan")
-    if not (weight.MEAN_G_RANGE[0] <= mean_g <= weight.MEAN_G_RANGE[1]):
-        return jsonify({
-            "error": "invalid_mean_weight",
-            "detail": "Give the flock's average weight in grams, between %d and %d." % weight.MEAN_G_RANGE,
-        }), 400
+    mean_g = None
+    if request.args.get("mean_g", "") != "":
+        try:
+            mean_g = float(request.args.get("mean_g", ""))
+        except (TypeError, ValueError):
+            mean_g = float("nan")
+        if not (weight.MEAN_G_RANGE[0] <= mean_g <= weight.MEAN_G_RANGE[1]):
+            return jsonify({
+                "error": "invalid_mean_weight",
+                "detail": "Give the flock's average weight in grams, between %d and %d." % weight.MEAN_G_RANGE,
+            }), 400
     if not detector.available:
         return jsonify({"error": "model_unavailable", "detail": detector.load_error}), 503
 
@@ -444,9 +451,36 @@ def video_bird_weights(clip_id: str):
     if frame is None:
         return jsonify({"error": "video_frame_unavailable", "t": t}), 422
 
+    calibration_info = {"mode": "typed_average"}
+    grams_per_unit = None
+    if mean_g is None:
+        calibration = weight.load_calibration()
+        if calibration is None:
+            return jsonify({"error": "camera_position_unknown", "detail": "No size calibration is installed (size_calibration.json)."}), 422
+        times = clip_store.sample_times(clip, 9, 0, max_samples=9)
+        shots = [f for f in (clip_store.frame_at(clip, x) for x in times) if f is not None]
+        position, best, runner = weight.identify_setup(weight.background_signature(shots or [frame]), calibration)
+        if position is None:
+            return jsonify({
+                "error": "camera_position_unknown",
+                "detail": "This video's camera position is not one the scale was learned for.",
+                "match": round(best, 2),
+            }), 422
+        setup = calibration["setups"][position]
+        grams_per_unit = float(setup["grams_per_size_unit"])
+        calibration_info = {
+            "mode": "camera_position",
+            "position": position,
+            "learned_from_days": setup["days"],
+            "scale_spread_percent": setup.get("scale_spread_percent"),
+            "match": round(best, 2),
+            "other_match": round(runner, 2),
+            "close_call": bool(best - runner < weight.CLEAR_MARGIN),
+        }
+
     boxes = [(d.box_x, d.box_y, d.box_w, d.box_h) for d in detector.detect(frame)]
     height, width = frame.shape[:2]
-    result = weight.size_weights(boxes, (width, height), mean_g)
+    result = weight.size_weights(boxes, (width, height), mean_g=mean_g, grams_per_unit=grams_per_unit)
     jpeg = clip_store.encode_jpeg(weight.draw_weights(frame, boxes, result))
     if jpeg is None:
         return jsonify({"error": "encode_failed"}), 500
@@ -455,6 +489,7 @@ def video_bird_weights(clip_id: str):
         "clip": clip.as_dict(),
         "t": t,
         "mean_g": mean_g,
+        "calibration": calibration_info,
         "birds": [
             {"box": {"x": round(b[0], 1), "y": round(b[1], 1), "w": round(b[2], 1), "h": round(b[3], 1)}, **r}
             for b, r in zip(boxes, result["birds"])

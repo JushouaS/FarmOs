@@ -174,11 +174,28 @@ def _overlap(a: tuple[float, float, float, float], b: tuple[float, float, float,
     return iw * ih / max(1e-9, min(a[2] * a[3], b[2] * b[3]))
 
 
-def size_weights(boxes: list[tuple[float, float, float, float]], frame_size: tuple[int, int], mean_g: float) -> dict:
-    """
-    One weight per box, from its size, calibrated so the weighed birds average `mean_g`.
+#: Sizes are measured as if the picture were this big, so a clip re-encoded at another resolution gives the same size.
+REFERENCE_FRAME = (1280, 720)
 
-    boxes: (x, y, w, h) in pixels. frame_size: (width, height) of the picture.
+
+def size_unit(box: tuple[float, float, float, float], frame_size: tuple[int, int]) -> float:
+    """A bird's size: its box area as it would be in a 1280x720 picture, to the power 1.5."""
+    scale = (REFERENCE_FRAME[0] * REFERENCE_FRAME[1]) / float(frame_size[0] * frame_size[1])
+    return (box[2] * box[3] * scale) ** 1.5
+
+
+def size_weights(
+    boxes: list[tuple[float, float, float, float]],
+    frame_size: tuple[int, int],
+    mean_g: float | None = None,
+    grams_per_unit: float | None = None,
+) -> dict:
+    """
+    One weight per box, from its size.
+
+    boxes: (x, y, w, h) in pixels. frame_size: (width, height) of the picture. Give either `grams_per_unit` (the scale of this
+    camera position, see size_calibration.json: the weights are then absolute and their average is a result) or `mean_g` (the
+    weighed birds are scaled to average this: the average is an input).
     Returns {"birds": [{"weight_g": float | None, "reliable": bool, "reason": str | None}], "summary": {...}}.
     """
     width, height = frame_size
@@ -193,12 +210,16 @@ def size_weights(boxes: list[tuple[float, float, float, float]], frame_size: tup
             reason = "overlaps_another_bird"
         birds.append({"weight_g": None, "reliable": reason is None, "reason": reason})
 
-    sizes = [(boxes[i][2] * boxes[i][3]) ** 1.5 for i, b in enumerate(birds) if b["reliable"]]
-    if sizes:
-        mean_size = float(np.mean(sizes))
-        for i, b in enumerate(birds):
-            if b["reliable"]:
-                b["weight_g"] = round(mean_g * (boxes[i][2] * boxes[i][3]) ** 1.5 / mean_size, 1)
+    units = {i: size_unit(boxes[i], frame_size) for i, b in enumerate(birds) if b["reliable"]}
+    if units:
+        if grams_per_unit is not None:
+            factor = grams_per_unit
+        elif mean_g is not None:
+            factor = mean_g / float(np.mean(list(units.values())))
+        else:
+            raise ValueError("size_weights needs mean_g or grams_per_unit")
+        for i, u in units.items():
+            birds[i]["weight_g"] = round(factor * u, 1)
 
     weights = [b["weight_g"] for b in birds if b["weight_g"] is not None]
     summary = {
@@ -211,6 +232,89 @@ def size_weights(boxes: list[tuple[float, float, float, float]], frame_size: tup
         "spread_percent": round(float(np.std(weights) / np.mean(weights) * 100), 1) if len(weights) > 1 else None,
     }
     return {"birds": birds, "summary": summary}
+
+
+# ---------------------------------------------------------------------------
+# Which camera position is this? (the scale of a picture depends on it)
+# ---------------------------------------------------------------------------
+
+import base64  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+
+CALIBRATION_PATH = os.getenv("SIZE_CALIBRATION_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "size_calibration.json"))
+SIGNATURE_SIZE = (96, 54)
+#: A video is taken to come from a stored camera position when its background resembles that position's references at least this
+#: much (a picture of something else scores about 0) and more than it resembles the other positions' references by MIN_MARGIN.
+#: Measured by leaving each of the 15 recorded days out in turn: every day was matched to its own position, the closest call by
+#: 0.04, the best scores between 0.28 and 0.55. A margin under CLEAR_MARGIN is reported as a close call.
+MIN_SIMILARITY = 0.25
+MIN_MARGIN = 0.03
+CLEAR_MARGIN = 0.08
+
+
+def background_signature(frames: list[np.ndarray]) -> np.ndarray:
+    """
+    The still part of the scene as a small picture (96 wide, 108 high): the median of the frames, so the moving birds drop out,
+    as brightness in the top half and as colour strength (saturation) in the bottom half. Litter and lighting change from day to
+    day; the pen's fixed things (walls, feeders, tarps) do not, and show in both.
+    """
+    small = [cv2.resize(f, (192, 108), interpolation=cv2.INTER_AREA) for f in frames]
+    bg = np.median(np.stack(small), axis=0).astype(np.uint8)
+    gray = cv2.cvtColor(bg, cv2.COLOR_BGR2GRAY)
+    sat = cv2.cvtColor(bg, cv2.COLOR_BGR2HSV)[..., 1]
+    halves = [cv2.GaussianBlur(cv2.resize(x, SIGNATURE_SIZE, interpolation=cv2.INTER_AREA), (3, 3), 0) for x in (gray, sat)]
+    return np.vstack(halves)
+
+
+def _correlation(a: np.ndarray, b: np.ndarray) -> float:
+    x = a.astype(np.float32).ravel()
+    y = b.astype(np.float32).ravel()
+    x -= x.mean()
+    y -= y.mean()
+    denom = float(np.linalg.norm(x) * np.linalg.norm(y))
+    return float(np.dot(x, y) / denom) if denom > 0 else 0.0
+
+
+def similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """How alike two background signatures are, 1 = the same scene: the mean of the correlations of the two halves."""
+    half = a.shape[0] // 2
+    return (_correlation(a[:half], b[:half]) + _correlation(a[half:], b[half:])) / 2
+
+
+_calibration_cache: dict | None = None
+
+
+def load_calibration(path: str | None = None) -> dict | None:
+    """size_calibration.json with its reference backgrounds decoded, or None when the file is missing or unreadable."""
+    global _calibration_cache
+    if path is None and _calibration_cache is not None:
+        return _calibration_cache
+    try:
+        with open(path or CALIBRATION_PATH, encoding="utf-8") as fh:
+            data = json.load(fh)
+        for setup in data["setups"].values():
+            setup["_refs"] = [
+                cv2.imdecode(np.frombuffer(base64.b64decode(b), np.uint8), cv2.IMREAD_GRAYSCALE) for b in setup["backgrounds"]
+            ]
+    except (OSError, ValueError, KeyError):
+        return None
+    if path is None:
+        _calibration_cache = data
+    return data
+
+
+def identify_setup(signature: np.ndarray, calibration: dict) -> tuple[str | None, float, float]:
+    """(camera position, best similarity, runner-up similarity); the position is None when it is not clearly one of the stored ones."""
+    scores = sorted(
+        ((max(similarity(signature, ref) for ref in setup["_refs"]), name) for name, setup in calibration["setups"].items()),
+        reverse=True,
+    )
+    best, name = scores[0]
+    runner = scores[1][0] if len(scores) > 1 else -1.0
+    if best >= MIN_SIMILARITY and best - runner >= MIN_MARGIN:
+        return name, best, runner
+    return None, best, runner
 
 
 def draw_weights(frame: np.ndarray, boxes: list[tuple[float, float, float, float]], result: dict) -> np.ndarray:

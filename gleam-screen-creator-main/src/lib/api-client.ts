@@ -802,8 +802,21 @@ export interface BirdWeightEstimate {
 
 export interface BirdWeightsResult {
   t: number;
-  /** The average the weights were calibrated to, as given. */
-  mean_g: number;
+  /** The average the weights were calibrated to when the caller gave one; null when the scale came from the camera position. */
+  mean_g: number | null;
+  calibration:
+    | { mode: "typed_average" }
+    | {
+        mode: "camera_position";
+        position: string;
+        /** The grow-out days the scale was learned from. */
+        learned_from_days: [number, number];
+        scale_spread_percent: number | null;
+        match: number;
+        other_match: number;
+        /** The camera position matched, but not by much. */
+        close_call: boolean;
+      };
   birds: BirdWeightEstimate[];
   summary: {
     birds: number;
@@ -820,10 +833,13 @@ export interface BirdWeightsResult {
   method: "size";
 }
 
-/** A rough per-bird weight from the size of each bird in an ordinary colour picture, calibrated to the flock's average weight. */
-export async function birdWeightsAt(clipId: string, t: number, meanG: number): Promise<BirdWeightsResult> {
+/**
+ * A rough per-bird weight from the size of each bird in an ordinary colour picture. The scale comes from the camera position
+ * (recognised from the video); only when that is unknown, `meanG` (the flock's average weight) calibrates it instead.
+ */
+export async function birdWeightsAt(clipId: string, t: number, meanG?: number): Promise<BirdWeightsResult> {
   return apiFetch<BirdWeightsResult>(
-    `/visual/video/${encodeURIComponent(clipId)}/bird-weights?t=${t}&mean_g=${meanG}`,
+    `/visual/video/${encodeURIComponent(clipId)}/bird-weights?t=${t}${meanG === undefined ? "" : `&mean_g=${meanG}`}`,
     { method: "POST" },
   );
 }

@@ -415,13 +415,19 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
       const { clipId } = request.params as { clipId: string };
       const query = request.query as { t?: string; mean_g?: string };
       const t = Number(query.t ?? 0);
-      const meanG = Number(query.mean_g);
       if (!Number.isFinite(t) || t < 0) return reply.code(400).send({ error: "invalid_time" });
-      if (!Number.isFinite(meanG)) return reply.code(400).send({ error: "invalid_mean_weight", detail: "Give the flock's average weight in grams." });
+      // The scale normally comes from the camera position (the vision service works it out); `mean_g` is only given when it
+      // could not, and then calibrates the weights to the flock's average instead.
+      let meanQuery = "";
+      if (query.mean_g !== undefined && query.mean_g !== "") {
+        const meanG = Number(query.mean_g);
+        if (!Number.isFinite(meanG)) return reply.code(400).send({ error: "invalid_mean_weight", detail: "Give the flock's average weight in grams." });
+        meanQuery = `&mean_g=${meanG}`;
+      }
 
       try {
         const res = await fetch(
-          `${VISION_BASE}/video/${encodeURIComponent(clipId)}/bird-weights?t=${t}&mean_g=${meanG}`,
+          `${VISION_BASE}/video/${encodeURIComponent(clipId)}/bird-weights?t=${t}${meanQuery}`,
           { method: "POST", headers: visionHeaders(), signal: AbortSignal.timeout(READ_TIMEOUT_MS) },
         );
         if (!res.ok) return forwardError(reply, res);

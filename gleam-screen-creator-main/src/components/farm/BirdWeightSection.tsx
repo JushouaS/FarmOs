@@ -19,9 +19,10 @@ import { tr } from "@/lib/i18n";
  * doing, the 3D test weighs a Kinect depth recording, and this one guesses weights from how big each bird looks in a
  * normal overhead picture. It is a guide, not a measurement, and the screen says so:
  *
- * 1. Mass is taken as proportional to (the bird's box area) to the power 1.5. That has no scale of its own, so the flock's
- *    average weight is something the operator types in (a scale reading, or the breed standard for the day). The average
- *    on the screen is therefore the one that was typed, never a finding.
+ * 1. Mass is taken as proportional to (the bird's box area) to the power 1.5. A picture's scale depends on the camera's
+ *    height, so the vision service recognises the camera position from the video and uses the scale learned for it from
+ *    the labelled recordings (size_calibration.json). Nothing is typed, and the average is a result. Only when the position
+ *    is not one it knows does this ask for the flock's average weight, and then calibrates to that instead.
  * 2. A bird whose box overlaps another, or is cut by the edge of the picture, is shown but not weighed: its size says
  *    nothing about its weight.
  * 3. Nothing is saved, like every other clip test.
@@ -113,6 +114,8 @@ export function BirdWeightSection() {
   const [frame, setFrame] = useState<string | null>(null);
   const [frameBusy, setFrameBusy] = useState(false);
   const [meanText, setMeanText] = useState("");
+  // Shown only when the camera position could not be recognised from the video.
+  const [needsAverage, setNeedsAverage] = useState(false);
   const [result, setResult] = useState<BirdWeightsResult | null>(null);
 
   const reset = useCallback(() => {
@@ -121,6 +124,7 @@ export function BirdWeightSection() {
     setFrame(null);
     setResult(null);
     setError(null);
+    setNeedsAverage(false);
   }, []);
 
   // The plain picture at the chosen moment, debounced like the behaviour test: dragging the slider fires a change per pixel.
@@ -150,6 +154,7 @@ export function BirdWeightSection() {
     if (!file) return;
     setError(null);
     setResult(null);
+    setNeedsAverage(false);
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
       setError(tr("The clip is larger than the {n} MB limit.", { n: MAX_UPLOAD_MB }));
       return;
@@ -169,17 +174,30 @@ export function BirdWeightSection() {
 
   const estimate = async () => {
     if (!clip) return;
-    const meanG = Number(meanText.replace(",", "."));
-    if (!Number.isFinite(meanG) || meanG <= 0) {
-      setError(tr("Type the flock's average weight in grams, for example 1100."));
-      return;
+    let meanG: number | undefined;
+    if (needsAverage) {
+      meanG = Number(meanText.replace(",", "."));
+      if (!Number.isFinite(meanG) || meanG <= 0) {
+        setError(tr("Type the flock's average weight in grams, for example 1100."));
+        return;
+      }
     }
     setError(null);
     setBusy(true);
     try {
       setResult(await birdWeightsAt(clip.id, t, meanG));
     } catch (err) {
-      setError(reason(err));
+      if (err instanceof ApiError && err.message === "camera_position_unknown") {
+        setNeedsAverage(true);
+        setResult(null);
+        setError(
+          tr(
+            "This video's camera position is not one the size scale was learned for. Type the flock's average weight below to calibrate by instead.",
+          ),
+        );
+      } else {
+        setError(reason(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -207,7 +225,7 @@ export function BirdWeightSection() {
       <Block>
         <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
           {tr(
-            "Upload an ordinary colour video of the pen to get a rough weight for each bird from how big it looks. This is a guide, not a measurement: it needs the flock's average weight from you, and only compares the birds' sizes with each other. Nothing is saved to the flock's history.",
+            "Upload an ordinary colour video of the pen to get a rough weight for each bird from how big it looks. The size scale comes from the video's camera position, learned from the labelled recordings. This is a guide, not a measurement. Nothing is saved to the flock's history.",
           )}
         </p>
 
@@ -317,32 +335,34 @@ export function BirdWeightSection() {
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="bird-weight-mean"
-                className="text-sm font-semibold"
-                style={{ color: "var(--text-primary)" }}
-              >
-                {tr("Average weight of the flock (grams)")}
-              </label>
-              <input
-                id="bird-weight-mean"
-                type="number"
-                inputMode="decimal"
-                min={30}
-                max={8000}
-                step={10}
-                value={meanText}
-                onChange={(e) => setMeanText(e.target.value)}
-                placeholder="1100"
-                className="cb-input mt-1.5 block w-40 text-sm"
-              />
-              <Hint>
-                {tr(
-                  "A scale reading of a few birds from that day, or the breed standard for the grow-out day (about 1,100 g on day 24). The estimates are scaled so the weighed birds average this.",
-                )}
-              </Hint>
-            </div>
+            {needsAverage && (
+              <div>
+                <label
+                  htmlFor="bird-weight-mean"
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {tr("Average weight of the flock (grams)")}
+                </label>
+                <input
+                  id="bird-weight-mean"
+                  type="number"
+                  inputMode="decimal"
+                  min={30}
+                  max={8000}
+                  step={10}
+                  value={meanText}
+                  onChange={(e) => setMeanText(e.target.value)}
+                  placeholder="1100"
+                  className="cb-input mt-1.5 block w-40 text-sm"
+                />
+                <Hint>
+                  {tr(
+                    "A scale reading of a few birds from that day, or the breed standard for the grow-out day (about 1,100 g on day 24). The estimates are scaled so the weighed birds average this.",
+                  )}
+                </Hint>
+              </div>
+            )}
 
             <button
               type="button"
@@ -365,7 +385,16 @@ export function BirdWeightSection() {
                       })}
                 </p>
                 <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Stat label={tr("Average (as typed)")} value={grams(result.mean_g)} />
+                  <Stat
+                    label={
+                      result.calibration.mode === "typed_average"
+                        ? tr("Average (as typed)")
+                        : tr("Average of weighed birds")
+                    }
+                    value={grams(
+                      result.calibration.mode === "typed_average" ? result.mean_g : summary.mean_g,
+                    )}
+                  />
                   <Stat label={tr("Lightest")} value={grams(summary.min_g)} />
                   <Stat label={tr("Heaviest")} value={grams(summary.max_g)} />
                   <Stat
@@ -377,10 +406,35 @@ export function BirdWeightSection() {
                   className="mt-2 text-xs leading-relaxed"
                   style={{ color: "var(--text-secondary)" }}
                 >
-                  {tr(
-                    "Rough guide only: one bird's estimate can be well off, and the average is the one you typed, not a finding. Birds drawn grey with a dash were seen but not weighed.",
-                  )}
+                  {result.calibration.mode === "camera_position"
+                    ? tr(
+                        "Rough guide only: one bird's estimate can be well off, and the flock average is typically within 6 to 7 % of the breed standard on the days it was learned from. Birds drawn grey with a dash were seen but not weighed.",
+                      )
+                    : tr(
+                        "Rough guide only: one bird's estimate can be well off, and the average is the one you typed, not a finding. Birds drawn grey with a dash were seen but not weighed.",
+                      )}
                 </p>
+                {result.calibration.mode === "camera_position" && (
+                  <p
+                    className="mt-1 text-xs leading-relaxed"
+                    style={{ color: "var(--text-tertiary)" }}
+                  >
+                    {tr(
+                      "Scale: camera position recognised from the video, learned from the recordings of days {a} to {b} (match {match}).",
+                      {
+                        a: result.calibration.learned_from_days[0],
+                        b: result.calibration.learned_from_days[1],
+                        match: result.calibration.match,
+                      },
+                    )}
+                    {result.calibration.close_call
+                      ? " " +
+                        tr(
+                          "The match with the other camera position was close, so check the figures against a scale reading.",
+                        )
+                      : ""}
+                  </p>
+                )}
 
                 <ul
                   className="mt-3 divide-y text-sm"
