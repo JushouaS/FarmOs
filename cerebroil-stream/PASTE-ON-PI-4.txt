@@ -1,3 +1,6 @@
+# FIRST, on its own, run:   sudo -v   and type the Pi's password. Then paste the rest. If sudo has to ask for the
+# password in the middle of a paste, it reads the NEXT pasted line as the password and the restarts below never happen.
+#
 # Paste ALL of this into the Raspberry Pi Connect terminal (one go) and press Enter, AFTER the new files are on GitHub
 # (the branch responsive-login-local-db). It takes about 1 minute. At the end copy everything it printed and send it back.
 #
