@@ -33,7 +33,7 @@ import { visionHeaders } from "../vision-pipeline.js";
  * service, which writes it to disk under its own size cap.
  */
 
-const VISION_BASE = env.VISION_SERVICE_URL;
+const VISION_BASE = env.VIDEO_SERVICE_URL ?? env.VISION_SERVICE_URL;
 const MAX_BYTES = env.VIDEO_MAX_MB * 1024 * 1024;
 
 /** A 200 MB clip over farm wifi is not quick, but it does not get forever. */

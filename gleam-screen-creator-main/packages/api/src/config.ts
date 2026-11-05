@@ -57,6 +57,10 @@ const schema = z.object({
 
   // Vision service (Flask)
   VISION_SERVICE_URL: z.string().url().default("http://127.0.0.1:5000"),
+  // Where uploaded clips (Settings > Test clip) are checked: the vision package's /video routes. The Raspberry Pi's camera
+  // service (cerebroil-stream) has no such routes, so when VISION_SERVICE_URL is the Pi, point this at a computer that runs
+  // packages/vision (it uses the same VISION_SERVICE_TOKEN). Unset = VISION_SERVICE_URL.
+  VIDEO_SERVICE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   // H-4: no insecure default — server will refuse to start without a real token.
   VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
   // The camera's RTSP link, as the fallback for the one Settings stores

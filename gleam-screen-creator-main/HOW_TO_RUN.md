@@ -515,6 +515,25 @@ curl.exe -H "X-Vision-Token: <token>" -o sensors.csv http://behavior.local:5000/
 To put this on a Pi that is already set up, paste `cerebroil-stream\PASTE-ON-PI-4.txt` into the Raspberry Pi Connect
 terminal once the new files are on GitHub. It restarts the two services and prints the first rows.
 
+### Settings > Test clip (upload a recording): the vision package
+
+The two Test clip boxes in Settings (the behaviour check and the 3D weight check) send the file to `/visual/video`, which the
+API forwards to the **vision package**. The Raspberry Pi's camera service (`cerebroil-stream`) does not have those routes, so with
+`VISION_SERVICE_URL` pointing at the Pi the upload is refused (404) and nothing happens. Run the vision package on this
+computer instead and tell the API where it is:
+
+1. In `packages\api\.env` add `VIDEO_SERVICE_URL=http://127.0.0.1:5001` and restart the API.
+2. In a new window, from the project folder:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-vision.ps1
+```
+
+It needs Python with `flask`, `opencv-python-headless`, `numpy`, `psycopg2-binary`, `python-dotenv` and `onnxruntime` (the
+package's `requirements.txt`). The **3D weight check** works as soon as it runs. The **behaviour check** also needs the trained
+detector, `packages\vision\models\chicken.onnx`, which is not in git; without it the service reports `model_unavailable`.
+Nothing from a test clip is saved to the flock's history.
+
 ### Getting the data without visiting the farm
 
 Three things work together. None of them needs the internet except the last step (the folder that syncs to your home).
