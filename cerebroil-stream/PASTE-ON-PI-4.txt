@@ -1,0 +1,39 @@
+# Paste ALL of this into the Raspberry Pi Connect terminal (one go) and press Enter, AFTER the new files are on GitHub
+# (the branch responsive-login-local-db). It takes about 1 minute. At the end copy everything it printed and send it back.
+#
+# What it does:
+#   A. shows the Pi's clock and time zone (read only), because every row in the daily files is stamped with it;
+#   B. downloads the latest camera service files from GitHub (your .env and the .venv are NOT touched);
+#   C. restarts the sensor reader and the camera service, so they start writing the daily files;
+#   D. waits for the first row and shows what the files look like, and that the camera service lists and serves them.
+#
+# What you get: one CSV a day in ~/cerebroil-stream/logs/ -- sensors-YYYY-MM-DD.csv (a row a minute; always) and
+# behavior-YYYY-MM-DD.csv (a row a minute; only while LIVE_BEHAVIOR=1 is set in ~/cerebroil-stream/.env).
+# Files older than 90 days are deleted; nothing is written if less than 200 MB of the card is free.
+
+echo; echo "=== A. The Pi's clock (rows are stamped with this)"
+date
+timedatectl 2>/dev/null | grep -E "Time zone|synchronized|NTP" || true
+echo "(the time zone should be Asia/Manila; if not:  sudo timedatectl set-timezone Asia/Manila )"
+
+echo; echo "=== B. Getting the latest files"
+command -v git >/dev/null || sudo apt-get install -y git
+rm -rf ~/farmos-src
+git clone --quiet --depth 1 --filter=blob:none --sparse -b responsive-login-local-db https://github.com/JushouaS/FarmOs.git ~/farmos-src
+git -C ~/farmos-src sparse-checkout set cerebroil-stream
+cp -a ~/farmos-src/cerebroil-stream/. ~/cerebroil-stream/
+ls ~/cerebroil-stream | tr '\n' ' '; echo
+
+echo; echo "=== C. Restarting the sensor reader and the camera service"
+sudo systemctl restart dht22
+sudo systemctl restart cerebroil-stream
+
+echo; echo "=== D. The first rows"
+sleep 25
+ls -l ~/cerebroil-stream/logs/ 2>/dev/null || echo "(no logs folder yet)"
+for f in ~/cerebroil-stream/logs/*.csv; do echo "--- $f"; head -3 "$f"; done 2>/dev/null
+TOKEN=$(grep -E '^VISION_SERVICE_TOKEN=' ~/cerebroil-stream/.env | cut -d= -f2-)
+echo "--- /logs as the camera service lists it:"
+curl -s -m 5 -H "X-Vision-Token: $TOKEN" http://127.0.0.1:5000/logs; echo
+echo "--- the service names and their state:"
+systemctl is-active dht22 cerebroil-stream

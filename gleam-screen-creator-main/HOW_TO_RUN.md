@@ -486,6 +486,35 @@ Live Camera and the dashboard then show real numbers, marked Warning or Critical
 card says "Sensor offline, last reading 2 h ago" (or "No reading" if it never reported), and after 10 minutes of silence the API
 raises one "Sensor Offline" alert. There is no ammonia sensor, so ammonia is not shown anywhere.
 
+### Daily CSV files kept on the Raspberry Pi (a second copy)
+
+The laptop's database is the main record, but it only stores what it hears while it is on and can reach the Pi. So the Pi
+also writes its own file every day in `~/cerebroil-stream/logs/`, one row a minute:
+
+| File | Written by | Columns |
+|---|---|---|
+| `sensors-YYYY-MM-DD.csv` | the sensor reader, always | `time, temperature_c, humidity_pct, reading_age_s, error` |
+| `behavior-YYYY-MM-DD.csv` | the live behaviour monitor, only while `LIVE_BEHAVIOR=1` is set in the Pi's `.env` | `time, birds, still_birds, huddled_birds, flock_moving, huddle_fdi, error` |
+
+They are plain CSV (Excel opens them). A value that is blank means there was no fresh reading that minute; the `error` column
+says why. `time` is the Pi's clock with its time zone, so check `timedatectl` shows `Asia/Manila`; a Pi without internet can
+have the wrong time after a power cut. The behaviour file holds counts only (not day or night): apply the lighting hours when
+you read it. Weights are not on the Pi: they are typed in or measured on the laptop.
+
+A row is one short line, flushed to the card as it is written, and a row cut short by a power cut is closed off before the next
+one. Nothing is written when less than 200 MB of the card is free, and files older than 90 days (`LOG_KEEP_DAYS`) are deleted.
+`LOG_DIR` and `LOG_SECONDS` (default 60) change the folder and the spacing.
+
+To get the files from the laptop or any machine that can reach the Pi (the camera service's token is the same one the API uses):
+
+```powershell
+curl.exe -H "X-Vision-Token: <token>" http://behavior.local:5000/logs                                   # the list
+curl.exe -H "X-Vision-Token: <token>" -o sensors.csv http://behavior.local:5000/logs/sensors-2026-11-05.csv
+```
+
+To put this on a Pi that is already set up, paste `cerebroil-stream\PASTE-ON-PI-4.txt` into the Raspberry Pi Connect
+terminal once the new files are on GitHub. It restarts the two services and prints the first rows.
+
 ### Test video: the trained model on an uploaded clip (optional)
 
 The small film button in the **Live Camera** header opens "Test video". You pick a clip from the

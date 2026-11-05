@@ -26,9 +26,10 @@ import base64
 import cv2
 import numpy as np
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, send_from_directory
 
 import behavior
+import daily_log
 
 # Load cerebroil-stream/.env (if present) before reading any of the vars below.
 load_dotenv()
@@ -812,6 +813,26 @@ def sensors_route() -> tuple[Response, int] | Response:
         "ageSeconds": round(time.time() - at, 1) if isinstance(at, (int, float)) else None,
         "error": data.get("error"),
     })
+
+
+@app.get("/logs")
+def logs_list_route() -> tuple[Response, int] | Response:
+    """The daily CSV files this Pi has kept (daily_log.py): sensors-YYYY-MM-DD.csv and behavior-YYYY-MM-DD.csv."""
+    err = _require_vision_token()
+    if err:
+        return err
+    return jsonify({"files": daily_log.list_files()})
+
+
+@app.get("/logs/<name>")
+def logs_file_route(name: str) -> tuple[Response, int] | Response:
+    """One of those files, as CSV. Only names of the form sensors-YYYY-MM-DD.csv / behavior-YYYY-MM-DD.csv are served."""
+    err = _require_vision_token()
+    if err:
+        return err
+    if not daily_log.FILE_NAME.match(name):
+        return jsonify({"error": "not_found"}), 404
+    return send_from_directory(daily_log.default_dir(), name, mimetype="text/csv", as_attachment=True)
 
 
 @app.post("/demo/convert")

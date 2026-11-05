@@ -23,11 +23,13 @@ import cv2
 import numpy as np
 
 import behavior
+import daily_log
 import demo_detect
 
 SAMPLE_SECONDS = float(os.getenv("LIVE_SAMPLE_SECONDS", "3"))
 INACTIVE_SECONDS = float(os.getenv("LIVE_INACTIVE_SECONDS", "1800"))
 HUDDLE_SECONDS = float(os.getenv("LIVE_HUDDLE_SECONDS", "600"))
+LOG_SECONDS = float(os.getenv("LOG_SECONDS", "60"))
 
 
 class LiveBehavior:
@@ -41,6 +43,10 @@ class LiveBehavior:
         self._lock = threading.Lock()
         self._last_at: float | None = None
         self._error: str | None = None
+        # A copy of every minute on this Pi's own disk, for when the laptop that stores the snapshots is off (daily_log.py).
+        # Counts only, not night or day: the lighting hours are the API's to know, so they are applied when the file is read.
+        self._log = daily_log.DailyCsv("behavior", ["birds", "still_birds", "huddled_birds", "flock_moving", "huddle_fdi", "error"])
+        self._logged_at = 0.0
 
     def start(self) -> None:
         threading.Thread(target=self._run, daemon=True, name="live-behavior").start()
@@ -59,7 +65,26 @@ class LiveBehavior:
                 time.sleep(60)
             except Exception as exc:  # keep going: one bad frame must not stop the monitoring
                 self._error = f"{type(exc).__name__}: {exc}"[:200]
+            self._log_row()
             time.sleep(max(0.5, SAMPLE_SECONDS - (time.time() - started)))
+
+    def _log_row(self) -> None:
+        now = time.time()
+        if now - self._logged_at < LOG_SECONDS:
+            return
+        self._logged_at = now
+        with self._lock:
+            last = self._engine.last
+            seen = self._last_at
+        fresh = last is not None and seen is not None and now - seen <= max(30.0, 4 * SAMPLE_SECONDS)
+        self._log.append({
+            "birds": last["n"] if fresh else None,
+            "still_birds": sum(1 for s in last["still"] if s) if fresh else None,
+            "huddled_birds": sum(1 for h in last["in_huddle"] if h) if fresh else None,
+            "flock_moving": round(last["flock_moving"], 3) if fresh and last["flock_moving"] is not None else None,
+            "huddle_fdi": round(last["fdi"], 3) if fresh and last.get("fdi") is not None else None,
+            "error": self._error,
+        })
 
     def step(self) -> bool:
         """One look at the newest frame. Returns False when there was nothing to look at."""

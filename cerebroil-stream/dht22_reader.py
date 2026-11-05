@@ -30,6 +30,8 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
+import daily_log
+
 GPIO_LINE = int(os.getenv("DHT22_GPIO", "4"))
 GPIO_CHIP = os.getenv("DHT22_GPIOCHIP", "/dev/gpiochip0")
 INTERVAL_SECONDS = max(4.0, float(os.getenv("DHT22_INTERVAL", "10")))
@@ -128,6 +130,10 @@ def main() -> int:
             time.sleep(60)
 
     last_good: dict = {"temperature": None, "humidity": None, "at": None}
+    # A copy of every minute on this Pi's own disk, for when the laptop that stores the readings is off (daily_log.py).
+    log = daily_log.DailyCsv("sensors", ["temperature_c", "humidity_pct", "reading_age_s", "error"])
+    log_every = float(os.getenv("LOG_SECONDS", "60"))
+    logged_at = 0.0
     while True:
         started = time.monotonic()
         error: str | None = None
@@ -147,6 +153,16 @@ def main() -> int:
                 print(f"try {attempt}: {error}")
             time.sleep(PAUSE_BETWEEN_TRIES)
         write_state({**last_good, "checkedAt": time.time(), "error": error})
+        if not once and time.time() - logged_at >= log_every:
+            logged_at = time.time()
+            age = logged_at - last_good["at"] if last_good["at"] else None
+            fresh = age is not None and age <= 120  # an old value is not repeated as if it were new: the row is left blank
+            log.append({
+                "temperature_c": last_good["temperature"] if fresh else None,
+                "humidity_pct": last_good["humidity"] if fresh else None,
+                "reading_age_s": round(age) if age is not None else None,
+                "error": error,
+            })
         if once:
             return 0 if error is None else 1
         time.sleep(max(1.0, INTERVAL_SECONDS - (time.monotonic() - started)))

@@ -14,3 +14,6 @@ models/
 # The DHT22 reader's newest reading (dht22_reader.py writes it; it is a live value, not source)
 dht22.json
 dht22.tmp
+
+# The daily CSV files this Pi keeps (daily_log.py)
+logs/
