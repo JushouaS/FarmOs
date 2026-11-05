@@ -415,6 +415,57 @@ def video_frame(clip_id: str):
     )
 
 
+@app.route("/video/<clip_id>/bird-weights", methods=["POST"])
+def video_bird_weights(clip_id: str):
+    """
+    Per-bird weights from an ordinary colour picture at one moment: the size of each bird's box, calibrated to the flock's
+    average weight given in `mean_g` (grams). A rough guide, see weight.size_weights. Nothing is stored.
+    """
+    clip, missing = _clip_or_404(clip_id)
+    if missing:
+        return missing
+
+    t = _time_param()
+    if t is None:
+        return jsonify({"error": "invalid_time"}), 400
+    try:
+        mean_g = float(request.args.get("mean_g", ""))
+    except (TypeError, ValueError):
+        mean_g = float("nan")
+    if not (weight.MEAN_G_RANGE[0] <= mean_g <= weight.MEAN_G_RANGE[1]):
+        return jsonify({
+            "error": "invalid_mean_weight",
+            "detail": "Give the flock's average weight in grams, between %d and %d." % weight.MEAN_G_RANGE,
+        }), 400
+    if not detector.available:
+        return jsonify({"error": "model_unavailable", "detail": detector.load_error}), 503
+
+    frame = clip_store.frame_at(clip, t)
+    if frame is None:
+        return jsonify({"error": "video_frame_unavailable", "t": t}), 422
+
+    boxes = [(d.box_x, d.box_y, d.box_w, d.box_h) for d in detector.detect(frame)]
+    height, width = frame.shape[:2]
+    result = weight.size_weights(boxes, (width, height), mean_g)
+    jpeg = clip_store.encode_jpeg(weight.draw_weights(frame, boxes, result))
+    if jpeg is None:
+        return jsonify({"error": "encode_failed"}), 500
+
+    return jsonify({
+        "clip": clip.as_dict(),
+        "t": t,
+        "mean_g": mean_g,
+        "birds": [
+            {"box": {"x": round(b[0], 1), "y": round(b[1], 1), "w": round(b[2], 1), "h": round(b[3], 1)}, **r}
+            for b, r in zip(boxes, result["birds"])
+        ],
+        "summary": result["summary"],
+        "content_type": "image/jpeg",
+        "image": base64.b64encode(jpeg).decode("ascii"),
+        "method": "size",
+    })
+
+
 @app.route("/video/<clip_id>/analyze", methods=["POST"])
 def video_analyze(clip_id: str):
     """One measurement on the clip, in the same shape as a camera pass."""

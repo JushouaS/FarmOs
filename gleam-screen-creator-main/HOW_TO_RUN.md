@@ -517,7 +517,7 @@ terminal once the new files are on GitHub. It restarts the two services and prin
 
 ### Settings > Test clip (upload a recording): the vision package
 
-The two Test clip boxes in Settings (the behaviour check and the 3D weight check) send the file to `/visual/video`, which the
+The two Test clip boxes in Settings (**Behaviour** and **Weight**) send the file to `/visual/video`, which the
 API forwards to the **vision package**. The Raspberry Pi's camera service (`cerebroil-stream`) does not have those routes, so with
 `VISION_SERVICE_URL` pointing at the Pi the upload is refused (404) and nothing happens. Run the vision package on this
 computer instead and tell the API where it is:
@@ -530,7 +530,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-vision.ps1
 ```
 
 It needs Python with `flask`, `opencv-python-headless`, `numpy`, `psycopg2-binary`, `python-dotenv` and `onnxruntime` (the
-package's `requirements.txt`). The **3D weight check** works as soon as it runs. The **behaviour check** also needs the trained
+package's `requirements.txt`). Both boxes need the trained
 detector, `packages\vision\models\chicken.onnx`, which is not in git; without it the service reports `model_unavailable`. The trained model is on the Raspberry Pi, so copy it
 from there (it asks for the Pi's password):
 
@@ -541,6 +541,15 @@ scp admin@behavior.local:~/cerebroil-stream/models/detector.onnx packages\vision
 Restart `scripts\run-vision.ps1` afterwards. The file is a one-class YOLO detector (class name `item`), which the service reads
 with its default settings. With it, a 1-hour clip is checked in seconds: `/health` then says `"model_loaded":true`.
 Nothing from a test clip is saved to the flock's history.
+
+**The two boxes.** Both show the video frame with their readings drawn on it, and a slider to pick the moment.
+**Behaviour** draws the detector's boxes and gives the counts, inactive and huddled birds. **Weight** gives a rough weight for each
+bird from an ordinary colour video: a bird's mass is taken as its box area to the power 1.5, scaled so the weighed birds average
+the **flock's average weight that you type in** (a scale reading of a few birds, or the breed standard for the grow-out day). So
+the average on screen is the one you typed, never a finding, and the estimates only compare the birds' sizes with each other.
+A bird whose box overlaps another, or touches the edge of the picture, is drawn grey with a dash and left out. It is a guide:
+on the sample video one bird's estimate can be well off (a spread of about 30 % where a real flock varies about 10 to 15 %).
+The earlier Kinect depth test (`WeightTestSection.tsx`, route `/visual/video/:id/weights`) is still in the code but no longer on the page.
 
 Limits for both Test clip boxes: **1 hour** (`VIDEO_MAX_SECONDS`, default 3600, set on the vision package and the API) and
 **2.5 GB** (`VIDEO_MAX_MB`, default 2560, on both; the two components show it as 2560 MB). The file is streamed from the browser

@@ -37,7 +37,7 @@ const MAX_UPLOAD_MB = 2560;
 function reason(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401) return tr("Your session ended. Sign in again, then try the clip.");
-    if (err.status === 429) return tr("Too many uploads or checks just now. Please wait a minute.");
+    if (err.status === 429) return tr("Too many uploads or checks in a short time. Wait a few minutes, then try again.");
     switch (err.message) {
       case "too_large":
         return tr("The clip is larger than the {n} MB limit.", { n: MAX_UPLOAD_MB });

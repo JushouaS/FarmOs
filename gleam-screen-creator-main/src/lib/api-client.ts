@@ -792,6 +792,42 @@ export async function analyzeClipAt(clipId: string, t: number): Promise<VideoAna
   );
 }
 
+/** One bird in a size-based weight estimate. `weight_g` is null for a bird that was seen but not weighed (`reason` says why). */
+export interface BirdWeightEstimate {
+  box: { x: number; y: number; w: number; h: number };
+  weight_g: number | null;
+  reliable: boolean;
+  reason: "too_small" | "cut_by_edge" | "overlaps_another_bird" | null;
+}
+
+export interface BirdWeightsResult {
+  t: number;
+  /** The average the weights were calibrated to, as given. */
+  mean_g: number;
+  birds: BirdWeightEstimate[];
+  summary: {
+    birds: number;
+    weighed: number;
+    mean_g: number | null;
+    median_g: number | null;
+    min_g: number | null;
+    max_g: number | null;
+    spread_percent: number | null;
+  };
+  content_type: string;
+  /** base64 JPEG of the picture with each weight drawn on it. */
+  image: string;
+  method: "size";
+}
+
+/** A rough per-bird weight from the size of each bird in an ordinary colour picture, calibrated to the flock's average weight. */
+export async function birdWeightsAt(clipId: string, t: number, meanG: number): Promise<BirdWeightsResult> {
+  return apiFetch<BirdWeightsResult>(
+    `/visual/video/${encodeURIComponent(clipId)}/bird-weights?t=${t}&mean_g=${meanG}`,
+    { method: "POST" },
+  );
+}
+
 /** The whole clip, sampled evenly and judged as a run. Writes nothing. */
 export async function sweepClip(
   clipId: string,

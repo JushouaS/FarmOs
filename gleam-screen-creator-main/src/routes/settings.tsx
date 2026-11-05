@@ -6,7 +6,7 @@ import { AccountsSection } from "@/components/farm/AccountsSection";
 import { FlockSizeSection } from "@/components/farm/FlockSizeSection";
 import { FeederZonesSection } from "@/components/farm/FeederZonesSection";
 import { VideoTestSection } from "@/components/farm/VideoTestSection";
-import { WeightTestSection } from "@/components/farm/WeightTestSection";
+import { BirdWeightSection } from "@/components/farm/BirdWeightSection";
 import { LightingSection } from "@/components/farm/LightingSection";
 import { CameraSourceSection } from "@/components/farm/CameraSourceSection";
 import { Block, Hint, MonoVal, Row, SaveRow, Section, Toggle, useSaver } from "@/components/farm/SettingsParts";
@@ -398,10 +398,11 @@ function SettingsPage() {
           {/* Right below the zones on purpose: a clip is judged against those
               very polygons, so the two belong within a glance of each other. */}
           <VideoTestSection />
-          {/* Sibling of the behaviour test, kept beside it on purpose: the two
-              answer different questions about the same footage pipeline, and
-              a reader comparing them should not have to hunt for the other. */}
-          <WeightTestSection />
+          {/* Two clip tests, side by side on purpose: behaviour (what the birds are
+              doing) and weight (a rough weight for each bird). Both show the
+              video frame with their readings drawn on it. The Kinect depth test
+              (WeightTestSection) is no longer shown here. */}
+          <BirdWeightSection />
         </div>
         <div className="space-y-6">
           <AccountSection />

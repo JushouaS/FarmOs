@@ -247,3 +247,90 @@ def test_a_colormapped_depth_video_is_weighed(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.get_json()["summary"]["samples"] == 6
     video._clips.clear()
+
+
+# ---------------------------------------------------------------------------
+# Rough weights from an ordinary colour picture (size of each bird's box)
+# ---------------------------------------------------------------------------
+
+FRAME = (1280, 720)
+
+
+def test_equal_isolated_birds_all_get_the_typed_average():
+    boxes = [(100, 100, 60, 60), (400, 100, 60, 60), (700, 300, 60, 60)]
+    result = weight.size_weights(boxes, FRAME, 1100.0)
+    assert [b["weight_g"] for b in result["birds"]] == [1100.0, 1100.0, 1100.0]
+    assert result["summary"]["weighed"] == 3 and result["summary"]["spread_percent"] == 0.0
+
+
+def test_a_bigger_bird_weighs_more_and_the_weighed_birds_average_the_typed_value():
+    # Twice the area is 2 ** 1.5 = 2.83 times the mass.
+    boxes = [(100, 100, 60, 60), (400, 100, 120, 60)]
+    result = weight.size_weights(boxes, FRAME, 1000.0)
+    small, big = (b["weight_g"] for b in result["birds"])
+    assert big / small == pytest.approx(2 ** 1.5, rel=0.01)
+    assert (small + big) / 2 == pytest.approx(1000.0, abs=0.2)
+
+
+def test_a_bird_overlapped_by_another_is_shown_but_not_weighed_or_counted_in_the_average():
+    boxes = [(100, 100, 60, 60), (130, 100, 60, 60), (600, 300, 60, 60)]
+    result = weight.size_weights(boxes, FRAME, 1100.0)
+    assert [b["reason"] for b in result["birds"]] == ["overlaps_another_bird", "overlaps_another_bird", None]
+    assert [b["weight_g"] for b in result["birds"]] == [None, None, 1100.0]
+    assert result["summary"]["weighed"] == 1 and result["summary"]["birds"] == 3
+
+
+def test_a_bird_cut_by_the_edge_of_the_picture_is_not_weighed():
+    boxes = [(0, 100, 60, 60), (600, 300, 60, 60)]
+    result = weight.size_weights(boxes, FRAME, 1100.0)
+    assert result["birds"][0]["reason"] == "cut_by_edge" and result["birds"][0]["weight_g"] is None
+    assert result["birds"][1]["weight_g"] == 1100.0
+
+
+def test_no_birds_or_no_isolated_birds_weighs_nothing():
+    assert weight.size_weights([], FRAME, 1100.0)["summary"]["weighed"] == 0
+    crowded = weight.size_weights([(100, 100, 60, 60), (120, 100, 60, 60)], FRAME, 1100.0)
+    assert crowded["summary"]["weighed"] == 0 and crowded["summary"]["mean_g"] is None
+
+
+class _StubDetector:
+    available = True
+    load_error = None
+
+    def detect(self, frame):
+        import detector
+
+        return [
+            detector.Detection(box_x=10, box_y=10, box_w=20, box_h=20, confidence=0.9),
+            detector.Detection(box_x=60, box_y=40, box_w=30, box_h=20, confidence=0.9),
+        ]
+
+
+def _post_bird_weights(clip_id, query):
+    import app as service
+
+    client = service.app.test_client()
+    return client.post(f"/video/{clip_id}/bird-weights?{query}", headers={"X-Vision-Token": service.SERVICE_TOKEN})
+
+
+def test_the_bird_weights_route_needs_a_believable_average_weight(tmp_path, monkeypatch):
+    clip = _clip_of(tmp_path, monkeypatch, colour_footage())
+    for query in ("t=1", "t=1&mean_g=abc", "t=1&mean_g=5", "t=1&mean_g=99999"):
+        response = _post_bird_weights(clip.id, query)
+        assert response.status_code == 400, query
+        assert response.get_json()["error"] == "invalid_mean_weight"
+    video._clips.clear()
+
+
+def test_the_bird_weights_route_returns_each_bird_and_the_picture_with_the_weights_drawn(tmp_path, monkeypatch):
+    import app as service
+
+    clip = _clip_of(tmp_path, monkeypatch, colour_footage())
+    monkeypatch.setattr(service, "detector", _StubDetector())
+    response = _post_bird_weights(clip.id, "t=1&mean_g=1100")
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["method"] == "size" and body["mean_g"] == 1100.0
+    assert [b["weight_g"] is not None for b in body["birds"]] == [True, True]
+    assert body["summary"]["weighed"] == 2 and body["content_type"] == "image/jpeg" and len(body["image"]) > 100
+    video._clips.clear()

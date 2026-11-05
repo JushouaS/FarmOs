@@ -40,6 +40,7 @@ const routes = [
   ["POST", "/visual/capture/CAM-01"],
   ["POST", "/visual/analyze/CAM-01"],
   ["POST", "/visual/demo-detect"],
+  ["POST", "/visual/video/abc/bird-weights?t=1&mean_g=1100"],
 ] as const;
 
 for (const [method, url] of routes) {

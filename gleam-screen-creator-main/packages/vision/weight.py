@@ -142,3 +142,87 @@ def summarize(per_frame: list[dict]) -> dict:
             round(float(np.mean(confidences)), 2) if confidences else None
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Weights from an ordinary colour picture (an overhead camera, not the Kinect)
+# ---------------------------------------------------------------------------
+#
+# A rough guide, not a measurement. A bird's mass grows with its length cubed and its top-down area with its length squared,
+# so mass is taken as proportional to (box area) ** 1.5. The proportionality has no scale of its own: the camera's distance
+# and lens are unknown, so the numbers are calibrated by being told the flock's average weight (a scale reading, or the breed
+# standard for the day), and every bird is weighed relative to the others. The average is therefore an input, never a result.
+#
+# Only birds the box describes well are weighed: a bird whose box overlaps another (two birds in one box, or one hidden behind
+# another) or is cut by the edge of the picture has a size that says nothing about its weight, so it is shown but left out
+# of the weighing and of the average used to calibrate.
+
+#: A bird is not weighed when another box covers more than this share of the smaller of the two.
+BIRD_OVERLAP_MAX = 0.10
+#: ... or when its box comes this close to the edge of the picture (pixels).
+BIRD_EDGE_MARGIN = 4
+#: The calibration average must be a believable bird weight (grams).
+MEAN_G_RANGE = (30.0, 8000.0)
+
+
+def _overlap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    """The overlap of two (x, y, w, h) boxes as a share of the smaller one."""
+    iw = min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])
+    ih = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
+    if iw <= 0 or ih <= 0:
+        return 0.0
+    return iw * ih / max(1e-9, min(a[2] * a[3], b[2] * b[3]))
+
+
+def size_weights(boxes: list[tuple[float, float, float, float]], frame_size: tuple[int, int], mean_g: float) -> dict:
+    """
+    One weight per box, from its size, calibrated so the weighed birds average `mean_g`.
+
+    boxes: (x, y, w, h) in pixels. frame_size: (width, height) of the picture.
+    Returns {"birds": [{"weight_g": float | None, "reliable": bool, "reason": str | None}], "summary": {...}}.
+    """
+    width, height = frame_size
+    birds = []
+    for i, (x, y, w, h) in enumerate(boxes):
+        reason = None
+        if w <= 1 or h <= 1:
+            reason = "too_small"
+        elif x < BIRD_EDGE_MARGIN or y < BIRD_EDGE_MARGIN or x + w > width - BIRD_EDGE_MARGIN or y + h > height - BIRD_EDGE_MARGIN:
+            reason = "cut_by_edge"
+        elif any(j != i and _overlap(boxes[i], boxes[j]) > BIRD_OVERLAP_MAX for j in range(len(boxes))):
+            reason = "overlaps_another_bird"
+        birds.append({"weight_g": None, "reliable": reason is None, "reason": reason})
+
+    sizes = [(boxes[i][2] * boxes[i][3]) ** 1.5 for i, b in enumerate(birds) if b["reliable"]]
+    if sizes:
+        mean_size = float(np.mean(sizes))
+        for i, b in enumerate(birds):
+            if b["reliable"]:
+                b["weight_g"] = round(mean_g * (boxes[i][2] * boxes[i][3]) ** 1.5 / mean_size, 1)
+
+    weights = [b["weight_g"] for b in birds if b["weight_g"] is not None]
+    summary = {
+        "birds": len(birds),
+        "weighed": len(weights),
+        "mean_g": round(float(np.mean(weights)), 1) if weights else None,
+        "median_g": round(float(np.median(weights)), 1) if weights else None,
+        "min_g": min(weights) if weights else None,
+        "max_g": max(weights) if weights else None,
+        "spread_percent": round(float(np.std(weights) / np.mean(weights) * 100), 1) if len(weights) > 1 else None,
+    }
+    return {"birds": birds, "summary": summary}
+
+
+def draw_weights(frame: np.ndarray, boxes: list[tuple[float, float, float, float]], result: dict) -> np.ndarray:
+    """The picture with each bird's box and its weight; birds that were not weighed are drawn grey with a dash."""
+    out = frame.copy()
+    for (x, y, w, h), bird in zip(boxes, result["birds"]):
+        x, y, w, h = int(x), int(y), int(w), int(h)
+        weighed = bird["weight_g"] is not None
+        cv2.rectangle(out, (x, y), (x + w, y + h), (80, 220, 80) if weighed else (160, 160, 160), 2)
+        label = f"{bird['weight_g']:.0f} g" if weighed else "-"
+        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+        top = max(0, y - th - 8)
+        cv2.rectangle(out, (x, top), (x + tw + 6, top + th + 8), (0, 0, 0), -1)
+        cv2.putText(out, label, (x + 3, top + th + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    return out

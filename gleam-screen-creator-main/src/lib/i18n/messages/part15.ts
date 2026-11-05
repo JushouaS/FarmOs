@@ -48,9 +48,9 @@ export const part15: Messages = {
     "Natapos na ang iyong session. Mag-sign in ulit, saka subukan ang clip.",
     "Natapos na ang imong session. Mag-sign in pag-usab, unya sulayi ang clip.",
   ],
-  "Too many uploads or checks just now. Please wait a minute.": [
-    "Masyadong maraming upload o pagsusuri kanina lang. Maghintay muna ng isang minuto.",
-    "Daghan kaayo ang upload o pagsusi nga bag-o lang. Palihog hulat una og usa ka minuto.",
+  "Too many uploads or checks in a short time. Wait a few minutes, then try again.": [
+    "Masyadong maraming upload o pagsusuri sa maikling panahon. Maghintay ng ilang minuto, saka subukan ulit.",
+    "Daghan kaayo ang upload o pagsusi sa mubo nga panahon. Palihog hulat og pipila ka minuto, unya sulayi pag-usab.",
   ],
   "The clip is larger than the {n} MB limit.": [
     "Lampas sa {n} MB na limitasyon ang clip.",
