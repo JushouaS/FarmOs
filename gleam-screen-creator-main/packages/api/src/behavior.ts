@@ -24,7 +24,7 @@ export const INACTIVITY_RATIO = 0.6;
 export const MIN_BIRDS = 3;
 
 /** Huddling needs enough birds outside feeder zones to mean something. */
-export const MIN_EVALUABLE = 5;
+export const MIN_EVALUABLE = 3;
 
 /** Huddling risk bands. Above 0.6 the clump is dense enough to matter. */
 export const HUDDLE_MODERATE = 0.25;

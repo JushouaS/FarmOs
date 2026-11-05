@@ -46,13 +46,13 @@ MOTION_THRESHOLD = 0.004
 #: each other sit about one body-width apart.
 RADIUS_FACTOR = 1.3
 
-#: Neighbours needed before a bird counts as part of a clump. Four neighbours
-#: means five birds, which is a clump rather than two birds standing near
+#: Neighbours needed before a bird counts as part of a clump. Two neighbours
+#: means three birds, which is a clump rather than two birds standing near
 #: each other.
-MIN_NEIGHBOURS = 4
+MIN_NEIGHBOURS = 2
 
-#: Smallest group that is worth calling a huddle.
-MIN_CLUSTER = 5
+#: Smallest group that is worth calling a huddle: three or more birds.
+MIN_CLUSTER = 3
 
 
 @dataclass

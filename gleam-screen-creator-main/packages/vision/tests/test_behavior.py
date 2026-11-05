@@ -179,10 +179,17 @@ def test_scattered_birds_are_not_huddling():
     assert result.risk == 0.0
 
 
-def test_fewer_than_five_birds_is_never_a_cluster():
-    # Four birds packed shoulder to shoulder are just four birds.
-    result = bz.cluster_huddling(ring(4, 300, 300, radius=8))
+def test_fewer_than_three_birds_is_never_a_cluster():
+    # Two birds packed shoulder to shoulder are just two birds.
+    result = bz.cluster_huddling(ring(2, 300, 300, radius=8))
     assert sum(result.huddled) == 0
+
+
+def test_three_birds_packed_together_are_a_huddle():
+    # Three or more birds close together is a huddle (the thesis definition).
+    result = bz.cluster_huddling(ring(3, 300, 300, radius=12))
+    assert sum(result.huddled) == 3
+    assert len(result.clusters) == 1
 
 
 def test_radius_scales_with_bird_size():

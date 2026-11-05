@@ -621,11 +621,19 @@ bird means depends on it:
 
 - **Moving** (green): the bird is walking about.
 - **Resting** (violet): still **at night**. This is normal sleep and is never flagged.
-- **Inactive** (amber): by day, a bird that stayed within about a third of its own body size for the
-  test time while at least a fifth of the flock was moving. This is the bird to go and look at.
+- **Inactive** (amber): by day, a bird that did not move for the test time while at least a fifth of the
+  flock was moving. This is the bird to go and look at. "Did not move" follows Kim (2022): in a picture,
+  at least **95 %** of the pixels inside the bird's box are the same as in the previous picture, and that
+  holds in 90 % of the pictures of the test time (one jumpy picture is ignored). "The same" means a grey
+  value within 20 of 255 (`BEHAVIOR_PIXEL_TOLERANCE`; the paper gives no number, so check it on your own
+  footage); a change in the brightness of the whole picture is ignored. `BEHAVIOR_STILL_PIXELS` changes the 95 %.
+  A bird the detector misses for a moment keeps its number for about two gaps between pictures (never less
+  than 2 seconds), which is what lets the live monitor, which looks every 3 seconds, follow birds at all.
+  When only boxes are given and no pictures, the older rule is used: the bird stayed within about a third of
+  its own body size.
 - **Inactivity** (red): by day, when most of the flock is still too. No single bird stands out, so
   check the house (heat, cold, lighting, illness).
-- **Huddling** (blue): a group of 5 or more touching birds, much denser than the flock as a whole,
+- **Huddling** (blue): a group of 3 or more touching birds, much denser than the flock as a whole,
   that stays together for the test time. A uniformly crowded house is not a huddle. The summary gives
   the share of birds in huddles (FDI) and warns above 35%.
 
@@ -927,7 +935,7 @@ migrations.
 | `bun run test:node` | `packages\api` | A closed browser connection releases the Test video lock (runs on Node) |
 | `bun run test` | project root | The weight logic and the AI briefing's input |
 | `npm run test:gateway` | project root | The public-link gateway, against stand-in servers |
-| `python -m unittest test_behavior` | `cerebroil-stream` | The inactive and huddling rules |
+| `python -m unittest test_behavior test_pixels test_daily_log` | `cerebroil-stream` | The inactive and huddling rules, the pixel comparison, the daily files |
 
 The same checks run on GitHub for every push (`.github\workflows\ci.yml`). Before sending changes: `bunx tsc --noEmit` in the project
 root and in `packages\api`.

@@ -69,7 +69,12 @@ class Huddling(unittest.TestCase):
         self.assertEqual(groups[0]["birds"], 8)
 
     def test_fewer_birds_than_the_minimum_are_not_a_huddle(self):
-        self.assertEqual(behavior.snapshot_huddles(clump(4), AREA), [])
+        self.assertEqual(behavior.snapshot_huddles(clump(2), AREA), [])
+
+    def test_three_birds_touching_are_a_huddle(self):
+        # Three or more birds packed together is a huddle (the thesis definition).
+        groups = behavior.snapshot_huddles(clump(3), AREA)
+        self.assertEqual([g["birds"] for g in groups], [3])
 
     def test_a_uniformly_crowded_house_is_not_a_huddle(self):
         # 400 birds side by side across the whole picture: the group is no denser than the flock overall.
@@ -86,6 +91,62 @@ class Huddling(unittest.TestCase):
         self.assertIsNotNone(huddle)
         self.assertGreaterEqual(huddle["birds"], 5)
         self.assertGreater(huddle["fdi"], 0)
+
+
+class PixelRule(unittest.TestCase):
+    """Inactivity from pixels: a bird has not moved when 95 % of its pixels are unchanged (Kim 2022)."""
+
+    def watch(self, shares, gap=3.0, seconds=300, inactive=60):
+        """Five birds seen every `gap` seconds; the first has the given share of unchanged pixels, the other four are moving."""
+        engine = behavior.Engine(inactive_seconds=inactive, huddle_seconds=600, keep_all=False)
+        for k in range(int(seconds / gap)):
+            kept = [shares(k)] + [0.5] * 4
+            engine.update(k * gap, [box(60 + i * 180, 60) for i in range(5)], AREA, kept=kept)
+        return engine
+
+    def test_a_bird_with_95_percent_unchanged_pixels_is_inactive(self):
+        engine = self.watch(lambda k: 0.97)
+        self.assertEqual(len(engine.status(night=False)["inactive"]), 1)
+
+    def test_a_bird_with_less_than_95_percent_unchanged_pixels_is_not(self):
+        engine = self.watch(lambda k: 0.93)
+        self.assertEqual(engine.status(night=False)["inactive"], [])
+
+    def test_one_jumpy_picture_does_not_break_a_still_bird(self):
+        engine = self.watch(lambda k: 0.5 if k == 40 else 0.99)
+        self.assertEqual(len(engine.status(night=False)["inactive"]), 1)
+
+    def test_a_bird_that_moves_in_a_fifth_of_the_pictures_is_not_still(self):
+        engine = self.watch(lambda k: 0.5 if k % 5 == 0 else 0.99)
+        self.assertEqual(engine.status(night=False)["inactive"], [])
+
+    def test_a_still_bird_at_night_is_resting_not_inactive(self):
+        engine = self.watch(lambda k: 0.99)
+        self.assertEqual(engine.status(night=True)["inactive"], [])
+
+    def test_it_is_too_early_to_say_before_the_whole_window(self):
+        engine = self.watch(lambda k: 0.99, seconds=30)
+        self.assertEqual(engine.status(night=False)["inactive"], [])
+
+    def test_birds_are_followed_when_pictures_come_every_three_seconds(self):
+        # The detector is run every few seconds on a live feed: a bird must keep its number from one picture to the next.
+        engine = self.watch(lambda k: 0.99)
+        self.assertEqual(engine.next_id - 1, 5)
+
+    def test_a_bird_the_detector_misses_once_keeps_its_number(self):
+        engine = behavior.Engine(inactive_seconds=60, huddle_seconds=600, keep_all=False)
+        for k in range(20):
+            boxes = [box(60 + i * 180, 60) for i in range(5)]
+            if k == 10:
+                boxes = boxes[1:]      # one bird missed in one picture
+            engine.update(k * 3.0, boxes, AREA)
+        self.assertEqual(engine.next_id - 1, 5)
+
+    def test_without_pictures_the_position_rule_is_used(self):
+        engine = behavior.Engine(inactive_seconds=60, huddle_seconds=600, keep_all=False)
+        for k in range(100):
+            engine.update(k * 3.0, [box(60 + i * 180, 60) for i in range(4)] + [box(60 + (k % 2) * 35, 700)], AREA)
+        self.assertEqual(len(engine.status(night=False)["inactive"]), 4)   # the four that stayed put; the fifth keeps moving
 
 
 if __name__ == "__main__":

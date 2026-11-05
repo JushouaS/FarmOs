@@ -22,6 +22,7 @@ import cv2
 import numpy as np
 
 import behavior
+import pixels
 
 MODEL_PATH = Path(os.getenv("DETECTOR_MODEL_PATH", str(Path(__file__).parent / "models" / "detector.onnx")))
 MAX_SECONDS = float(os.getenv("DEMO_MAX_SECONDS", "30"))   # only the start of a long clip is analyzed
@@ -165,12 +166,16 @@ def detect_video(path: str, night: bool = False) -> dict[str, Any]:
             step = max(1, round(fps / SAMPLE_FPS))
             last = int(MAX_SECONDS * fps)
             frames: list[dict[str, Any]] = []
+            prev_gray = None   # the previous analysed picture, to see which birds moved
             i = 0
             while i < last and cap.grab():
                 if i % step == 0:
                     ok, frame = cap.retrieve()
                     if ok:
-                        frames.append({"t": round(i / fps, 3), "boxes": _infer(frame)})
+                        boxes = _infer(frame)
+                        gray = pixels.to_gray(frame)
+                        frames.append({"t": round(i / fps, 3), "boxes": boxes, "kept": pixels.unchanged_shares(prev_gray, gray, boxes)})
+                        prev_gray = gray
                 i += 1
         finally:
             cap.release()

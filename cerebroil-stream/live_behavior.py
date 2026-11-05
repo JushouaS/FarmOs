@@ -25,6 +25,7 @@ import numpy as np
 import behavior
 import daily_log
 import demo_detect
+import pixels
 
 SAMPLE_SECONDS = float(os.getenv("LIVE_SAMPLE_SECONDS", "3"))
 INACTIVE_SECONDS = float(os.getenv("LIVE_INACTIVE_SECONDS", "1800"))
@@ -43,6 +44,7 @@ class LiveBehavior:
         self._lock = threading.Lock()
         self._last_at: float | None = None
         self._error: str | None = None
+        self._prev_gray: np.ndarray | None = None   # the previous picture, to see which birds moved
         # A copy of every minute on this Pi's own disk, for when the laptop that stores the snapshots is off (daily_log.py).
         # Counts only, not night or day: the lighting hours are the API's to know, so they are applied when the file is read.
         self._log = daily_log.DailyCsv("behavior", ["birds", "still_birds", "huddled_birds", "flock_moving", "huddle_fdi", "error"])
@@ -100,8 +102,12 @@ class LiveBehavior:
         if boxes is None:            # the detector is busy with an uploaded video
             return False
         height, width = frame.shape[:2]
+        gray = pixels.to_gray(frame)
+        boxes4 = [b[:4] for b in boxes]
+        kept = pixels.unchanged_shares(self._prev_gray, gray, boxes4)
+        self._prev_gray = gray
         with self._lock:
-            self._engine.update(time.time(), [b[:4] for b in boxes], float(width * height))
+            self._engine.update(time.time(), boxes4, float(width * height), kept=kept)
             self._last_at = time.time()
         self._error = None
         return True

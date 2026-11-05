@@ -101,9 +101,9 @@ export const part15: Messages = {
     "Built-in na sample data ang numero sa pahinang ito. Hindi pa ito konektado sa live camera.",
     "Built-in nga sample data ang numero niini nga panid. Wala pa kini konektado sa live camera.",
   ],
-  "The share of the birds packed into a huddle: a group of 5 or more touching birds that stays together. A bird in a clump that forms and breaks up again does not count.": [
-    "Ang bahagi ng mga manok na nagsisiksikan sa isang pangkat: 5 o higit pang magkakadikit na manok na nananatiling magkasama. Hindi binibilang ang pagkumpol na nabubuo at agad ding naghihiwalay.",
-    "Ang bahin sa mga manok nga nagpundok sa usa ka grupo: 5 o labaw pa nga nagdikit nga manok nga magpabilin nga magkauban. Dili ihapon ang pagpundok nga mabuo ug dayon mabungkag.",
+  "The share of the birds packed into a huddle: a group of 3 or more touching birds that stays together. A bird in a clump that forms and breaks up again does not count.": [
+    "Ang bahagi ng mga manok na nagsisiksikan sa isang pangkat: 3 o higit pang magkakadikit na manok na nananatiling magkasama. Hindi binibilang ang pagkumpol na nabubuo at agad ding naghihiwalay.",
+    "Ang bahin sa mga manok nga nagpundok sa usa ka grupo: 3 o labaw pa nga nagdikit nga manok nga magpabilin nga magkauban. Dili ihapon ang pagpundok nga mabuo ug dayon mabungkag.",
   ],
   "8 of every 100 birds in a huddle means a risk of 8%. From 35% it raises a Huddling alert.": [
     "Kung 8 sa bawat 100 manok ang nagsisiksikan, 8% ang panganib. Mula 35%, magpapataas ito ng alerto sa Pagsisiksikan.",
