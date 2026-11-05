@@ -9,9 +9,9 @@ export const part15: Messages = {
     "Mag-upload ug Kinect depth recording aron susihon ang 3D weight estimation nga wala gigamit ang weighing station. Gisukod ang mga frame gamit ang samang depth-to-mass nga linya sa usa ka live nga pagbasa, ug walay gitipigan sa kasaysayan sa panon.",
   ],
   "Depth recording": ["Depth recording", "Depth recording"],
-  "A recording of the depth view, not the colour camera. Up to {n} MB and 10 minutes.": [
-    "Recording ng depth view, hindi ng colour camera. Hanggang {n} MB at 10 minuto.",
-    "Recording sa depth view, dili sa colour camera. Hangtod {n} MB ug 10 minuto.",
+  "A recording of the depth view, not the colour camera. Up to {n} MB and 1 hour.": [
+    "Recording ng depth view, hindi ng colour camera. Hanggang {n} MB at 1 oras.",
+    "Recording sa depth view, dili sa colour camera. Hangtod {n} MB ug 1 ka oras.",
   ],
   "Check weights": ["Suriin ang timbang", "Susiha ang gibug-aton"],
   "Weighing the clip…": ["Tinatimbang ang clip…", "Gitimbang ang clip…"],

@@ -81,8 +81,8 @@ const schema = z.object({
   // camera. The body is streamed to the vision service and never buffered here,
   // but the cap is enforced on this side too so an oversized upload is refused
   // before it has travelled anywhere.
-  VIDEO_MAX_MB: z.coerce.number().int().positive().default(200),
-  VIDEO_MAX_SECONDS: z.coerce.number().positive().default(600),
+  VIDEO_MAX_MB: z.coerce.number().int().positive().default(2560),
+  VIDEO_MAX_SECONDS: z.coerce.number().positive().default(3600),
   VIDEO_SWEEP_SAMPLES: z.coerce.number().int().positive().max(120).default(30),
 
   // How long the temporary password an administrator hands out keeps working if the person has not signed in.

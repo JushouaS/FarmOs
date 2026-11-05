@@ -37,7 +37,7 @@ const VISION_BASE = env.VIDEO_SERVICE_URL ?? env.VISION_SERVICE_URL;
 const MAX_BYTES = env.VIDEO_MAX_MB * 1024 * 1024;
 
 /** A 200 MB clip over farm wifi is not quick, but it does not get forever. */
-const UPLOAD_TIMEOUT_MS = 10 * 60_000;
+const UPLOAD_TIMEOUT_MS = 60 * 60_000; // a 2.5 GB clip over an ordinary connection takes a long time to arrive
 const READ_TIMEOUT_MS = 30_000;
 /** A sweep analyses up to 30 samples, each an open + detect + measure. */
 const SWEEP_TIMEOUT_MS = 3 * 60_000;

@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 #: Where clips live. Ephemeral on purpose: they are test artefacts, not data,
 #: and a container restart forgetting them is the correct outcome.
 STORE_DIR = os.getenv("VIDEO_STORE_DIR", "/tmp/cerebroil-video")
-MAX_MB = int(os.getenv("VIDEO_MAX_MB", "200"))
+MAX_MB = int(os.getenv("VIDEO_MAX_MB", "2560"))
 MAX_BYTES = MAX_MB * 1024 * 1024
-MAX_SECONDS = float(os.getenv("VIDEO_MAX_SECONDS", "600"))
+MAX_SECONDS = float(os.getenv("VIDEO_MAX_SECONDS", "3600"))
 TTL_SECONDS = float(os.getenv("VIDEO_TTL_MINUTES", "120")) * 60
 MAX_SAMPLES = int(os.getenv("VIDEO_SWEEP_SAMPLES", "30"))
 

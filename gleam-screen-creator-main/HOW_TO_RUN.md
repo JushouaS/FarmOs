@@ -534,6 +534,13 @@ package's `requirements.txt`). The **3D weight check** works as soon as it runs.
 detector, `packages\vision\models\chicken.onnx`, which is not in git; without it the service reports `model_unavailable`.
 Nothing from a test clip is saved to the flock's history.
 
+Limits for both Test clip boxes: **1 hour** (`VIDEO_MAX_SECONDS`, default 3600, set on the vision package and the API) and
+**2.5 GB** (`VIDEO_MAX_MB`, default 2560, on both; the two components show it as 2560 MB). The file is streamed from the browser
+through the API to the vision package and straight to disk, so it is not held in memory, but the clip is kept in this computer's
+temp folder for 2 hours (`VIDEO_TTL_MINUTES`): leave a few GB free. The API waits up to an hour for a slow upload to arrive.
+To change the size limit, change `VIDEO_MAX_MB` on the vision package and the API, and `MAX_UPLOAD_MB` in
+`VideoTestSection.tsx` and `WeightTestSection.tsx`.
+
 ### Getting the data without visiting the farm
 
 Three things work together. None of them needs the internet except the last step (the folder that syncs to your home).

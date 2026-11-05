@@ -38,7 +38,7 @@ import { T, tr } from "@/lib/i18n";
  */
 
 /** Mirrors the API's own default, so an oversized file is refused before it travels. */
-const MAX_UPLOAD_MB = 200;
+const MAX_UPLOAD_MB = 2560;
 
 const CONCLUSION_TEXT: Record<VideoConclusion, string> = {
   no_samples: T("No frames could be read from this clip."),
@@ -310,7 +310,7 @@ export function VideoTestSection() {
           <Hint>
             {uploading
               ? tr("Uploading and reading the clip… a long clip takes a while.")
-              : tr("MP4 (H.264) works best. Up to {n} MB and 10 minutes.", { n: MAX_UPLOAD_MB })}
+              : tr("MP4 (H.264) works best. Up to {n} MB and 1 hour.", { n: MAX_UPLOAD_MB })}
           </Hint>
         </div>
 

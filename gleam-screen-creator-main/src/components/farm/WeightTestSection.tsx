@@ -31,7 +31,7 @@ import { tr } from "@/lib/i18n";
  */
 
 /** Mirrors the API's own default, so an oversized file is refused before it travels. */
-const MAX_UPLOAD_MB = 200;
+const MAX_UPLOAD_MB = 2560;
 
 /** What to tell the operator when a call is refused. */
 function reason(err: unknown): string {
@@ -181,7 +181,7 @@ export function WeightTestSection() {
           <Hint>
             {uploading
               ? tr("Uploading and reading the clip… a long clip takes a while.")
-              : tr("A recording of the depth view, not the colour camera. Up to {n} MB and 10 minutes.", {
+              : tr("A recording of the depth view, not the colour camera. Up to {n} MB and 1 hour.", {
                   n: MAX_UPLOAD_MB,
                 })}
           </Hint>
