@@ -15,6 +15,7 @@
     "test": "bun test --timeout 30000",
     "test:node": "tsx --test test/demo-lock.node-test.ts test/camera-routes.node-test.ts test/kinect-relay.node-test.ts",
     "db:migrate": "tsx scripts/migrate.ts",
+    "export:daily": "tsx scripts/export-daily.ts",
     "db:seed": "tsx scripts/migrate.ts --up-to 0009_seed_from_dataset",
     "db:local:init": "tsx scripts/local-db.ts init",
     "db:local:start": "tsx scripts/local-db.ts start",

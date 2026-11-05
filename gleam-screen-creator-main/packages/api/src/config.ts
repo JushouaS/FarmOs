@@ -131,6 +131,9 @@ const schema = z.object({
   SENSOR_SOURCE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   SENSOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
   SENSOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(60)),
+  // Every PI_BACKFILL_MINUTES (and shortly after start-up) the API reads the daily sensor files the Pi keeps and stores the
+  // readings that fall in a gap, e.g. while this computer was off (pi-backfill.ts). 0 turns it off.
+  PI_BACKFILL_MINUTES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).default(60)),
   // A "Sensor Offline" alert is raised when a sensor that has worked has sent nothing for this many minutes.
   SENSOR_OFFLINE_MINUTES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(2).default(10)),
 

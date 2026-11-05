@@ -515,6 +515,68 @@ curl.exe -H "X-Vision-Token: <token>" -o sensors.csv http://behavior.local:5000/
 To put this on a Pi that is already set up, paste `cerebroil-stream\PASTE-ON-PI-4.txt` into the Raspberry Pi Connect
 terminal once the new files are on GitHub. It restarts the two services and prints the first rows.
 
+### Getting the data without visiting the farm
+
+Three things work together. None of them needs the internet except the last step (the folder that syncs to your home).
+
+**1. Gaps are filled from the Pi automatically.** While this computer is off or cannot reach the Pi, no temperature or
+humidity is stored. About 45 seconds after the API starts, and then every hour (`PI_BACKFILL_MINUTES` in `packages\api\.env`,
+`0` turns it off), the API reads the Pi's daily sensor files (the section above) and stores the readings that fall in a gap.
+A reading that already has a stored one within 90 seconds is skipped, so running it again adds nothing. Behaviour files are not
+read back into the database: they hold counts without the day or night rule, so they stay as CSV in the daily export.
+
+**2. A daily export writes one folder per day.** From `packages\api`:
+
+```powershell
+npm run export:daily
+```
+
+That writes yesterday (the farm's calendar day) to `packages\api\exports\<date>\`. Options: `-- --date 2026-11-05` for one day,
+`-- --days 3` for the last three finished days (use this when the computer may have been off), `-- --out D:\somewhere`. Each folder has
+
+| File | What it holds |
+|---|---|
+| `sensors.csv` | every stored temperature and humidity reading, in the farm's local time and in UTC, with its status |
+| `behavior.csv` | the behaviour snapshots (bird, inactive and huddled counts, labels, night) |
+| `weights-typed.csv` | the weights typed in that day; `weights-by-day.csv` is the whole growth curve of the active flock |
+| `alerts.csv` | the alerts raised that day |
+| `pi\` | the Pi's own files for the day (`sensors-...csv`, `behavior-...csv`), downloaded from it when it answers |
+| `health.txt`, `health.json` | how whole the day is: readings against the number expected, every silence of 5 minutes or more, alerts, and whether the Pi's files were fetched |
+
+Run it again for the same day and the files are written over, so a day exported while the laptop was off is complete after the
+gap-fill has run. It needs the database running. Nothing is sent anywhere by this command.
+
+**3. Getting the folder home.** Install Google Drive for desktop (or OneDrive) on the farm computer and sign in yourself, then put
+
+```
+EXPORT_DIR=C:\Users\<you>\My Drive\farm-exports
+```
+
+in `packages\api\.env`. The app never sees the sign-in; the sync program uploads the folder. To run the export every night, make
+one scheduled task (this is a standing setting on the computer, so it is yours to create, not something the app does):
+
+```powershell
+schtasks /Create /SC DAILY /ST 00:10 /TN "FarmOS daily export" /TR "cmd /c cd /d <this folder>\packages\api && npm run export:daily -- --days 3"
+```
+
+It only runs while the computer is on and the database is running.
+
+#### Turning on the behaviour file on the Pi
+
+The Pi writes `behavior-YYYY-MM-DD.csv` only while the live behaviour monitor runs. That needs the trained detector model on the Pi
+(`~/cerebroil-stream/models/detector.onnx`, not in git) and one line in the Pi's `.env`. In the Raspberry Pi Connect terminal:
+
+```bash
+ls -l ~/cerebroil-stream/models/
+```
+
+```bash
+echo "LIVE_BEHAVIOR=1" >> ~/cerebroil-stream/.env && sudo systemctl restart cerebroil-stream
+```
+
+It keeps the Pi busy (one detector run every 3 seconds). If `/behavior/status` then says `model_not_installed`, copy `detector.onnx` into that folder.
+Undo it by deleting that line from `.env` and restarting the service.
+
 ### Test video: the trained model on an uploaded clip (optional)
 
 The small film button in the **Live Camera** header opens "Test video". You pick a clip from the

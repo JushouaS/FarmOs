@@ -34,6 +34,7 @@ import { registerVisionZoneRoutes } from "./routes/vision-zones.js";
 import { registerVisionVideoRoutes } from "./routes/vision-video.js";
 import { startBehaviorSampler } from "./sampler.js";
 import { attachKinectRelay } from "./kinect-relay.js";
+import { startPiBackfill } from "./pi-backfill.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 
 /** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
@@ -129,6 +130,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   startBehaviorMonitor(app);
   startSensorMonitor(app);
+  startPiBackfill(app);
   startHousekeeping(app);
 
   // Behaviour sampling. Deliberately here rather than in the vision service:
