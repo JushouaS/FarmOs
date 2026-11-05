@@ -4,7 +4,6 @@ import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
-import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
 import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { freshReading, silentFor } from "@/lib/farm/pen-sensors";
@@ -267,9 +266,6 @@ export function VisualsDashboardPage() {
                 <span className="hidden sm:inline">{tr("Kinect 3D")}</span>
               </button>
             </div>
-
-            {/* Try the trained detector on an uploaded video */}
-            <VideoDetectDialog lighting={lighting} standardG={standardG || undefined} />
 
             {/* Fullscreen Trigger Button */}
             <button

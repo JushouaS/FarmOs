@@ -579,6 +579,12 @@ Undo it by deleting that line from `.env` and restarting the service.
 
 ### Test video: the trained model on an uploaded clip (optional)
 
+> **The Test video button was removed from the Live Camera page.** The page component
+> (`src/components/farm/VideoDetectDialog.tsx`), the API routes (`/visual/demo-detect`, `/visual/demo-convert`) and the
+> Pi's `/demo/detect` are all still in the code, so the button can be put back by adding
+> `<VideoDetectDialog lighting={lighting} standardG={standardG || undefined} />` to the header in `src/routes/visuals.tsx`.
+> The rest of this section describes it as it was.
+
 The small film button in the **Live Camera** header opens "Test video". You pick a clip from the
 device, the camera service runs the trained detector over it, and the clip plays back with the boxes
 drawn over it. Nothing is saved and the live camera is not touched.
