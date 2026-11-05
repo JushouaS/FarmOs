@@ -627,8 +627,14 @@ bird means depends on it:
   holds in 90 % of the pictures of the test time (one jumpy picture is ignored). "The same" means a grey
   value within 20 of 255 (`BEHAVIOR_PIXEL_TOLERANCE`; the paper gives no number, so check it on your own
   footage); a change in the brightness of the whole picture is ignored. `BEHAVIOR_STILL_PIXELS` changes the 95 %.
-  A bird the detector misses for a moment keeps its number for about two gaps between pictures (never less
-  than 2 seconds), which is what lets the live monitor, which looks every 3 seconds, follow birds at all.
+  **Following the birds** uses ByteTrack (Zhang et al., 2022; `cerebroil-stream/bytetrack.py`): a Kalman
+  filter predicts where each bird should be, confident detections (score 0.5 or more, `BEHAVIOR_TRACK_HIGH`)
+  are matched to birds first by overlap, then the weaker ones, so a bird whose score dips keeps its number. A
+  bird the detector misses is kept for about two gaps between pictures (never less than 2 seconds) and gets its
+  number back if it returns. Two differences from the paper's setting, because pictures come every few seconds,
+  not 30 a second: a last pass pairs birds by distance (a walking bird no longer overlaps its predicted box), and
+  every unmatched detection starts a bird (the detector already drops anything below 0.25). Weak boxes below
+  0.25 never reach the tracker, so ByteTrack's low band is 0.25 to 0.5, not 0.1 to 0.5.
   When only boxes are given and no pictures, the older rule is used: the bird stayed within about a third of
   its own body size.
 - **Inactivity** (red): by day, when most of the flock is still too. No single bird stands out, so
@@ -935,7 +941,7 @@ migrations.
 | `bun run test:node` | `packages\api` | A closed browser connection releases the Test video lock (runs on Node) |
 | `bun run test` | project root | The weight logic and the AI briefing's input |
 | `npm run test:gateway` | project root | The public-link gateway, against stand-in servers |
-| `python -m unittest test_behavior test_pixels test_daily_log` | `cerebroil-stream` | The inactive and huddling rules, the pixel comparison, the daily files |
+| `python -m unittest test_behavior test_bytetrack test_pixels test_daily_log` | `cerebroil-stream` | The inactive and huddling rules, the pixel comparison, the daily files |
 
 The same checks run on GitHub for every push (`.github\workflows\ci.yml`). Before sending changes: `bunx tsc --noEmit` in the project
 root and in `packages\api`.

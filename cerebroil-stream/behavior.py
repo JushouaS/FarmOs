@@ -4,6 +4,11 @@ behavior.py: tells which broilers are inactive or huddling, from detection boxes
 Input is what the detector found in a series of frames. Each bird is followed
 from frame to frame, then two checks run on the followed birds:
 
+Following the birds
+  Each bird is followed from picture to picture with ByteTrack (bytetrack.py): a Kalman filter predicts where it
+  should be, confident detections are matched first, then weak ones, and a bird that is missed for a while keeps its
+  number when it comes back.
+
 Inactivity
   A bird is "still" over the last INACTIVE_SECONDS when it did not move in nearly every
   picture. With pictures supplied (update(..., kept=...), what pixels.py measures), a bird
@@ -36,6 +41,8 @@ import math
 import os
 from statistics import median
 from typing import Any
+
+import bytetrack
 
 INACTIVE_SECONDS = float(os.getenv("BEHAVIOR_INACTIVE_SECONDS", "10"))
 HUDDLE_SECONDS = float(os.getenv("BEHAVIOR_HUDDLE_SECONDS", "6"))
@@ -72,6 +79,8 @@ class _Track:
         self.id = tid
         self.box = box                       # centre x, centre y, w, h
         self.first_t = self.last_t = t
+        self.kf = bytetrack.BoxKalman(*box)  # where the bird should be in the next picture (ByteTrack)
+        self.kf_t = t
         self.hist: list[tuple[float, float, float]] = [(t, box[0], box[1])]
         self.sizes: list[float] = [math.sqrt(box[2] * box[3])]
         self.inactive_from: float | None = None
@@ -84,6 +93,7 @@ class _Track:
         return median(self.sizes[-20:])
 
     def update(self, box: tuple[float, float, float, float], t: float) -> None:
+        self.kf.update(*box)
         self.box = box
         self.last_t = t
         self.hist.append((t, box[0], box[1]))
@@ -242,6 +252,7 @@ class Engine:
 
         kept: per box, the share (0 to 1) of its pixels that are the same as in the previous picture (pixels.py), or
         None for a box that could not be compared (the first picture). Leave it out to judge stillness by position."""
+        previous_t = self._prev_t
         if self._prev_t is not None and t > self._prev_t:
             self._gaps.append(t - self._prev_t)
             self._gaps = self._gaps[-50:]
@@ -251,7 +262,8 @@ class Engine:
         dets = [(b[0] + b[2] / 2, b[1] + b[3] / 2, b[2], b[3]) for b in boxes]
         # With pictures every few seconds, a bird the detector misses once must keep its number: allow a couple of gaps.
         alive = [trk for trk in self.tracks if t - trk.last_t <= max(MAX_MISSED_SECONDS, MISSED_PICTURES / fps)]
-        matched, fresh = _match(alive, dets)
+        scores = [b[4] if len(b) > 4 else 1.0 for b in boxes]
+        matched, fresh = bytetrack.match(alive, dets, scores, t, 1.0 / fps, previous_t, MATCH_GATE)
         ids: dict[int, _Track] = {}
         for di, ti in matched.items():
             alive[ti].update(dets[di], t)
