@@ -24,6 +24,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# The trained detector (an .onnx export) is not source: copy it into place, do not commit it
+packages/vision/models/*.onnx
+
 # Local dev artifacts (verification screenshots, stray npm lockfile — repo uses bun)
 /screenshot-*.png
 /verify-*.png

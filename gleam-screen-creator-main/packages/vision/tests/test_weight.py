@@ -167,3 +167,83 @@ def test_every_sample_of_an_even_depth_clip_agrees_with_the_live_line(clip):
     # And the samples must agree with each other: a spread wider than that is
     # an encoder effect large enough to hide a different formula.
     assert summary["max_g"] - summary["min_g"] <= 19.0
+
+
+# ---------------------------------------------------------------------------
+# Is it a depth recording at all?
+# ---------------------------------------------------------------------------
+
+def colormapped(code, size=(120, 80)):
+    """A depth frame drawn with a colormap: a spread of depths, a little noise."""
+    import cv2
+
+    rng = np.random.default_rng(0)
+    ramp = np.tile(np.linspace(20, 235, size[0], dtype=np.float32), (size[1], 1))
+    depth = np.clip(ramp + rng.normal(0, 3, ramp.shape), 0, 255).astype(np.uint8)
+    return cv2.applyColorMap(depth, code)
+
+
+def colour_footage(size=(120, 80)):
+    """Ordinary colour footage of the pen: sawdust, a red mat, green netting, pale birds (colours measured on the real footage)."""
+    frame = np.zeros((size[1], size[0], 3), np.uint8)
+    frame[:, :40] = (112, 150, 182)        # sawdust (BGR)
+    frame[:, 40:80] = (70, 70, 190)        # red mat
+    frame[:, 80:] = (80, 140, 60)          # green netting
+    frame[30:50, 20:100] = (205, 215, 225)  # pale birds
+    return frame
+
+
+def test_grey_and_colormapped_depth_frames_look_like_depth():
+    import cv2
+
+    assert weight.looks_like_depth(np.full((80, 120), 100, np.uint8))
+    assert weight.looks_like_depth(flat_frame(100))
+    assert weight.looks_like_depth(colormapped(cv2.COLORMAP_TURBO))
+    assert weight.looks_like_depth(colormapped(cv2.COLORMAP_JET))
+
+
+def test_ordinary_colour_footage_does_not_look_like_depth():
+    assert not weight.looks_like_depth(colour_footage())
+
+
+def test_no_frame_does_not_look_like_depth():
+    assert not weight.looks_like_depth(None)
+
+
+def _post_weights(clip_id):
+    import app as service
+
+    client = service.app.test_client()
+    return client.post(f"/video/{clip_id}/weights?count=6", headers={"X-Vision-Token": service.SERVICE_TOKEN})
+
+
+def _clip_of(tmp_path, monkeypatch, frame):
+    import cv2
+
+    monkeypatch.setattr(video, "STORE_DIR", str(tmp_path))
+    video._clips.clear()
+    path = tmp_path / "c.avi"
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10, (frame.shape[1], frame.shape[0]))
+    for _ in range(40):
+        writer.write(frame)
+    writer.release()
+    with open(path, "rb") as fh:
+        return video.save(fh, path.name)
+
+
+def test_a_colour_video_is_refused_instead_of_being_weighed(tmp_path, monkeypatch):
+    clip = _clip_of(tmp_path, monkeypatch, colour_footage())
+    response = _post_weights(clip.id)
+    assert response.status_code == 422
+    assert response.get_json()["error"] == "not_depth_recording"
+    video._clips.clear()
+
+
+def test_a_colormapped_depth_video_is_weighed(tmp_path, monkeypatch):
+    import cv2
+
+    clip = _clip_of(tmp_path, monkeypatch, colormapped(cv2.COLORMAP_TURBO))
+    response = _post_weights(clip.id)
+    assert response.status_code == 200
+    assert response.get_json()["summary"]["samples"] == 6
+    video._clips.clear()

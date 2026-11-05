@@ -41,6 +41,39 @@ DEFAULT_SAMPLES = 12
 MAX_SAMPLES = 60
 
 
+#: A depth recording is either grey (the three channels agree) or the depth colormap the station streams (TURBO; JET
+#: too). Ordinary colour footage is neither, and without this check the weight line turns *any* video into grams.
+#: Measured on the project's own footage: ordinary colour frames are at least 77 grey levels (of 255) from the nearest colour
+#: of either colormap, colormapped depth is within 10 even after video compression, and a grey frame's channels differ by 0 to 2
+#: while a colour frame's differ by 17 or more (median over the sampled pixels). The limits sit well between.
+GRAY_SPREAD = 6.0
+COLORMAP_RESIDUAL = 40.0
+_COLORMAPS = {
+    name: cv2.applyColorMap(np.arange(256, dtype=np.uint8).reshape(256, 1), code).reshape(256, 3).astype(np.float32)
+    for name, code in (("TURBO", cv2.COLORMAP_TURBO), ("JET", cv2.COLORMAP_JET))
+}
+
+
+def looks_like_depth(frame: np.ndarray | None) -> bool:
+    """True when the frame is grey or drawn with a depth colormap, False for ordinary colour footage."""
+    if frame is None:
+        return False
+    arr = np.asarray(frame)
+    if arr.size == 0:
+        return False
+    if arr.ndim == 2 or arr.shape[2] == 1:
+        return True
+    pixels = arr[..., :3].reshape(-1, 3)
+    pixels = pixels[:: max(1, len(pixels) // 4000)].astype(np.float32)
+    if float(np.median(pixels.max(axis=1) - pixels.min(axis=1))) <= GRAY_SPREAD:
+        return True
+    for lut in _COLORMAPS.values():
+        nearest = np.sqrt(((pixels[:, None, :] - lut[None, :, :]) ** 2).sum(axis=2)).min(axis=1)
+        if float(np.median(nearest)) <= COLORMAP_RESIDUAL:
+            return True
+    return False
+
+
 def estimate_weight_from_depth(frame: np.ndarray | None) -> dict | None:
     """
     One depth-colormap frame → one mass estimate, the way the live path does it.

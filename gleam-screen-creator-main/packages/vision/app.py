@@ -533,15 +533,27 @@ def video_weights(clip_id: str):
 
     per_frame = []
     truncated = False
+    decoded = depth_like = 0
     for t in times:
         if time.monotonic() > deadline:
             truncated = True
             break
-        estimate = weight.estimate_weight_from_depth(clip_store.frame_at(clip, t))
+        frame = clip_store.frame_at(clip, t)
+        estimate = weight.estimate_weight_from_depth(frame)
         if estimate is None:
             per_frame.append({"t": t, "mass_g": None, "confidence": None, "warnings": ["video_frame_unavailable"]})
             continue
+        decoded += 1
+        depth_like += 1 if weight.looks_like_depth(frame) else 0
         per_frame.append({"t": t, **estimate})
+
+    # The weight line prices any picture as grams, so a colour video of the pen would come back as a confident-looking number.
+    # Refuse a clip whose frames are not a depth recording rather than answer it.
+    if decoded and depth_like < decoded / 2:
+        return jsonify({
+            "error": "not_depth_recording",
+            "detail": "This looks like an ordinary colour video, not a Kinect depth recording, so it cannot be weighed.",
+        }), 422
 
     logger.info(
         "Weighed clip %s: %d of %d samples%s",

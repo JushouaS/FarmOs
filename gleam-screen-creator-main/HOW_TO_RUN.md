@@ -531,7 +531,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-vision.ps1
 
 It needs Python with `flask`, `opencv-python-headless`, `numpy`, `psycopg2-binary`, `python-dotenv` and `onnxruntime` (the
 package's `requirements.txt`). The **3D weight check** works as soon as it runs. The **behaviour check** also needs the trained
-detector, `packages\vision\models\chicken.onnx`, which is not in git; without it the service reports `model_unavailable`.
+detector, `packages\vision\models\chicken.onnx`, which is not in git; without it the service reports `model_unavailable`. The trained model is on the Raspberry Pi, so copy it
+from there (it asks for the Pi's password):
+
+```powershell
+scp admin@behavior.local:~/cerebroil-stream/models/detector.onnx packages\vision\models\chicken.onnx
+```
+
+Restart `scripts\run-vision.ps1` afterwards. The file is a one-class YOLO detector (class name `item`), which the service reads
+with its default settings. With it, a 1-hour clip is checked in seconds: `/health` then says `"model_loaded":true`.
 Nothing from a test clip is saved to the flock's history.
 
 Limits for both Test clip boxes: **1 hour** (`VIDEO_MAX_SECONDS`, default 3600, set on the vision package and the API) and

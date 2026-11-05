@@ -56,6 +56,10 @@ export const part15: Messages = {
     "Lampas sa {n} MB na limitasyon ang clip.",
     "Labaw sa {n} MB nga limitasyon ang clip.",
   ],
+  "This looks like an ordinary colour video, not a Kinect depth recording, so it cannot be weighed.": [
+    "Mukhang karaniwang colour na video ito, hindi recording ng depth ng Kinect, kaya hindi ito matitimbang.",
+    "Murag kasagarang colour nga video kini, dili depth recording sa Kinect, busa dili kini mapabug-atan.",
+  ],
   "The clip is longer than the limit. Cut it down and try again.": [
     "Mas mahaba ang clip kaysa limitasyon. Pupulin ito at subukan ulit.",
     "Mas taas ang clip kay sa limitasyon. Pupula kini ug sulayi pag-usab.",

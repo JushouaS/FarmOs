@@ -43,6 +43,8 @@ function reason(err: unknown): string {
         return tr("The clip is larger than the {n} MB limit.", { n: MAX_UPLOAD_MB });
       case "too_long":
         return tr("The clip is longer than the limit. Cut it down and try again.");
+      case "not_depth_recording":
+        return tr("This looks like an ordinary colour video, not a Kinect depth recording, so it cannot be weighed.");
       case "unsupported_type":
       case "unreadable_clip":
         return tr("That file could not be read as a video. Export it as H.264 MP4 and try again.");
