@@ -6,10 +6,27 @@ the commands are the same, except write `cd "path"` instead of `cd /d "path"`.
 
 ---
 
+## 0. What you can run, and what you need first
+
+Read this before anything else, so you know which parts you will be able to turn on.
+
+| Level | What works | What you need |
+|---|---|---|
+| **A. Website only (no hardware)** | Sign-in, Dashboard, Settings, Accounts, Alerts, typing weights in Flock Tracking, Analytics from what you type | A Windows computer with the tools in 3.1. Nothing else. Live Camera shows "not reachable" and the sensor card says "No reading", which is expected |
+| **B. Plus the camera and sensor** | Live video, the DHT22 temperature and humidity, Sensor Offline alerts, the daily CSV files | The Dahua camera and its password, a Raspberry Pi with the DHT22 wired to it (section 7), both on a network your computer can reach |
+| **C. Plus bird detection and behaviour** | Bird count on Analyze data, Inactive Bird / Huddling alerts, Settings > Test clip | The trained model files (section 3.5). **They are not in git** |
+| **D. Plus the Kinect** | 3D depth, chicken outlines, per-bird weights from depth | A Kinect v2 with its USB 3.0 adapter, the Kinect SDK 2.0, and the Kinect model files (section 3.5) |
+
+For level A you need four windows (database, API, camera service, website); the camera service can even be left off.
+Each later level adds at most one more window: the vision package (Test clip, port 5001), the Kinect bridge (8181) and the
+chicken finder (8182). So the full system is **up to seven windows**.
+
+---
+
 ## 1. The big picture
 
-Cerebroil is four programs that run at the same time and talk to each other.
-You open **one window for each**. Nothing works properly until all four are running.
+The core of Cerebroil is four programs that run at the same time and talk to each other.
+You open **one window for each**. The optional ones (vision package, Kinect bridge, chicken finder) are described in section 7.
 
 ```
                     your browser  (http://localhost:8080)
@@ -72,20 +89,38 @@ drive-download-20260831T212213Z-1-001\
       HOW_TO_RUN.md                          <-- this file
 ```
 
-Full paths used in this guide (copy them exactly, they are long):
+**The paths in this guide are the ones on the original laptop** (user `Jush`, a folder downloaded from Google Drive).
+On your computer the start is different. Wherever a command says
+`C:\Users\Jush\Downloads\drive-download-20260831T212213Z-1-001\gleam-screen-creator-main`, put the folder you got the code
+into (section 3.0), for example `C:\cerebroil`. The four folders, relative to that one:
 
 ```
-PARENT   = C:\Users\Jush\Downloads\drive-download-20260831T212213Z-1-001\gleam-screen-creator-main
-PROJECT  = C:\Users\Jush\Downloads\drive-download-20260831T212213Z-1-001\gleam-screen-creator-main\gleam-screen-creator-main
-API      = C:\Users\Jush\Downloads\drive-download-20260831T212213Z-1-001\gleam-screen-creator-main\gleam-screen-creator-main\packages\api
-CAMERA   = C:\Users\Jush\Downloads\drive-download-20260831T212213Z-1-001\gleam-screen-creator-main\cerebroil-stream
+PARENT   = <your folder>
+PROJECT  = <your folder>\gleam-screen-creator-main
+API      = <your folder>\gleam-screen-creator-main\packages\api
+CAMERA   = <your folder>\cerebroil-stream
 ```
+
+Avoid a folder name with spaces or one inside OneDrive: both make some of the tools misbehave.
 
 ---
 
 ## 3. One-time setup (do this once on a new computer)
 
 You only need this section the first time, or after a fresh download.
+
+### 3.0 Get the code
+
+Install Git for Windows (git-scm.com), then in Command Prompt:
+
+```
+cd /d C:\
+git clone https://github.com/JushouaS/FarmOs.git cerebroil
+```
+
+That makes `C:\cerebroil`, the PARENT folder of section 2. If GitHub says the repository is not found, it is private and
+the owner has to add your GitHub account first. A copy of the folder (a zip, a USB drive) works the same, as long as it
+keeps the layout of section 2.
 
 ### 3.1 Install the tools
 
@@ -98,6 +133,10 @@ You only need this section the first time, or after a fresh download.
 
 The local database script finds PostgreSQL there by itself. You do **not** need Docker (the optional
 Docker stack is described in section 9) and you do **not** need to know the PostgreSQL superuser password.
+When the PostgreSQL installer asks, the "Stack Builder" extras are not needed.
+
+**npm or bun?** Install the packages with `bun install` (3.2). After that, `npm run <name>` and `bun run <name>` do the
+same thing for every command in this guide; the guide uses `npm run`.
 
 ### 3.2 Install the packages
 
@@ -121,11 +160,17 @@ Each program reads secrets and addresses from a file called `.env`.
 These files are **never committed to git**. Each folder has a `.env.example` showing the names.
 Copy it to `.env` and fill in the values:
 
+From the PARENT folder:
+
 ```
-copy "...\packages\api\.env.example"      "...\packages\api\.env"
-copy "...\cerebroil-stream\.env.example"  "...\cerebroil-stream\.env"
-copy "...\gleam-screen-creator-main\.env.example"  "...\gleam-screen-creator-main\.env"
+cd /d C:\cerebroil
+copy gleam-screen-creator-main\packages\api\.env.example  gleam-screen-creator-main\packages\api\.env
+copy cerebroil-stream\.env.example                          cerebroil-stream\.env
+copy gleam-screen-creator-main\.env.example                 gleam-screen-creator-main\.env
 ```
+
+Then open each `.env` in Notepad and change the values below. Every other line in the files can stay as it is: they
+are either the default or switched off with a `#`. The comments in each `.env.example` explain every setting.
 
 What goes in each one (names only, keep the values private):
 
@@ -133,7 +178,7 @@ What goes in each one (names only, keep the values private):
 
 | Name | Meaning |
 |------|---------|
-| `DATABASE_URL` | Where the database is, for example `postgres://user:password@127.0.0.1:5434/dbname`. The local database script reads the port, user, password and name from here. |
+| `DATABASE_URL` | Where the database is. The example line is already right for the local database: `postgres://cerebroil:CHOOSE-A-PASSWORD@127.0.0.1:5434/farmos`. Change only `CHOOSE-A-PASSWORD` to a password you make up (letters and digits). `db:local:init` creates the database with exactly this user, password, port and name, so there is nothing to set up in PostgreSQL itself. |
 | `JWT_SECRET` | A long random secret used to sign logins. At least 32 characters. |
 | `API_HOST`, `API_PORT` | Use `0.0.0.0` and `4000` if you want phones on the same Wi-Fi to reach it. |
 | `API_CORS_ORIGINS` | Websites allowed to call the API, for example `http://localhost:8080`. |
@@ -151,8 +196,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | Name | Meaning |
 |------|---------|
 | `VISION_SERVICE_TOKEN` | Same value as in the API's `.env`. If it is missing, every camera request fails. |
-| `DAHUA_RTSP_URL` | The camera's address: `rtsp://USER:PASSWORD@CAMERA-IP:554/...`. If the password has symbols such as `@` or `#`, they must be URL-encoded (`@` becomes `%40`). |
+| `DAHUA_RTSP_URL` | The camera's address: `rtsp://USER:PASSWORD@CAMERA-IP:554/...`. If the password has symbols such as `@` or `#`, they must be URL-encoded (`@` becomes `%40`). No camera yet (level A of section 0)? Leave the example line: the service just keeps retrying. |
 | `KINECT_SOURCE` | `simulated` (default, a fake depth picture), a device number like `0`, or a URL. |
+| `LIVE_BEHAVIOR` | Remove the `#` and set `1` only when the model file of section 3.5 is in place. |
 
 **Project root `.env`**
 
@@ -160,7 +206,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 |------|---------|
 | `GROQ_API_KEY` | Needed only for the **Insights** page (the AI briefing). Get a free key at console.groq.com. Without it the Insights AI cards show a "key not configured" message and everything else still works. |
 
-**Other settings** (all have sensible defaults; `.env.example` and `packages\api\src\config.ts` list every name)
+**Other settings** (all have sensible defaults; each `.env.example` lists them with a comment, and `packages\api\src\config.ts` is the full list for the API)
 
 | Name | Where | Meaning |
 |------|-------|---------|
@@ -190,9 +236,42 @@ npm run db:migrate
 
 You should see lines like `✓ 0016_cycle_day_setting.sql` and `Migrations applied: N.`
 
-Then, once: make the administrator (see "Open it" in section 4) and remove the demo rows that come with a new database
-(see "Setting up your own farm" near the end). In short, a new computer needs: `db:local:init`, `db:migrate`,
-`scripts\seed-admin.ts`, `scripts\seed-farm.ts`.
+Then, once, in that second window: make the administrator and remove the demo rows that come with a new database:
+
+```
+.\node_modules\.bin\tsx.exe scripts\seed-admin.ts
+npx tsx scripts\seed-farm.ts --name "Your Farm Name" --birds 20
+npx tsx scripts\seed-farm.ts --name "Your Farm Name" --birds 20 --yes
+```
+
+`seed-admin.ts` prints the administrator's password **once**: save it straight away (more in "Open it", section 4).
+`seed-farm.ts` first only shows what it would change; the run with `--yes` does it ("Setting up your own farm", near
+the end). In short, a new computer needs: `db:local:init`, `db:migrate`, `scripts\seed-admin.ts`, `scripts\seed-farm.ts`.
+
+### 3.5 The model files (not in git)
+
+The trained models are too big for git and are kept out of it on purpose. Without them, levels A and B of section 0
+work and the rest says the model is not installed. Each file has to be copied in by hand:
+
+| File | Put it at | Used for |
+|---|---|---|
+| `detector.onnx` (the trained YOLO bird detector) | `cerebroil-stream\models\detector.onnx` on the machine that runs the camera service (the Pi) | Bird count on Analyze data, live behaviour alerts |
+| the same file, renamed | `gleam-screen-creator-main\packages\vision\models\chicken.onnx` | Settings > Test clip (Behaviour and Weight) |
+| `kinect_chicken_seg.pt` | `cerebroil-stream\models\` on the Kinect computer | Chicken outlines on the Kinect picture |
+| `weight_model_size_v1.json` | `cerebroil-stream\models\` on the Kinect computer | Per-bird weights from the Kinect depth |
+
+Where to get them, in order:
+
+1. **The backup.** `scripts\backup-db.ps1` zips the laptop's `cerebroil-stream\models` folder once a day as
+   `models-<date>.zip` in `cerebroil-backups` in the owner's user folder (section "Backups and restore"). Ask the owner
+   for the newest zip and unpack it into `cerebroil-stream\models`.
+2. **The Raspberry Pi**, if you can reach it: `scp admin@behavior.local:~/cerebroil-stream/models/detector.onnx .`
+   (`admin` and `behavior.local` are the original Pi's user and name; use yours).
+3. **Train them again** from the labelled data (`cerebroil-stream\train_weight_model.py` for the weight model; the
+   detector and the outline model were trained outside this repository).
+
+After copying, restart the program that uses the file. The page that needed it then stops saying the model or the
+detector is not installed (for the vision package, `/health` says `"model_loaded":true`).
 
 ---
 
@@ -932,7 +1011,7 @@ Whichever port is missing tells you which window to start.
 
 | You want to understand | Open this |
 |------------------------|-----------|
-| How the website is built and routed | `src\routes\` (one file per page), `src\routes\__root.tsx` |
+| How the website is built and routed | `src\routes\` (one file per page), `src\routes\__root.tsx`. `CEREBROILER.md` describes the first design (SQLite, a 28-bird sample pen) and is out of date: trust this guide where they differ |
 | The Settings page | `src\routes\settings.tsx` and `src\components\farm\*Section.tsx` |
 | How the website asks the API for data | `src\lib\farm\repository.ts` (server side), `src\lib\api-client.ts` (browser side) |
 | Sign in and sessions | `src\lib\auth-context.tsx`, `packages\api\src\routes\auth.ts` |
