@@ -30,8 +30,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-#: Files the camera service is willing to hand out: "<name>-YYYY-MM-DD.csv" and nothing else.
-FILE_NAME = re.compile(r"^(sensors|behavior)-(\d{4})-(\d{2})-(\d{2})\.csv$")
+#: The daily files: "<name>-YYYY-MM-DD.csv" and nothing else. The camera service hands these out, and old ones are
+#: deleted by this pattern. kinect-weights and kinect-birds are written on the Kinect computer (kinect_log.py).
+FILE_NAME = re.compile(r"^(sensors|behavior|kinect-weights|kinect-birds)-(\d{4})-(\d{2})-(\d{2})\.csv$")
 
 #: Stop writing when less than this is free, so a full card cannot stop the Pi from booting.
 MIN_FREE_BYTES = 200 * 1024 * 1024
@@ -102,7 +103,7 @@ class DailyCsv:
         cutoff = today - timedelta(days=self.keep)
         for path in self.directory.glob(f"{self.name}-*.csv"):
             found = FILE_NAME.match(path.name)
-            if not found:
+            if not found or found[1] != self.name:   # "kinect-*" must not match a "kinect-birds" file
                 continue
             try:
                 if date(int(found[2]), int(found[3]), int(found[4])) < cutoff:

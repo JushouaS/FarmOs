@@ -913,8 +913,8 @@ python kinect_seg.py
 ```
 
 It only listens on this computer (`127.0.0.1:8182`). The API asks it (`GET /visual/kinect-chickens`, which needs a
-sign-in), so nobody reaches it from outside. It works only while somebody has the Picture view open, and rests
-otherwise. If it is not running, the Picture view says "Chicken finder is not running" and everything else works.
+sign-in), so nobody reaches it from outside. It works continuously while somebody has the Picture view open; otherwise
+it only takes the once-a-minute saved reading (see "Saved weights" below) and rests in between. If it is not running, the Picture view says "Chicken finder is not running" and everything else works.
 `KINECT_SEG_URL` in `packages\api\.env` changes where the API looks for it. In a room with no chickens it may still
 find one now and then (a person or an object): the model counts anything above 25% confidence
 (`KINECT_SEG_CONFIDENCE`).
@@ -932,6 +932,24 @@ it, and especially for birds much younger or older. To train it again on your ow
 `projected_area_mm2`, `length_mm`, `width_mm`, `elongation`, `pixel_count`, `weight_g`, `session` and `band_id`):
 `python train_weight_model.py your.csv`. Without the model file, `xgboost` or the depth picture, the weights are left
 out and everything else works.
+
+**Saved weights, on the Kinect computer.** `kinect_seg.py` also weighs the flock once a minute when nobody is watching
+(it takes one picture, weighs, and lets go of the Kinect again), and keeps every reading in two files a day in
+`cerebroil-stream\logs\` on that computer. No internet or laptop is needed; the files are plain CSV and open in Excel.
+
+| File | One row per | Columns |
+|---|---|---|
+| `kinect-weights-YYYY-MM-DD.csv` | reading | `time, reading, status, birds, weighed, mean_g, median_g, min_g, max_g, error_percent, message` |
+| `kinect-birds-YYYY-MM-DD.csv` | weighed bird in a reading | `time, reading, bird, weight_g, confidence, box_x1..box_y2, area_mm2, length_mm, width_mm, depth_mm` |
+
+`reading` links each bird to its summary row. A minute with no weight still gets a summary row, and `status` says why:
+`bridge_unreachable` (the Kinect bridge is not running), `waiting_for_picture` (the Kinect sends nothing),
+`model_not_installed`, `no_depth`, or `no_birds`. Blank numbers mean unknown, not zero. The single-bird weights carry the
+same ~18 % error as on the page; use `mean_g` or `median_g` for the flock. Settings in `cerebroil-stream\.env`:
+`KINECT_LOG_SECONDS` (default 60, `0` turns saving off), `LOG_DIR` (another folder, for example a Google Drive one, to
+have the files reach you on their own) and `LOG_KEEP_DAYS` (default 90). Nothing is written when the disk has less than
+200 MB free. `http://127.0.0.1:8182/health`, on that computer, shows where the files go and whether the last one was
+written. It only saves while `kinect_seg.py` and the Kinect bridge are running.
 
 The bridge itself only listens on this computer. A phone or another computer on your network still sees the 3D view:
 the website asks the API (which that device already reaches on port 4000), and the API checks the sign-in and passes

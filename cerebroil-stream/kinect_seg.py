@@ -10,8 +10,13 @@ and keeps the newest answer: how many chickens, and the outline of each.
 Nothing reaches it from outside: the API asks it (GET /visual/kinect-chickens, which needs a sign-in)
 and the Live Camera page gets the answer from the API.
 
-It only works while somebody is watching. Every GET /latest keeps it working for another 15 seconds;
-after that it lets go of the bridge, so the sensor and the processor are left alone.
+It works while somebody is watching: every GET /latest keeps it going for another 15 seconds. When nobody is, it
+still takes one reading every KINECT_LOG_SECONDS (60) and lets go of the bridge in between, so the sensor and the
+processor are mostly left alone.
+
+Saved weights: every one of those readings is written to this computer's disk, in logs/kinect-weights-<date>.csv
+(the flock's numbers) and logs/kinect-birds-<date>.csv (each weighed bird). See kinect_log.py. No network is
+needed. KINECT_LOG_SECONDS=0 turns this off.
 
 The model is models/kinect_chicken_seg.pt (not in the repository), a YOLO11n-seg model trained on
 colour pictures with one class, "chicken". Change the place with KINECT_SEG_MODEL.
@@ -40,6 +45,7 @@ import numpy as np
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 
+import kinect_log
 import kinect_weight
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -52,11 +58,14 @@ CONFIDENCE = float(os.getenv("KINECT_SEG_CONFIDENCE", "0.25"))
 IMGSZ = int(os.getenv("KINECT_SEG_IMGSZ", "896"))        # the size the model was trained at
 KEEP_ALIVE_S = 15.0                                      # works this long after the last request
 MAX_POINTS = 60                                          # an outline is simplified to about this many points
+LOG_EVERY_S = kinect_log.interval_seconds()              # a saved reading this often, watched or not (0 = never)
 
 app = Flask(__name__)
 _lock = threading.Lock()
 _wanted_until = 0.0
 _result: dict[str, Any] = {"ok": False, "status": "starting"}
+_log = kinect_log.KinectLog()
+_next_log_at = 0.0
 
 
 # ── A small WebSocket client (the standard library has none) ──────────────────────────────────────
@@ -186,8 +195,9 @@ def add_weights(birds: list[dict[str, Any]], image_w: int, image_h: int, depth: 
         if m is not None:
             measured.append((bird, m))
     grams = _weights.predict([m for _, m in measured])
-    for (bird, _), g in zip(measured, grams):
+    for (bird, m), g in zip(measured, grams):
         bird["weightG"] = int(round(g / 10.0) * 10)
+        bird["_size"] = m          # kept for the saved file (kinect_log.py); not sent to the page
     summary = kinect_weight.summarize(grams)
     if summary:
         summary["errorPercent"] = round(_weights.typical_error_percent)
@@ -232,17 +242,32 @@ def find_chickens(jpeg: bytes, depth: np.ndarray | None = None) -> dict[str, Any
     }
 
 
-# ── The worker: follows the bridge while someone is watching ──────────────────────────────────────
+# ── The worker: follows the bridge while someone is watching, and takes the saved readings ────────
+def _publish(result: dict[str, Any], save: bool) -> None:
+    """Make a result the newest one, and write it to the daily files when a saved reading was due."""
+    global _result, _next_log_at
+    with _lock:
+        _result = result
+    if save:
+        _next_log_at = time.time() + LOG_EVERY_S
+        _log.save(result)
+
+
 def worker() -> None:
-    global _result
     bridge: Bridge | None = None
     depth_bridge: Bridge | None = None
+
+    def let_go() -> None:
+        nonlocal bridge, depth_bridge
+        for b in (bridge, depth_bridge):
+            if b:
+                b.close()
+        bridge = depth_bridge = None
+
     while True:
-        if time.time() > _wanted_until:
-            for b in (bridge, depth_bridge):
-                if b:
-                    b.close()
-            bridge = depth_bridge = None
+        work, save = kinect_log.should_work(time.time(), _wanted_until, _next_log_at, LOG_EVERY_S)
+        if not work:
+            let_go()
             time.sleep(0.3)
             continue
         try:
@@ -250,30 +275,24 @@ def worker() -> None:
                 bridge = Bridge()
             if depth_bridge is None and _weights.available:
                 depth_bridge = Bridge("depth")
-            jpeg = bridge.newest_picture(3.0)
+            # A fresh connection needs a moment before the bridge sends; give a saved reading a little longer.
+            jpeg = bridge.newest_picture(5.0 if save else 3.0)
             if jpeg is None:
-                with _lock:
-                    _result = {"ok": False, "status": "waiting_for_picture", "message": "The Kinect is not sending a picture."}
+                _publish({"ok": False, "status": "waiting_for_picture", "message": "The Kinect is not sending a picture."}, save)
                 continue
-            depth = depth_bridge.newest_depth(0.3) if depth_bridge else None
-            result = find_chickens(jpeg, depth)
-            with _lock:
-                _result = result
+            depth = depth_bridge.newest_depth(1.5 if save else 0.3) if depth_bridge else None
+            _publish(find_chickens(jpeg, depth), save)
+            if save and time.time() > _wanted_until:
+                let_go()     # nobody is watching: release the Kinect until the next saved reading
         except FileNotFoundError as err:
-            with _lock:
-                _result = {"ok": False, "status": "model_not_installed", "message": str(err)}
+            _publish({"ok": False, "status": "model_not_installed", "message": str(err)}, save)
             time.sleep(3)
         except (OSError, ConnectionError) as err:
-            for b in (bridge, depth_bridge):
-                if b:
-                    b.close()
-            bridge = depth_bridge = None
-            with _lock:
-                _result = {"ok": False, "status": "bridge_unreachable", "message": f"The Kinect bridge is not answering ({err})."}
+            let_go()
+            _publish({"ok": False, "status": "bridge_unreachable", "message": f"The Kinect bridge is not answering ({err})."}, save)
             time.sleep(2)
         except Exception as err:  # noqa: BLE001 - keep going, and say what happened
-            with _lock:
-                _result = {"ok": False, "status": "error", "message": str(err)[:200]}
+            _publish({"ok": False, "status": "error", "message": str(err)[:200]}, save)
             time.sleep(2)
 
 
@@ -284,15 +303,32 @@ def latest():
     _wanted_until = time.time() + KEEP_ALIVE_S
     with _lock:
         out = dict(_result)
+    if out.get("birds"):
+        out["birds"] = [{k: v for k, v in b.items() if k != "_size"} for b in out["birds"]]
     return jsonify(out)
 
 
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok", "model_installed": MODEL_PATH.exists(), "working": time.time() < _wanted_until})
+    return jsonify({
+        "status": "ok",
+        "model_installed": MODEL_PATH.exists(),
+        "working": time.time() < _wanted_until,
+        "saving": {
+            "every_s": LOG_EVERY_S,
+            "folder": str(_log.weights.directory),
+            "readings_this_run": _log.readings,
+            "last_status": _log.last_status,
+            "last_written": _log.last_ok,
+        },
+    })
 
 
 if __name__ == "__main__":
     threading.Thread(target=worker, daemon=True).start()
     print(f"kinect_seg: model {MODEL_PATH.name}, listening on 127.0.0.1:8182 (this computer only)")
+    if LOG_EVERY_S > 0:
+        print(f"kinect_seg: saving a reading every {LOG_EVERY_S:.0f}s to {_log.weights.directory}")
+    else:
+        print("kinect_seg: saving readings is off (KINECT_LOG_SECONDS=0)")
     app.run(host="127.0.0.1", port=int(os.getenv("KINECT_SEG_PORT", "8182")), threaded=True, debug=False)
