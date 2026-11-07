@@ -479,18 +479,36 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
   // writes nothing to the database.
   // ---------------------------------------------------------------------------
 
-  // POST /visual/video/:clipId/track — start. Body (optional): { interval?: seconds, exclude?: ["HH:MM:SS-HH:MM:SS"] }
+  // POST /visual/video/:clipId/track — start. Body (all optional):
+  //   { interval?: seconds, inactivity_window_s?: seconds, exclude?: ["HH:MM:SS-HH:MM:SS"],
+  //     zones?: [[[x, y], ...], ...] (feeder polygons in 0..1; default: the camera's saved zones) }
   app.post(
     "/video/:clipId/track",
     { preHandler: [requireAuth], config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const { clipId } = request.params as { clipId: string };
-      const body = (request.body ?? {}) as { interval?: unknown; exclude?: unknown };
-      const forward: { interval?: number; exclude?: string[] } = {};
-      if (body.interval !== undefined && body.interval !== null && body.interval !== "") {
-        const interval = Number(body.interval);
-        if (!Number.isFinite(interval)) return reply.code(400).send({ error: "invalid_settings", detail: "interval must be a number of seconds" });
-        forward.interval = interval;
+      const body = (request.body ?? {}) as { interval?: unknown; inactivity_window_s?: unknown; exclude?: unknown; zones?: unknown };
+      const forward: { interval?: number; inactivity_window_s?: number; exclude?: string[]; zones?: number[][][] } = {};
+      for (const key of ["interval", "inactivity_window_s"] as const) {
+        const value = body[key];
+        if (value === undefined || value === null || value === "") continue;
+        const n = Number(value);
+        if (!Number.isFinite(n)) return reply.code(400).send({ error: "invalid_settings", detail: `${key} must be a number of seconds` });
+        forward[key] = n;
+      }
+      if (body.zones !== undefined && body.zones !== null) {
+        const ok =
+          Array.isArray(body.zones) &&
+          body.zones.length <= 50 &&
+          body.zones.every(
+            (poly) =>
+              Array.isArray(poly) &&
+              poly.length >= 3 &&
+              poly.length <= 200 &&
+              poly.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every((v) => typeof v === "number" && v >= 0 && v <= 1)),
+          );
+        if (!ok) return reply.code(400).send({ error: "invalid_zones", detail: "zones must be polygons of [x, y] points between 0 and 1" });
+        forward.zones = body.zones as number[][][];
       }
       if (body.exclude !== undefined) {
         if (!Array.isArray(body.exclude) || body.exclude.length > 50 || !body.exclude.every((x) => typeof x === "string" && x.length <= 40)) {

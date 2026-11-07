@@ -199,6 +199,107 @@ def test_registry_one_scan_at_a_time():
     assert reg.get("a") is None
 
 
+# ---------------------------------------------------------------------------
+# Behaviour in the scan (phase 3)
+# ---------------------------------------------------------------------------
+
+TRIO = ((60, 60), (85, 60), (72, 82))        # 25 px apart; boxes reported 40 px wide, so body = 40
+LONER = ((250, 180),)
+
+
+def flock_frame(t: float, birds=TRIO + LONER, still=True) -> np.ndarray:
+    img = np.full((H, W, 3), 80, np.uint8)
+    cv2.putText(img, f"{t:.1f}", (int(t * 7) % (W - 60), 140), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (140, 140, 140), 2)
+    for x, y in birds:
+        cx = x if still else x + int(3 * t)
+        cv2.rectangle(img, (cx - 8, y - 8), (cx + 8, y + 8), (250, 250, 250), -1)
+    return img
+
+
+def wide_box_detector(frame):
+    """The white squares, reported 40 px wide (a bird's box is bigger than its bright back)."""
+    return [(cx, cy, 40.0, 40.0, s) for cx, cy, _, _, s in white_box_detector(frame)]
+
+
+def flock_frames(times, **kw):
+    return [(t, n, flock_frame(t, **kw)) for n, t in enumerate(times, start=1)]
+
+
+SHORT = cs.ScanSettings(interval=2.0, inactivity_window_s=10.0)
+
+
+def test_scan_judges_huddles_and_inactivity():
+    stats = {}
+    out = list(cs.scan(flock_frames([2.0 * i for i in range(10)]), wide_box_detector, SHORT, stats=stats))
+    assert [s.status for s in out] == ["VALID"] * 10
+    assert all(s.judged for s in out)
+    trio_ids = sorted(b.id for b in out[0].birds if b.cy < 100)
+    assert all(sorted(s.huddles[0][0]) == trio_ids and s.huddles[0][1] == "primary" for s in out)
+    # Nobody moves: inactive once the 10 s window is covered (frame at t = 10 s), not before.
+    assert out[4].inactive == []
+    assert sorted(out[5].inactive) == sorted(b.id for b in out[5].birds)
+    assert out[0].feeding == 0 and stats["temporal_added"] == 0
+
+
+def test_moving_birds_are_not_inactive():
+    out = list(cs.scan(flock_frames([2.0 * i for i in range(10)], still=False), wide_box_detector, SHORT))
+    assert all(s.inactive == [] for s in out)
+
+
+def test_a_gap_restarts_the_inactivity_window_and_leaves_gaps_unjudged():
+    times = [2.0 * i for i in range(16)]
+    samples = flock_frames(times)
+    frozen = samples[4][2]
+    samples = [(t, n, frozen.copy() if 8.0 < t <= 14.0 else img) for t, n, img in samples]
+    out = list(cs.scan(samples, wide_box_detector, SHORT))
+    statuses = [s.status for s in out]
+    assert statuses[5:8] == ["GAP"] * 3 and statuses[8:11] == ["RECOVERING"] * 3
+    assert all(not s.judged for s in out if s.status != "VALID")
+    first_inactive = next(s.t for s in out if s.inactive)
+    # After the gap ends at 16 s the window has to fill again: nobody is inactive before 26 s.
+    assert first_inactive >= 26.0
+    assert [s.t for s in out] == sorted(s.t for s in out)          # still in time order
+
+
+def test_zones_turn_a_trio_into_feeding():
+    zone = [[[0.0, 0.0], [0.45, 0.0], [0.45, 0.5], [0.0, 0.5]]]    # covers the trio, not the loner
+    out = list(cs.scan(flock_frames([2.0 * i for i in range(6)]), wide_box_detector, SHORT, zones=zone))
+    assert all(s.feeding == 3 and s.huddles == [] for s in out)
+
+
+def test_job_reports_behaviour_and_csv():
+    clip = SimpleNamespace(id="c2", name="trio.mp4", path="unused", duration=18.0)
+    job = cs.ScanJob(clip, SHORT)
+    job.run(wide_box_detector, frames=flock_frames([2.0 * i for i in range(10)]))
+    b = job.summary()["behaviour"]
+    assert b["judged_frames"] == 10 and b["frames_with_huddling"] == 10 and b["huddling_share"] == 1.0
+    assert b["max_birds_huddled"] == 3 and b["huddle_groups_by_origin"] == {"primary": 10}
+    assert b["frames_with_inactivity"] == 5 and len(b["inactive_birds"]) == 4
+    assert b["window_fits"] is True
+    header, first, *_rest, last = job.samples_csv().strip().splitlines()
+    cols = header.split(",")
+    row = dict(zip(cols, last.split(",")))
+    assert row["n_huddles"] == "1" and row["n_inactive"] == "4" and row["huddle_origins"] == "primary"
+    assert len(row["huddle_ids"].split("|")) == 3 and row["n_feeding"] == "0"
+
+
+def test_window_must_fit_the_sampling():
+    with pytest.raises(ValueError):
+        cs.ScanSettings().with_overrides(inactivity_window_s=4)
+    with pytest.raises(ValueError):
+        cs.ScanSettings(interval=10).with_overrides(inactivity_window_s=20)
+
+
+def test_annotate_marks_huddles_and_inactive_birds():
+    sample = cs.ScanSample(4.0, 3, "VALID", birds=[cs.TrackedBird(1, 60, 60, 30, 30, 0.9, False),
+                                                   cs.TrackedBird(2, 85, 60, 30, 30, 0.9, False),
+                                                   cs.TrackedBird(3, 72, 82, 30, 30, 0.9, False)],
+                           huddles=[([1, 2, 3], "primary")], inactive=[2], feeding=0)
+    out = cs.annotate(flock_frame(4.0), sample)
+    assert (out == np.array(cs._RED, np.uint8)).all(axis=2).any()
+    assert (out == np.array(cs._VIOLET, np.uint8)).all(axis=2).any()
+
+
 def test_real_video_file(tmp_path):
     """The whole path through OpenCV: write a clip, scan it from disk."""
     path = tmp_path / "clip.avi"

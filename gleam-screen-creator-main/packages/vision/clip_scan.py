@@ -24,8 +24,16 @@ Bird numbers restart with every tracker reset, so each reset starts a new
 "session" and the numbers shown are made unique across the clip (session 2's
 bird 1 is shown as one more than the highest number used before).
 
-Behaviour (huddling, inactivity) is not judged here yet; that is phase 3. A
-scan only reads the clip and writes nothing to the database.
+  6. Each VALID frame is judged by klydel's huddling and inactivity rules
+     (behavior_rules.py): strict huddle groups outside the feeder zones, and
+     birds that stayed within half a body length for the inactivity window.
+     A frame's answer is final 2 frames later (temporal recovery looks ahead),
+     and a gap ends every inactivity window. GAP and RECOVERING frames get no
+     behaviour: unknown, not "nothing happening".
+
+The feeder zones are the ones saved for VIDEO_ZONE_CAMERA in Settings, unless
+the request sends its own. A scan only reads the clip and writes nothing to
+the database.
 """
 from __future__ import annotations
 
@@ -43,6 +51,7 @@ from typing import Callable, Iterator
 import cv2
 import numpy as np
 
+from behavior_rules import BehaviorSettings, BehaviorTracker, Zones
 from bytetrack import ByteTrackConfig, _env_float
 from gap_guard import iter_guarded_samples, parse_exclusions
 from stable_ids import KLYDEL_COMMIT, BroilerTracker, HybridConfig
@@ -63,6 +72,9 @@ class ScanSettings:
     warmup_frames: int = 3        # RECOVERING frames after a reset
     min_visible: int = 1          # fewer tracked birds than this = GAP
     exclusions: tuple[tuple[float, float], ...] = ()
+    inactivity_window_s: float = 1800.0   # klydel / thesis: 30 minutes
+    move_frac: float = 0.5                # allowed wander, in body lengths
+    min_fill: float = 0.5                 # share of the window's frames a bird must be seen in
 
     @classmethod
     def from_env(cls) -> "ScanSettings":
@@ -76,18 +88,27 @@ class ScanSettings:
             max_time_step=_env_float("TRACK_MAX_TIME_STEP_S", d.max_time_step),
             warmup_frames=int(_env_float("TRACK_WARMUP_FRAMES", d.warmup_frames)),
             min_visible=int(_env_float("TRACK_MIN_VISIBLE", d.min_visible)),
+            inactivity_window_s=_env_float("TRACK_INACTIVITY_WINDOW_S", d.inactivity_window_s),
+            move_frac=_env_float("TRACK_MOVE_FRAC", d.move_frac),
+            min_fill=_env_float("TRACK_MIN_FILL", d.min_fill),
         )
 
-    def with_overrides(self, interval: float | None = None, exclude: list[str] | None = None) -> "ScanSettings":
+    def with_overrides(self, interval: float | None = None, exclude: list[str] | None = None,
+                       inactivity_window_s: float | None = None) -> "ScanSettings":
         """A copy with what the operator chose for this clip. Raises ValueError on bad input."""
         changes: dict = {}
         if interval is not None:
             changes["interval"] = float(interval)
         if exclude:
             changes["exclusions"] = tuple(parse_exclusions(exclude))
+        if inactivity_window_s is not None:
+            changes["inactivity_window_s"] = float(inactivity_window_s)
         out = ScanSettings(**{**asdict(self), **changes})
         out.validate()
         return out
+
+    def behavior(self) -> BehaviorSettings:
+        return BehaviorSettings(window_s=self.inactivity_window_s, move_frac=self.move_frac, min_fill=self.min_fill)
 
     def validate(self) -> None:
         if not 0.2 <= self.interval <= 60:
@@ -100,6 +121,11 @@ class ScanSettings:
             raise ValueError("warmup_frames and min_visible must not be negative")
         if not 0 < self.conf < 1 or not 0 < self.nms_iou <= 1:
             raise ValueError("conf must be in (0, 1) and nms_iou in (0, 1]")
+        if not 10 <= self.inactivity_window_s <= 4 * 3600:
+            raise ValueError("inactivity_window_s must be between 10 seconds and 4 hours")
+        if self.inactivity_window_s < 3 * self.interval:
+            raise ValueError("inactivity_window_s must cover at least 3 sampled frames")
+        self.behavior().validate()
 
 
 @dataclass
@@ -127,10 +153,18 @@ class ScanSample:
     n_detections: int = 0
     body_len: float | None = None
     birds: list[TrackedBird] = field(default_factory=list)
+    # Behaviour, VALID frames only (None = not judged: GAP, RECOVERING).
+    huddles: list[tuple[list[int], str]] | None = None    # (bird ids, origin: primary / temporal_*)
+    inactive: list[int] | None = None                     # bird ids
+    feeding: int | None = None                            # birds in a feeder/drinker zone
 
     @property
     def recovered(self) -> int:
         return sum(1 for b in self.birds if b.recovered)
+
+    @property
+    def judged(self) -> bool:
+        return self.huddles is not None
 
     def as_dict(self, with_birds: bool = True) -> dict:
         out = {
@@ -143,6 +177,9 @@ class ScanSample:
             "n_detections": self.n_detections if self.status != GAP else None,
             "body_len_px": round(self.body_len, 2) if self.body_len else None,
             "recovered": self.recovered if self.status != GAP else None,
+            "huddles": [{"birds": ids, "origin": origin} for ids, origin in self.huddles] if self.judged else None,
+            "inactive": self.inactive,
+            "feeding": self.feeding,
         }
         if with_birds:
             # [id, cx, cy, w, h, score, recovered]: compact, a 1 h clip is ~1800 of these.
@@ -182,10 +219,14 @@ def scan(
     settings: ScanSettings,
     tracker: BroilerTracker | None = None,
     cancel: threading.Event | None = None,
+    zones: list | None = None,
+    stats: dict | None = None,
 ) -> Iterator[ScanSample]:
-    """Yields one ScanSample per sampled frame (and per detected time jump).
+    """Yields one ScanSample per sampled frame (and per detected time jump), in time order.
 
-    frames: (t, n, image) in time order. detect: image -> (cx, cy, w, h, score) boxes."""
+    frames: (t, n, image) in time order. detect: image -> (cx, cy, w, h, score) boxes.
+    zones: feeder/drinker polygons with points in 0..1 (None or [] = none).
+    stats: if given, receives {"temporal_added": n} as the scan goes."""
     tracker = tracker or BroilerTracker()
     tracker.reset()
     guarded = iter_guarded_samples(
@@ -199,11 +240,35 @@ def scan(
     id_base = 0          # added to the tracker's numbers so they stay unique across sessions
     highest = 0
     body_lengths: deque[float] = deque(maxlen=500)
+    rules: BehaviorTracker | None = None      # made at the first frame, once its size is known
+    pending: dict[int, ScanSample] = {}       # frames waiting for their behaviour answer
+    seq = 0
+    stats = stats if stats is not None else {}
+    stats.setdefault("temporal_added", 0)
+
+    def release(answers) -> Iterator[ScanSample]:
+        for key, fb in answers:
+            s = pending.pop(key)
+            if fb is not None:
+                s.huddles = [([s.birds[i].id for i in members], origin) for members, origin in fb.huddles]
+                s.inactive = list(fb.inactive_ids)
+                s.feeding = len(fb.feeding)
+            yield s
+        if rules is not None:
+            stats["temporal_added"] = stats.get("temporal_added_before", 0) + rules.added
+
+    def end_session() -> Iterator[ScanSample]:
+        """A gap: settle the frames still waiting, then forget every history."""
+        if rules is not None:
+            yield from release(rules.flush())
+            stats["temporal_added_before"] = stats["temporal_added"]
+            rules.reset()
 
     for item in guarded:
         if cancel is not None and cancel.is_set():
             return
         if item.status == GAP:
+            yield from end_session()
             need_reset = True
             yield ScanSample(item.time, item.number, GAP, item.reason, session)
             continue
@@ -216,6 +281,10 @@ def scan(
             session += 1
             id_base = highest
 
+        if rules is None:
+            h, w = item.frame.shape[:2]
+            rules = BehaviorTracker(settings.behavior(), Zones.from_normalized(zones or [], w, h), settings.interval)
+
         dets = detect(item.frame)
         birds = [
             TrackedBird(id_base + b.stable_id, *b.box, b.score, b.recovered)
@@ -225,6 +294,7 @@ def scan(
             highest = max(highest, b.id)
 
         if len(birds) < settings.min_visible:
+            yield from end_session()
             need_reset = True
             yield ScanSample(item.time, item.number, GAP, "too_few_tracked_birds", session, len(dets))
             continue
@@ -235,10 +305,18 @@ def scan(
 
         if warmup_left > 0:
             warmup_left -= 1
-            yield ScanSample(item.time, item.number, RECOVERING, "tracker_warmup", session,
-                             len(dets), body_len, birds)
-            continue
-        yield ScanSample(item.time, item.number, VALID, "", session, len(dets), body_len, birds)
+            sample = ScanSample(item.time, item.number, RECOVERING, "tracker_warmup", session,
+                                len(dets), body_len, birds)
+        else:
+            sample = ScanSample(item.time, item.number, VALID, "", session, len(dets), body_len, birds)
+        pending[seq] = sample
+        answers = rules.push(seq, [b.id for b in birds], [(b.cx, b.cy, b.w, b.h) for b in birds],
+                             body_len, item.time, judge=sample.status == VALID)
+        seq += 1
+        yield from release(answers)
+
+    if not (cancel is not None and cancel.is_set()):
+        yield from end_session()
 
 
 # ---------------------------------------------------------------------------
@@ -250,13 +328,16 @@ class ScanBusy(RuntimeError):
 
 
 class ScanJob:
-    def __init__(self, clip, settings: ScanSettings) -> None:
+    def __init__(self, clip, settings: ScanSettings, zones: list | None = None, zones_source: str = "none") -> None:
         self.id = uuid.uuid4().hex[:12]
         self.clip_id = clip.id
         self.clip_name = clip.name
         self.path = clip.path
         self.duration = float(clip.duration)
         self.settings = settings
+        self.zones = zones or []
+        self.zones_source = zones_source
+        self.stats: dict = {}
         self.bytetrack = ByteTrackConfig.from_env()
         self.hybrid = HybridConfig.from_env()
         self.status = "running"
@@ -276,7 +357,7 @@ class ScanJob:
         try:
             source = frames if frames is not None else sample_frames(self.path, self.settings.interval)
             tracker = BroilerTracker(self.bytetrack, self.hybrid)
-            for s in scan(source, detect, self.settings, tracker, self.cancel):
+            for s in scan(source, detect, self.settings, tracker, self.cancel, self.zones, self.stats):
                 with self._lock:
                     self.samples.append(s)
             self.status = "cancelled" if self.cancel.is_set() else "done"
@@ -313,6 +394,7 @@ class ScanJob:
                 last[b.id] = s.t
         lifetimes = sorted(last[k] - first[k] for k in first)
         mean_birds = statistics.mean(birds_per_frame) if birds_per_frame else 0.0
+        behaviour = self._behaviour(samples)
         done = len([s for s in samples if s.frame_no is not None])
         elapsed = (self.finished or time.time()) - self.started
         eta = None
@@ -343,13 +425,56 @@ class ScanJob:
                 "longest_id_lifetime_s": round(lifetimes[-1], 1) if lifetimes else None,
                 "recovered_boxes": recovered,
             },
+            "behaviour": behaviour,
             "settings": {
                 **{k: v for k, v in asdict(self.settings).items() if k != "exclusions"},
                 "exclusions": [list(x) for x in self.settings.exclusions],
+                "zones": {"source": self.zones_source, "count": len(self.zones)},
                 "bytetrack": asdict(self.bytetrack),
                 "hybrid": asdict(self.hybrid),
+                "behaviour_rules": asdict(self.settings.behavior()),
                 "klydel_commit": KLYDEL_COMMIT,
             },
+        }
+
+    def _behaviour(self, samples: list[ScanSample]) -> dict:
+        """What the rules found over the clip. Only judged (VALID) frames count."""
+        judged = [s for s in samples if s.judged]
+        huddle_frames = [s for s in judged if s.huddles]
+        origins: dict[str, int] = {}
+        for s in judged:
+            for _, origin in s.huddles:
+                origins[origin] = origins.get(origin, 0) + 1
+        inactive_frames = [s for s in judged if s.inactive]
+        spans: dict[int, list[float]] = {}
+        for s in inactive_frames:
+            for bid in s.inactive:
+                span = spans.setdefault(bid, [s.t, s.t])
+                span[1] = s.t
+        # The longest stretch of judged frames within one session: can a full inactivity window fit at all?
+        longest = 0.0
+        run_start = prev = None
+        for s in samples:
+            if s.judged and prev is not None and prev.judged and prev.session == s.session:
+                longest = max(longest, s.t - run_start)
+            elif s.judged:
+                run_start = s.t
+            prev = s
+        window = self.settings.inactivity_window_s
+        return {
+            "judged_frames": len(judged),
+            "frames_with_huddling": len(huddle_frames),
+            "huddling_share": round(len(huddle_frames) / len(judged), 4) if judged else None,
+            "huddle_groups": sum(len(s.huddles) for s in judged),
+            "huddle_groups_by_origin": origins,
+            "max_birds_huddled": max((sum(len(ids) for ids, _ in s.huddles) for s in judged), default=0),
+            "temporal_added": self.stats.get("temporal_added", 0),
+            "frames_with_inactivity": len(inactive_frames),
+            "inactive_birds": [{"bird": bid, "from_s": round(a, 1), "to_s": round(b, 1)}
+                               for bid, (a, b) in sorted(spans.items(), key=lambda kv: kv[1][0])],
+            "inactivity_window_s": window,
+            "longest_judged_stretch_s": round(longest, 1),
+            "window_fits": longest >= window,
         }
 
     def sample_near(self, t: float) -> ScanSample | None:
@@ -364,19 +489,27 @@ class ScanJob:
 
     def samples_csv(self) -> str:
         """One row per sampled frame. The first columns follow klydel's gap-aware
-        log; the behaviour columns stay blank until phase 3 fills them (and stay
-        blank for GAP and RECOVERING rows, which are unknown, not zero)."""
+        log (huddle_ids: groups split by ";", birds by "|"). Behaviour columns are
+        blank for GAP and RECOVERING rows: unknown, not zero."""
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(["t_s", "status", "reason", "n_birds", "n_huddles", "n_inactive", "body_len_px",
-                    "recovered", "inactive_ids", "huddle_ids", "frame_no", "session", "n_detections", "bird_ids"])
+                    "recovered", "inactive_ids", "huddle_ids", "n_feeding", "huddle_origins",
+                    "frame_no", "session", "n_detections", "bird_ids"])
         for s in self.snapshot():
             tracked = s.status != GAP
+            judged = s.judged
             w.writerow([
                 f"{s.t:.3f}", s.status, s.reason,
-                len(s.birds) if tracked else "", "", "",
+                len(s.birds) if tracked else "",
+                len(s.huddles) if judged else "",
+                len(s.inactive) if judged else "",
                 f"{s.body_len:.2f}" if s.body_len else "",
-                s.recovered if tracked else "", "", "",
+                s.recovered if tracked else "",
+                "|".join(map(str, s.inactive)) if judged else "",
+                ";".join("|".join(map(str, sorted(ids))) for ids, _ in s.huddles) if judged else "",
+                s.feeding if judged else "",
+                ";".join(origin for _, origin in s.huddles) if judged else "",
                 s.frame_no if s.frame_no is not None else "", s.session,
                 s.n_detections if tracked else "",
                 "|".join(str(b.id) for b in s.birds),
@@ -406,12 +539,13 @@ class ScanRegistry:
         with self._lock:
             return self._jobs.get(clip_id)
 
-    def start(self, clip, detect: Detect, settings: ScanSettings) -> ScanJob:
+    def start(self, clip, detect: Detect, settings: ScanSettings,
+              zones: list | None = None, zones_source: str = "none") -> ScanJob:
         with self._lock:
             running = [j for j in self._jobs.values() if j.status == "running"]
             if running:
                 raise ScanBusy(running[0].clip_id)
-            job = ScanJob(clip, settings)
+            job = ScanJob(clip, settings, zones, zones_source)
             self._jobs[clip.id] = job
         job.thread = threading.Thread(target=job.run, args=(detect,), name=f"scan-{job.id}", daemon=True)
         job.thread.start()
@@ -436,17 +570,34 @@ class ScanRegistry:
 
 _GREEN = (110, 200, 90)
 _AMBER = (60, 170, 240)
+_RED = (60, 60, 230)
+_VIOLET = (220, 110, 170)
 _STATUS_COLOUR = {VALID: (110, 200, 90), RECOVERING: (60, 170, 240), GAP: (70, 70, 220)}
 
 
 def annotate(frame: np.ndarray, sample: ScanSample) -> np.ndarray:
-    """Boxes with their bird numbers; recovered boxes in amber. A banner says
-    which sample this is and whether it was trusted."""
+    """Boxes with their bird numbers (recovered boxes amber, inactive birds violet),
+    a red frame around each huddle group, and a banner saying which sample this is,
+    whether it was trusted, and what the rules found."""
     out = frame.copy()
     scale = max(0.45, min(1.2, frame.shape[1] / 1600))
     thick = max(1, int(round(2 * scale)))
+    inactive = set(sample.inactive or [])
+    by_id = {b.id: b for b in sample.birds}
+    for ids, origin in sample.huddles or []:
+        members = [by_id[i] for i in ids if i in by_id]
+        if not members:
+            continue
+        x0 = int(min(b.cx - b.w / 2 for b in members)) - 6
+        y0 = int(min(b.cy - b.h / 2 for b in members)) - 6
+        x1 = int(max(b.cx + b.w / 2 for b in members)) + 6
+        y1 = int(max(b.cy + b.h / 2 for b in members)) + 6
+        cv2.rectangle(out, (x0, y0), (x1, y1), _RED, thick + 1)
+        label = "huddle" if origin == "primary" else "huddle (t)"
+        cv2.putText(out, label, (x0, y1 + int(16 * scale)), cv2.FONT_HERSHEY_SIMPLEX, 0.55 * scale, _RED,
+                    thick, cv2.LINE_AA)
     for b in sample.birds:
-        colour = _AMBER if b.recovered else _GREEN
+        colour = _VIOLET if b.id in inactive else (_AMBER if b.recovered else _GREEN)
         x0, y0 = int(round(b.cx - b.w / 2)), int(round(b.cy - b.h / 2))
         x1, y1 = int(round(b.cx + b.w / 2)), int(round(b.cy + b.h / 2))
         cv2.rectangle(out, (x0, y0), (x1, y1), colour, thick)
@@ -456,6 +607,8 @@ def annotate(frame: np.ndarray, sample: ScanSample) -> np.ndarray:
         cv2.putText(out, label, (x0 + 3, max(th, y0 - 4)), cv2.FONT_HERSHEY_SIMPLEX,
                     0.6 * scale, (20, 20, 20), thick, cv2.LINE_AA)
     banner = f"t={sample.t:.1f}s  {sample.status}  birds={len(sample.birds)}"
+    if sample.judged:
+        banner += f"  huddles={len(sample.huddles)}  inactive={len(sample.inactive)}"
     if sample.reason:
         banner += f"  ({sample.reason})"
     cv2.putText(out, banner, (10, int(30 * scale) + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.8 * scale,

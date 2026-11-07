@@ -441,8 +441,13 @@ def _scan_or_404(clip_id: str):
 def video_track_start(clip_id: str):
     """
     Start following every bird through the clip, one frame every `interval`
-    seconds. Runs in the background; poll GET for progress. Body (optional):
-    {"interval": 2, "exclude": ["00:41:02-00:46:19"]} — known-bad stretches.
+    seconds, and judging huddling and inactivity. Runs in the background; poll
+    GET for progress. Body (all optional):
+      {"interval": 2,                         seconds between frames
+       "inactivity_window_s": 1800,           how long a bird must stay put
+       "exclude": ["00:41:02-00:46:19"],      known-bad stretches
+       "zones": [[[x, y], ...], ...]}         feeder polygons in 0..1; default:
+                                              the ones saved for VIDEO_ZONE_CAMERA
     """
     clip, missing = _clip_or_404(clip_id)
     if missing:
@@ -456,12 +461,22 @@ def video_track_start(clip_id: str):
         return jsonify({"error": "invalid_exclude", "detail": "exclude must be a list of 'HH:MM:SS-HH:MM:SS'"}), 400
     try:
         settings = clip_scan.DEFAULT_SETTINGS.with_overrides(
-            interval=payload.get("interval"), exclude=exclude)
+            interval=payload.get("interval"), exclude=exclude,
+            inactivity_window_s=payload.get("inactivity_window_s"))
     except (TypeError, ValueError) as err:
         return jsonify({"error": "invalid_settings", "detail": str(err)}), 400
+    try:
+        zones = _inline_zones()
+    except (TypeError, ValueError) as err:
+        return jsonify({"error": "invalid_zones", "detail": str(err)}), 400
+    zones_source = "request"
+    if zones is None:
+        zones = zone_store.get_zones(VIDEO_ZONE_CAMERA)
+        zones_source = f"saved:{VIDEO_ZONE_CAMERA}"
 
     try:
-        job = clip_scan.registry.start(clip, clip_scan.detector_fn(detector, settings), settings)
+        job = clip_scan.registry.start(clip, clip_scan.detector_fn(detector, settings), settings,
+                                       zones=zones, zones_source=zones_source)
     except clip_scan.ScanBusy as busy:
         return jsonify({"error": "scan_busy", "detail": "Another clip is being scanned.",
                         "clip_id": str(busy)}), 409
