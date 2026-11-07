@@ -17,3 +17,6 @@ dht22.tmp
 
 # The daily CSV files this Pi keeps (daily_log.py)
 logs/
+
+# The daily one-hour camera recordings (recorder.py): large, and only for the Pi's card
+recordings/

@@ -1,0 +1,35 @@
+# FIRST, on its own, run:   sudo -v   and type the Pi's password. Then paste the rest. If sudo has to ask for the
+# password in the middle of a paste, it reads the NEXT pasted line as the password and the steps below never happen.
+#
+# Paste ALL of this into the Raspberry Pi Connect terminal (one go) and press Enter, AFTER the new files are on GitHub
+# (the branch responsive-login-local-db). It takes about 1 to 2 minutes. At the end copy everything it printed and
+# send it back.
+#
+# What it sets up: a one-hour .mkv recording of the camera every day, saved on this Pi's SD card in
+# ~/cerebroil-stream/recordings/, starting tomorrow:
+#
+#   day 1  tomorrow       07:00 to 08:00        day 5   11:00 to 12:00
+#   day 2  the day after  08:00 to 09:00        day 6   12:00 to 13:00
+#   day 3                 09:00 to 10:00        day 7   13:00 to 14:00
+#   day 4                 10:00 to 11:00        day 8   14:00 to 15:00
+#
+# It checks everything BEFORE switching the recordings on: the camera link, the clock and time zone, a 20-second
+# test recording verified as a real .mkv with video, and room on the SD card for all 8 hours. If any check fails,
+# nothing is switched on and the output says what to fix. Your .env (apart from the RECORD_ lines) and the .venv
+# are NOT touched.
+
+echo; echo "=== A. Getting the latest files"
+command -v git >/dev/null || sudo apt-get install -y git
+rm -rf ~/farmos-src
+git clone --quiet --depth 1 --filter=blob:none --sparse -b responsive-login-local-db https://github.com/JushouaS/FarmOs.git ~/farmos-src
+git -C ~/farmos-src sparse-checkout set cerebroil-stream
+cp -a ~/farmos-src/cerebroil-stream/. ~/cerebroil-stream/
+ls ~/cerebroil-stream/recorder.py ~/cerebroil-stream/setup-recorder.sh
+
+echo; echo "=== B. Checking, then switching the recordings on (day 1 = tomorrow)"
+cd ~/cerebroil-stream && bash setup-recorder.sh
+
+echo; echo "=== C. What the recorder says"
+systemctl is-active cerebroil-recorder
+~/cerebroil-stream/.venv/bin/python ~/cerebroil-stream/recorder.py status | head -20
+df -h ~/cerebroil-stream | tail -1

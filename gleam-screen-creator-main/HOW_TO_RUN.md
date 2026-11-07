@@ -623,6 +623,50 @@ To put this on a Pi that is already set up, paste `cerebroil-stream\PASTE-ON-PI-
 terminal once the new files are on GitHub (`PASTE-ON-PI-4.txt` was the first version, with the combined file). It restarts
 the two services and prints the first rows of each folder.
 
+### Daily one-hour recordings on the Raspberry Pi (.mkv)
+
+For the behaviour footage the Pi records the camera for one hour a day, an hour later each day, on its own SD card
+(`cerebroil-stream\recorder.py`):
+
+| Day | Recording |
+|---|---|
+| 1 (the start date) | 07:00 to 08:00 |
+| 2 | 08:00 to 09:00 |
+| 3 | 09:00 to 10:00 |
+| ... | ... |
+| 8 | 14:00 to 15:00 |
+
+The files are `~/cerebroil-stream/recordings/day1_2026-11-08_0700-0800.mkv` and so on. The camera's own video is copied
+into the file without re-encoding, so recording costs the Pi almost no processor time; the audio is left out. MKV on
+purpose: a file cut short by a power cut still plays up to the cut, and the Test clip page (Settings) and the klydel
+scripts read it as it is. An hour of the main stream is roughly 1 to 3 GB, depending on the camera's settings.
+
+**Set it up (checks everything before switching on).** On the Pi, paste `cerebroil-stream\PASTE-ON-PI-6.txt` into Raspberry
+Pi Connect (after `sudo -v`), or run `bash setup-recorder.sh` in `~/cerebroil-stream` (`bash setup-recorder.sh 2026-11-10`
+for another start date). It saves the schedule in the Pi's `.env` (`RECORD_*` lines) and runs `recorder.py check`:
+
+1. ffmpeg is there (the one `imageio-ffmpeg` brings);
+2. the camera link is known;
+3. the clock is synchronised and in `Asia/Manila` (the slots are wall-clock times);
+4. a 20-second test recording is made and verified: a `.mkv` file, a real Matroska file inside, with video, as long as asked;
+5. the SD card has room for every remaining hour (estimated from the test) plus 1 GB.
+
+Only when all five pass does it install and start the `cerebroil-recorder` service; otherwise nothing is switched on and the
+output says what to fix. The service waits for each slot, starts by itself (also after the Pi restarts), and records the rest
+of a slot if the Pi was off at its start. If the camera drops out during the hour it carries on in a new file
+(`..._part2.mkv`). Every hour is verified the same way afterwards and gets one row in `recordings/recordings-log.csv`:
+
+`day, planned_start, planned_end, files, started, ended, size_mb, duration_s, verified, problem`
+
+`verified` is `yes` when every file is a real `.mkv` with video and together they cover at least 90 % of the time; `problem`
+says what went wrong in words (a drop-out, a late start, too little space). Check on it with
+`.venv/bin/python recorder.py status` (in `~/cerebroil-stream`) or `journalctl -u cerebroil-recorder -f`; stop it with
+`sudo systemctl disable --now cerebroil-recorder`.
+
+To check a recording on the laptop, copy it over (`scp admin@behavior.local:~/cerebroil-stream/recordings/day1_*.mkv .`, the
+Pi's password is asked) and upload it under Settings > Test clip. An hour of footage is within that page's 1-hour, 2.5 GB
+limit. The recordings are never deleted automatically: remove them from the card when they are safely copied.
+
 ### Settings > Test clip (upload a recording): the vision package
 
 The two Test clip boxes in Settings (**Behaviour** and **Weight**) send the file to `/visual/video`, which the
