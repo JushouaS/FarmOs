@@ -563,17 +563,28 @@ of Pen 1 (migration `0024`, run `bun run db:migrate` in `packages\api` once). Th
 Live Camera and the dashboard then show real numbers, marked Warning or Critical outside the limits (temperature 20 to
 32 °C, humidity 50 to 70 %; they are rows in `sensor_bounds`). A reading older than 5 minutes is not shown as the pen's air: the
 card says "Sensor offline, last reading 2 h ago" (or "No reading" if it never reported), and after 10 minutes of silence the API
-raises one "Sensor Offline" alert. There is no ammonia sensor, so ammonia is not shown anywhere.
+raises one "Sensor Offline" alert. There is no ammonia sensor, so ammonia is not shown on the website; the Pi keeps an
+ammonia file ready for one (below).
 
 ### Daily CSV files kept on the Raspberry Pi (a second copy)
 
 The laptop's database is the main record, but it only stores what it hears while it is on and can reach the Pi. So the Pi
-also writes its own file every day in `~/cerebroil-stream/logs/`, one row a minute:
+also writes its own files every day in `~/cerebroil-stream/logs/`, one folder per reading and one row a minute:
 
 | File | Written by | Columns |
 |---|---|---|
-| `sensors-YYYY-MM-DD.csv` | the sensor reader, always | `time, temperature_c, humidity_pct, reading_age_s, error` |
-| `behavior-YYYY-MM-DD.csv` | the live behaviour monitor, only while `LIVE_BEHAVIOR=1` is set in the Pi's `.env` | `time, birds, still_birds, huddled_birds, flock_moving, huddle_fdi, error` |
+| `temperature/temperature-YYYY-MM-DD.csv` | the sensor reader, always | `time, temperature_c, reading_age_s, error` |
+| `humidity/humidity-YYYY-MM-DD.csv` | the sensor reader, always | `time, humidity_pct, reading_age_s, error` |
+| `ammonia/ammonia-YYYY-MM-DD.csv` | the sensor reader, always | `time, ammonia_ppm, error` |
+| `behavior/behavior-YYYY-MM-DD.csv` | the live behaviour monitor, only while `LIVE_BEHAVIOR=1` is set in the Pi's `.env` | `time, birds, still_birds, huddled_birds, flock_moving, huddle_fdi, error` |
+
+Temperature and humidity come from the one DHT22, so a failed read leaves both blank with the same reason. **No ammonia
+sensor is connected yet:** every ammonia row has an empty `ammonia_ppm` and says `no ammonia sensor connected`, so the
+folder and its columns are ready but no number is ever made up. To add one later (for example an MQ-137 through an
+ADS1115 board, as the Pi has no analog input), write its read function in `cerebroil-stream\ammonia.py` and set
+`AMMONIA_SENSOR` in the Pi's `.env`; the file explains how. Files written before 2026-11-07 (`logs/sensors-*.csv`, with
+temperature and humidity together, and `logs/behavior-*.csv`) stay at the top of `logs/`, are still listed and served,
+and are still read by the laptop's gap-fill; delete them by hand when they are no longer needed.
 
 They are plain CSV (Excel opens them). A value that is blank means there was no fresh reading that minute; the `error` column
 says why. `time` is the Pi's clock with its time zone, so check `timedatectl` shows `Asia/Manila`; a Pi without internet can
@@ -587,12 +598,13 @@ one. Nothing is written when less than 200 MB of the card is free, and files old
 To get the files from the laptop or any machine that can reach the Pi (the camera service's token is the same one the API uses):
 
 ```powershell
-curl.exe -H "X-Vision-Token: <token>" http://behavior.local:5000/logs                                   # the list
-curl.exe -H "X-Vision-Token: <token>" -o sensors.csv http://behavior.local:5000/logs/sensors-2026-11-05.csv
+curl.exe -H "X-Vision-Token: <token>" http://behavior.local:5000/logs                                   # the list ("path" of each file)
+curl.exe -H "X-Vision-Token: <token>" -o temperature.csv http://behavior.local:5000/logs/temperature/temperature-2026-11-07.csv
 ```
 
-To put this on a Pi that is already set up, paste `cerebroil-stream\PASTE-ON-PI-4.txt` into the Raspberry Pi Connect
-terminal once the new files are on GitHub. It restarts the two services and prints the first rows.
+To put this on a Pi that is already set up, paste `cerebroil-stream\PASTE-ON-PI-5.txt` into the Raspberry Pi Connect
+terminal once the new files are on GitHub (`PASTE-ON-PI-4.txt` was the first version, with the combined file). It restarts
+the two services and prints the first rows of each folder.
 
 ### Settings > Test clip (upload a recording): the vision package
 
@@ -680,7 +692,7 @@ That writes yesterday (the farm's calendar day) to `packages\api\exports\<date>\
 | `behavior.csv` | the behaviour snapshots (bird, inactive and huddled counts, labels, night) |
 | `weights-typed.csv` | the weights typed in that day; `weights-by-day.csv` is the whole growth curve of the active flock |
 | `alerts.csv` | the alerts raised that day |
-| `pi\` | the Pi's own files for the day (`sensors-...csv`, `behavior-...csv`), downloaded from it when it answers |
+| `pi\` | the Pi's own files for the day, one folder per reading (`temperature\`, `humidity\`, `ammonia\`, `behavior\`; an older day has `sensors-...csv` and `behavior-...csv`), downloaded from it when it answers |
 | `health.txt`, `health.json` | how whole the day is: readings against the number expected, every silence of 5 minutes or more, alerts, and whether the Pi's files were fetched |
 
 Run it again for the same day and the files are written over, so a day exported while the laptop was off is complete after the
@@ -703,7 +715,7 @@ It only runs while the computer is on and the database is running.
 
 #### Turning on the behaviour file on the Pi
 
-The Pi writes `behavior-YYYY-MM-DD.csv` only while the live behaviour monitor runs. That needs the trained detector model on the Pi
+The Pi writes `logs/behavior/behavior-YYYY-MM-DD.csv` only while the live behaviour monitor runs. That needs the trained detector model on the Pi
 (`~/cerebroil-stream/models/detector.onnx`, not in git) and one line in the Pi's `.env`. In the Raspberry Pi Connect terminal:
 
 ```bash

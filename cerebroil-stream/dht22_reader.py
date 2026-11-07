@@ -5,6 +5,9 @@ It writes the newest reading to dht22.json next to this file. The camera service
 the website's API at /sensors, and the API stores it. It runs as its own program (dht22.service, see
 setup-dht22.sh) with the system Python, so a problem with the sensor can never take the camera down.
 
+Every minute it also keeps a row in logs/temperature/, logs/humidity/ and logs/ammonia/ on the Pi's own disk
+(MinuteLogs below; ammonia comes from ammonia.py, and says "no ammonia sensor connected" until one is wired).
+
     python3 dht22_reader.py --once      try to read the sensor a few times, print what happens, and stop
     python3 dht22_reader.py             keep reading, every DHT22_INTERVAL seconds
 
@@ -30,6 +33,7 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
+import ammonia
 import daily_log
 
 GPIO_LINE = int(os.getenv("DHT22_GPIO", "4"))
@@ -109,6 +113,36 @@ def read_once(gpiod) -> tuple[float, float]:
     return decode(high_pulses(edges))
 
 
+class MinuteLogs:
+    """The daily files this reader keeps on the Pi's own disk (daily_log.py), one folder per reading:
+    logs/temperature/, logs/humidity/ and logs/ammonia/. A failed DHT22 read leaves temperature and humidity
+    blank with the reason; ammonia has its own row and its own reason (ammonia.py)."""
+
+    def __init__(self, directory: Path | None = None, **kw) -> None:
+        self.temperature = daily_log.DailyCsv(
+            "temperature", ["temperature_c", "reading_age_s", "error"], directory, folder=True, **kw)
+        self.humidity = daily_log.DailyCsv(
+            "humidity", ["humidity_pct", "reading_age_s", "error"], directory, folder=True, **kw)
+        self.ammonia = daily_log.DailyCsv("ammonia", ["ammonia_ppm", "error"], directory, folder=True, **kw)
+
+    def write(self, last_good: dict, error: str | None, now: float, ammonia_reading=None) -> None:
+        age = now - last_good["at"] if last_good.get("at") else None
+        fresh = age is not None and age <= 120  # an old value is not repeated as if it were new: the row is left blank
+        age_s = round(age) if age is not None else None
+        self.temperature.append({
+            "temperature_c": last_good.get("temperature") if fresh else None,
+            "reading_age_s": age_s,
+            "error": error,
+        })
+        self.humidity.append({
+            "humidity_pct": last_good.get("humidity") if fresh else None,
+            "reading_age_s": age_s,
+            "error": error,
+        })
+        ppm, why = ammonia_reading if ammonia_reading is not None else ammonia.read_ppm()
+        self.ammonia.append({"ammonia_ppm": ppm, "error": why})
+
+
 def write_state(state: dict) -> None:
     tmp = OUT_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(state), encoding="utf-8")
@@ -131,7 +165,7 @@ def main() -> int:
 
     last_good: dict = {"temperature": None, "humidity": None, "at": None}
     # A copy of every minute on this Pi's own disk, for when the laptop that stores the readings is off (daily_log.py).
-    log = daily_log.DailyCsv("sensors", ["temperature_c", "humidity_pct", "reading_age_s", "error"])
+    logs = MinuteLogs()
     log_every = float(os.getenv("LOG_SECONDS", "60"))
     logged_at = 0.0
     while True:
@@ -155,14 +189,7 @@ def main() -> int:
         write_state({**last_good, "checkedAt": time.time(), "error": error})
         if not once and time.time() - logged_at >= log_every:
             logged_at = time.time()
-            age = logged_at - last_good["at"] if last_good["at"] else None
-            fresh = age is not None and age <= 120  # an old value is not repeated as if it were new: the row is left blank
-            log.append({
-                "temperature_c": last_good["temperature"] if fresh else None,
-                "humidity_pct": last_good["humidity"] if fresh else None,
-                "reading_age_s": round(age) if age is not None else None,
-                "error": error,
-            })
+            logs.write(last_good, error, logged_at)
         if once:
             return 0 if error is None else 1
         time.sleep(max(1.0, INTERVAL_SECONDS - (time.monotonic() - started)))

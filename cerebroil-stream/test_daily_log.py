@@ -89,10 +89,56 @@ class DailyCsvTest(unittest.TestCase):
         self.assertEqual(left, ["behavior-2026-09-01.csv", "notes.txt", "sensors-2026-10-20.csv", "sensors-2026-11-05.csv"])
 
     def test_only_log_files_are_listed_or_servable(self):
-        for good in ["sensors-2026-11-05.csv", "behavior-2026-01-31.csv"]:
+        for good in ["sensors-2026-11-05.csv", "behavior-2026-01-31.csv", "temperature-2026-11-07.csv",
+                     "humidity-2026-11-07.csv", "ammonia-2026-11-07.csv"]:
             self.assertTrue(daily_log.FILE_NAME.match(good), good)
         for bad in ["../.env", "sensors-2026-11-05.csv/..", "dht22.json", "sensors-2026-11-5.csv", "secret-2026-11-05.csv", "sensors-2026-11-05.csv.bak"]:
             self.assertFalse(daily_log.FILE_NAME.match(bad), bad)
+
+
+class FolderPerReadingTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.base = Path(tmp.name)
+
+    def log(self, name, clock, **kw):
+        return daily_log.DailyCsv(name, ["value"], self.base, now=clock, free_bytes=PLENTY, folder=True, **kw)
+
+    def test_each_reading_writes_into_its_own_folder(self):
+        clock = Clock(stamp(2026, 11, 7))
+        for name in ["temperature", "humidity", "ammonia", "behavior"]:
+            self.assertTrue(self.log(name, clock).append({"value": 1}))
+            self.assertTrue((self.base / name / f"{name}-2026-11-07.csv").is_file(), name)
+
+    def test_listing_shows_the_folders_and_the_older_files_at_the_top(self):
+        clock = Clock(stamp(2026, 11, 7))
+        self.log("temperature", clock).append({"value": 28})
+        (self.base / "sensors-2026-11-05.csv").write_text("x", encoding="utf-8")
+        (self.base / "temperature" / "notes.txt").write_text("x", encoding="utf-8")
+        (self.base / "temperature" / "humidity-2026-11-07.csv").write_text("x", encoding="utf-8")  # wrong folder
+        listed = [(f["path"], f["folder"]) for f in daily_log.list_files(self.base)]
+        self.assertEqual(listed, [("temperature/temperature-2026-11-07.csv", "temperature"), ("sensors-2026-11-05.csv", None)])
+
+    def test_only_a_reading_file_in_its_own_folder_can_be_fetched(self):
+        clock = Clock(stamp(2026, 11, 7))
+        self.log("humidity", clock).append({"value": 70})
+        (self.base / "sensors-2026-11-05.csv").write_text("x", encoding="utf-8")
+        (self.base / ".env").write_text("SECRET=1", encoding="utf-8")
+        self.assertEqual(daily_log.resolve("humidity/humidity-2026-11-07.csv", self.base),
+                         self.base / "humidity" / "humidity-2026-11-07.csv")
+        self.assertEqual(daily_log.resolve("sensors-2026-11-05.csv", self.base), self.base / "sensors-2026-11-05.csv")
+        for bad in ["../.env", ".env", "humidity/../.env", "temperature/humidity-2026-11-07.csv",
+                    "humidity/humidity-2026-11-08.csv", "secret/secret-2026-11-07.csv", "a/b/humidity-2026-11-07.csv",
+                    "humidity-2026-11-07.csv"]:
+            self.assertIsNone(daily_log.resolve(bad, self.base), bad)
+
+    def test_old_files_in_a_folder_are_deleted(self):
+        clock = Clock(stamp(2026, 11, 7))
+        (self.base / "ammonia").mkdir()
+        (self.base / "ammonia" / "ammonia-2026-01-01.csv").write_text("x", encoding="utf-8")
+        self.log("ammonia", clock, keep=30).append({"value": None})
+        self.assertEqual(sorted(p.name for p in (self.base / "ammonia").iterdir()), ["ammonia-2026-11-07.csv"])
 
 
 if __name__ == "__main__":

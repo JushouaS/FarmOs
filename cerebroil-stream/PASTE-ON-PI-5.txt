@@ -1,0 +1,43 @@
+# FIRST, on its own, run:   sudo -v   and type the Pi's password. Then paste the rest. If sudo has to ask for the
+# password in the middle of a paste, it reads the NEXT pasted line as the password and the restarts below never happen.
+#
+# Paste ALL of this into the Raspberry Pi Connect terminal (one go) and press Enter, AFTER the new files are on GitHub
+# (the branch responsive-login-local-db). It takes about 1 minute. At the end copy everything it printed and send it back.
+#
+# What changes: the daily files get one folder per reading instead of temperature and humidity sharing one file.
+#
+#   ~/cerebroil-stream/logs/temperature/temperature-YYYY-MM-DD.csv   time, temperature_c, reading_age_s, error
+#   ~/cerebroil-stream/logs/humidity/humidity-YYYY-MM-DD.csv         time, humidity_pct, reading_age_s, error
+#   ~/cerebroil-stream/logs/ammonia/ammonia-YYYY-MM-DD.csv           time, ammonia_ppm, error
+#                                                                    (empty ppm and "no ammonia sensor connected"
+#                                                                     until an ammonia sensor is wired)
+#   ~/cerebroil-stream/logs/behavior/behavior-YYYY-MM-DD.csv         same columns as before, only while LIVE_BEHAVIOR=1
+#
+# The older files (logs/sensors-*.csv and logs/behavior-*.csv) stay where they are; the laptop still reads them.
+# Your .env and the .venv are NOT touched.
+
+echo; echo "=== A. Getting the latest files"
+command -v git >/dev/null || sudo apt-get install -y git
+rm -rf ~/farmos-src
+git clone --quiet --depth 1 --filter=blob:none --sparse -b responsive-login-local-db https://github.com/JushouaS/FarmOs.git ~/farmos-src
+git -C ~/farmos-src sparse-checkout set cerebroil-stream
+cp -a ~/farmos-src/cerebroil-stream/. ~/cerebroil-stream/
+ls ~/cerebroil-stream/ammonia.py ~/cerebroil-stream/daily_log.py
+
+echo; echo "=== B. Restarting the sensor reader and the camera service"
+sudo systemctl restart dht22
+sudo systemctl restart cerebroil-stream
+
+echo; echo "=== C. The new folders and their first rows (waiting about 75 s for the first minute's rows)"
+sleep 75
+for d in temperature humidity ammonia behavior; do
+  echo "--- logs/$d/"
+  ls ~/cerebroil-stream/logs/$d/ 2>/dev/null || echo "(no file yet)"
+  f=$(ls ~/cerebroil-stream/logs/$d/*.csv 2>/dev/null | tail -1)
+  [ -n "$f" ] && tail -3 "$f"
+done
+TOKEN=$(grep -E '^VISION_SERVICE_TOKEN=' ~/cerebroil-stream/.env | cut -d= -f2-)
+echo "--- /logs as the camera service lists it (first 600 characters):"
+curl -s -m 5 -H "X-Vision-Token: $TOKEN" http://127.0.0.1:5000/logs | head -c 600; echo
+echo "--- the service names and their state:"
+systemctl is-active dht22 cerebroil-stream

@@ -47,7 +47,7 @@ class LiveBehavior:
         self._prev_gray: np.ndarray | None = None   # the previous picture, to see which birds moved
         # A copy of every minute on this Pi's own disk, for when the laptop that stores the snapshots is off (daily_log.py).
         # Counts only, not night or day: the lighting hours are the API's to know, so they are applied when the file is read.
-        self._log = daily_log.DailyCsv("behavior", ["birds", "still_birds", "huddled_birds", "flock_moving", "huddle_fdi", "error"])
+        self._log = daily_log.DailyCsv("behavior", ["birds", "still_birds", "huddled_birds", "flock_moving", "huddle_fdi", "error"], folder=True)
         self._logged_at = 0.0
 
     def start(self) -> None:

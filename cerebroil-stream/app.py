@@ -817,22 +817,26 @@ def sensors_route() -> tuple[Response, int] | Response:
 
 @app.get("/logs")
 def logs_list_route() -> tuple[Response, int] | Response:
-    """The daily CSV files this Pi has kept (daily_log.py): sensors-YYYY-MM-DD.csv and behavior-YYYY-MM-DD.csv."""
+    """The daily CSV files this Pi has kept (daily_log.py), one folder per reading: temperature/, humidity/,
+    ammonia/ and behavior/, plus the older sensors-*.csv and behavior-*.csv at the top. Each entry's "path" is
+    what /logs/<path> takes."""
     err = _require_vision_token()
     if err:
         return err
     return jsonify({"files": daily_log.list_files()})
 
 
-@app.get("/logs/<name>")
+@app.get("/logs/<path:name>")
 def logs_file_route(name: str) -> tuple[Response, int] | Response:
-    """One of those files, as CSV. Only names of the form sensors-YYYY-MM-DD.csv / behavior-YYYY-MM-DD.csv are served."""
+    """One of those files, as CSV: "temperature/temperature-2026-11-07.csv", or an older "sensors-2026-11-05.csv".
+    Nothing else on the Pi can be asked for (daily_log.resolve)."""
     err = _require_vision_token()
     if err:
         return err
-    if not daily_log.FILE_NAME.match(name):
+    path = daily_log.resolve(name)
+    if path is None:
         return jsonify({"error": "not_found"}), 404
-    return send_from_directory(daily_log.default_dir(), name, mimetype="text/csv", as_attachment=True)
+    return send_from_directory(path.parent, path.name, mimetype="text/csv", as_attachment=True)
 
 
 @app.post("/demo/convert")

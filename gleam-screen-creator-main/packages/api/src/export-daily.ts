@@ -6,8 +6,11 @@ import type postgres from "postgres";
  * One day's data as plain files, so it can be collected without opening the website: the readings, the
  * behaviour snapshots, the weights, the alerts, and a short health summary that says whether the day is whole.
  *
- *   exports/2026-11-05/sensors.csv  behavior.csv  weights-typed.csv  weights-by-day.csv  alerts.csv
- *                      health.txt   health.json   pi/sensors-2026-11-05.csv  pi/behavior-2026-11-05.csv
+ *   exports/2026-11-07/sensors.csv  behavior.csv  weights-typed.csv  weights-by-day.csv  alerts.csv
+ *                      health.txt   health.json
+ *                      pi/temperature/temperature-2026-11-07.csv  pi/humidity/humidity-2026-11-07.csv
+ *                      pi/ammonia/ammonia-2026-11-07.csv          pi/behavior/behavior-2026-11-07.csv
+ *   (a day from before the Pi kept one folder per reading has pi/sensors-<date>.csv and pi/behavior-<date>.csv)
  *
  * Run by scripts/export-daily.ts. The day is the farm's calendar day (FARM_TZ), not the database's or the Pi's.
  */
@@ -155,15 +158,20 @@ export async function exportDay(
       const listed = await fetch(`${pi.baseUrl}/logs`, { headers, signal: AbortSignal.timeout(8_000) });
       if (!listed.ok) throw new Error(`HTTP ${listed.status}`);
       piSummary.reachable = true;
-      const names = ((await listed.json()) as { files: { name: string }[] }).files.map((f) => f.name).filter((n) => n.endsWith(`-${date}.csv`));
-      if (names.length > 0) await mkdir(join(folder, "pi"), { recursive: true });
-      for (const name of names) {
-        const res = await fetch(`${pi.baseUrl}/logs/${name}`, { headers, signal: AbortSignal.timeout(15_000) });
+      // One folder per reading on the Pi (temperature/, humidity/, ammonia/, behavior/); an older Pi lists only names.
+      const paths = ((await listed.json()) as { files: { name: string; path?: string }[] }).files
+        .filter((f) => f.name.endsWith(`-${date}.csv`))
+        .map((f) => f.path ?? f.name)
+        .filter((p) => /^([a-z]+\/)?[a-z-]+-\d{4}-\d{2}-\d{2}\.csv$/.test(p));
+      for (const path of paths) {
+        const res = await fetch(`${pi.baseUrl}/logs/${path}`, { headers, signal: AbortSignal.timeout(15_000) });
         if (!res.ok) continue;
-        await writeFile(join(folder, "pi", name), Buffer.from(await res.arrayBuffer()));
-        piSummary.files.push(name);
+        const dest = join(folder, "pi", ...path.split("/"));
+        await mkdir(join(dest, ".."), { recursive: true });
+        await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+        piSummary.files.push(path);
       }
-      if (names.length === 0) piSummary.note = "The Pi answered but has no file for this day.";
+      if (paths.length === 0) piSummary.note = "The Pi answered but has no file for this day.";
     } catch (err) {
       piSummary.note = `The Pi's files could not be fetched (${err instanceof Error ? err.message : err}).`;
     }

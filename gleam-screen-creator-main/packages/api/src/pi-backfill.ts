@@ -6,10 +6,13 @@ import { statusFor } from "./sensor-monitor.js";
  * Fills the gaps in the stored temperature and humidity from the files the Raspberry Pi keeps.
  *
  * The API stores a reading each time it asks the Pi for one, so while the laptop is off, asleep, or cannot
- * reach the Pi, nothing is stored. The Pi writes its own row every minute (cerebroil-stream/daily_log.py, files
- * sensors-YYYY-MM-DD.csv). Once the laptop is back this reads those files and stores only the readings that fall
- * in a gap: one that already has a stored reading within TOLERANCE_MS is left alone, so running it again, or
- * running it while the live polling works, adds nothing.
+ * reach the Pi, nothing is stored. The Pi writes its own row every minute (cerebroil-stream/daily_log.py), one
+ * folder per reading: temperature/temperature-YYYY-MM-DD.csv and humidity/humidity-YYYY-MM-DD.csv (before
+ * 2026-11-07 both were in one file, sensors-YYYY-MM-DD.csv, which is still read). Once the laptop is back this
+ * reads those files and stores only the readings that fall in a gap: one that already has a stored reading within
+ * TOLERANCE_MS is left alone, so running it again, or running it while the live polling works, adds nothing.
+ *
+ * The ammonia folder is not read back: there is no ammonia sensor yet, so it holds no values to store.
  *
  * Behaviour files are not read back: the Pi writes counts without the day or night rule and with other columns
  * than behavior_snapshots, so they stay as CSV for the daily export rather than being squeezed into that table.
@@ -87,6 +90,81 @@ export function parseSensorCsv(text: string, now = Date.now()): PiSensorRow[] {
   return rows;
 }
 
+export interface PiValueRow {
+  at: number;
+  value: number;
+}
+
+/**
+ * The rows of a one-reading file (temperature/temperature-*.csv: time,temperature_c,reading_age_s,error, or
+ * humidity/humidity-*.csv: time,humidity_pct,...) that carry a value. Same rules as parseSensorCsv.
+ */
+export function parseValueCsv(text: string, kind: "temperature" | "humidity", now = Date.now()): PiValueRow[] {
+  const sensor = kind === "temperature" ? SENSORS[0] : SENSORS[1];
+  const column = kind === "temperature" ? "temperature_c" : "humidity_pct";
+  const lines = text.split(/\r?\n/);
+  if (!lines[0]?.startsWith(`time,${column},reading_age_s`)) return [];
+  const seen = new Set<number>();
+  const rows: PiValueRow[] = [];
+  for (const line of lines.slice(1)) {
+    const f = fields(line);
+    if (f.length < 4) continue;
+    const wrote = Date.parse(f[0]!);
+    const age = number(f[2]);
+    const value = number(f[1]);
+    if (!Number.isFinite(wrote) || age === null || age < 0 || value === null) continue;
+    if (value < sensor.min || value > sensor.max) continue;
+    const at = Math.round((wrote - age * 1000) / 1000) * 1000;
+    if (at > now + 5 * 60_000 || seen.has(at)) continue;
+    seen.add(at);
+    rows.push({ at, value });
+  }
+  return rows;
+}
+
+/** Temperature and humidity rows of the same reading (same moment) joined back into one, oldest first. */
+export function mergeReadings(temperature: PiValueRow[], humidity: PiValueRow[]): PiSensorRow[] {
+  const byAt = new Map<number, PiSensorRow>();
+  for (const r of temperature) byAt.set(r.at, { at: r.at, temperature: r.value, humidity: null });
+  for (const r of humidity) {
+    const row = byAt.get(r.at);
+    if (row) row.humidity = r.value;
+    else byAt.set(r.at, { at: r.at, temperature: null, humidity: r.value });
+  }
+  return [...byAt.values()].sort((a, b) => a.at - b.at);
+}
+
+/** A file in the Pi's list. `path` is what /logs/<path> takes; a Pi from before the folders gives only `name`. */
+export interface PiFile {
+  name: string;
+  path?: string;
+  folder?: string | null;
+}
+
+export interface SensorDay {
+  date: string;
+  temperature?: string;
+  humidity?: string;
+  /** The old combined file, used only when the day has no separate files. */
+  combined?: string;
+}
+
+/** The newest `days` days that have sensor files, newest first, with the path of each file for that day. */
+export function sensorDays(files: PiFile[], days: number): SensorDay[] {
+  const byDate = new Map<string, SensorDay>();
+  for (const f of files) {
+    const found = /^(temperature|humidity|sensors)-(\d{4}-\d{2}-\d{2})\.csv$/.exec(f.name);
+    if (!found) continue;
+    const [, kind, date] = found as unknown as [string, "temperature" | "humidity" | "sensors", string];
+    const path = f.path ?? f.name;
+    const day = byDate.get(date) ?? { date };
+    if (kind === "sensors") day.combined = path;
+    else day[kind] = path;
+    byDate.set(date, day);
+  }
+  return [...byDate.values()].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, days);
+}
+
 /** The rows with no stored reading within `toleranceMs`. `storedMs` is the stored reading times, in any order. */
 export function rowsToFill(rows: PiSensorRow[], storedMs: number[], toleranceMs = TOLERANCE_MS): PiSensorRow[] {
   const stored = [...storedMs].sort((a, b) => a - b);
@@ -104,14 +182,12 @@ export function rowsToFill(rows: PiSensorRow[], storedMs: number[], toleranceMs 
   });
 }
 
-const FILE = /^sensors-\d{4}-\d{2}-\d{2}\.csv$/;
-
 export interface BackfillResult {
   files: number;
   stored: number;
 }
 
-/** Reads the newest `days` sensor files from the Pi and stores the readings that fall in a gap. */
+/** Reads the newest `days` days of sensor files from the Pi and stores the readings that fall in a gap. */
 export async function backfillSensors(
   app: FastifyInstance,
   days = 2,
@@ -121,13 +197,25 @@ export async function backfillSensors(
   const headers = { "X-Vision-Token": source.token };
   const listed = await fetch(`${base}/logs`, { headers, signal: AbortSignal.timeout(8_000) });
   if (!listed.ok) throw new Error(`the Pi's file list answered HTTP ${listed.status}`);
-  const names = ((await listed.json()) as { files?: { name: string }[] }).files
-    ?.map((f) => f.name)
-    .filter((n) => FILE.test(n))
-    .sort()
-    .reverse()
-    .slice(0, days);
-  if (!names?.length) return { files: 0, stored: 0 };
+  const dayFiles = sensorDays(((await listed.json()) as { files?: PiFile[] }).files ?? [], days);
+  if (!dayFiles.length) return { files: 0, stored: 0 };
+
+  let fetched = 0;
+  const download = async (path: string): Promise<string | null> => {
+    const res = await fetch(`${base}/logs/${path}`, { headers, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return null;
+    fetched++;
+    return res.text();
+  };
+  const readDay = async (day: SensorDay): Promise<PiSensorRow[]> => {
+    if (day.temperature || day.humidity) {
+      const t = day.temperature ? await download(day.temperature) : null;
+      const h = day.humidity ? await download(day.humidity) : null;
+      return mergeReadings(t ? parseValueCsv(t, "temperature") : [], h ? parseValueCsv(h, "humidity") : []);
+    }
+    const text = day.combined ? await download(day.combined) : null;
+    return text ? parseSensorCsv(text) : [];
+  };
 
   const bounds = new Map<string, { lower: number | null; upper: number | null }>();
   for (const sensor of SENSORS) {
@@ -144,10 +232,8 @@ export async function backfillSensors(
   }
 
   let stored = 0;
-  for (const name of names) {
-    const res = await fetch(`${base}/logs/${name}`, { headers, signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) continue;
-    const rows = parseSensorCsv(await res.text());
+  for (const day of dayFiles) {
+    const rows = await readDay(day);
     if (rows.length === 0) continue;
     const from = new Date(Math.min(...rows.map((r) => r.at)) - TOLERANCE_MS);
     const to = new Date(Math.max(...rows.map((r) => r.at)) + TOLERANCE_MS);
@@ -167,7 +253,7 @@ export async function backfillSensors(
       }
     }
   }
-  return { files: names.length, stored };
+  return { files: fetched, stored };
 }
 
 /** Runs the gap-fill shortly after start-up and then every PI_BACKFILL_MINUTES. 0 turns it off. */

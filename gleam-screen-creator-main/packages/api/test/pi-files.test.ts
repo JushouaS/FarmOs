@@ -10,7 +10,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { findGaps, localTime, toCsv } from "../src/export-daily.js";
-import { backfillSensors, parseSensorCsv, rowsToFill } from "../src/pi-backfill.js";
+import { backfillSensors, mergeReadings, parseSensorCsv, parseValueCsv, rowsToFill, sensorDays } from "../src/pi-backfill.js";
 
 const HEADER = "time,temperature_c,humidity_pct,reading_age_s,error";
 const at = (iso: string) => Date.parse(iso);
@@ -52,6 +52,44 @@ describe("reading a Pi sensor file", () => {
   });
 });
 
+describe("one folder per reading (from 2026-11-07)", () => {
+  const T_HEADER = "time,temperature_c,reading_age_s,error";
+  const H_HEADER = "time,humidity_pct,reading_age_s,error";
+
+  test("a temperature file and a humidity file are read on their own and joined back by the moment of reading", () => {
+    const t = parseValueCsv(
+      [T_HEADER, "2020-01-01T10:00:30+08:00,28.4,30,", "2020-01-01T10:01:30+08:00,,,the sensor did not answer", ""].join("\n"),
+      "temperature",
+    );
+    const h = parseValueCsv([H_HEADER, "2020-01-01T10:00:30+08:00,70.8,30,", "2020-01-01T10:02:00+08:00,71.2,0,"].join("\n"), "humidity");
+    expect(mergeReadings(t, h)).toEqual([
+      { at: at("2020-01-01T10:00:00+08:00"), temperature: 28.4, humidity: 70.8 },
+      { at: at("2020-01-01T10:02:00+08:00"), temperature: null, humidity: 71.2 },
+    ]);
+  });
+
+  test("a value the sensor cannot give, or the wrong kind of file, gives nothing", () => {
+    expect(parseValueCsv(`${T_HEADER}\n2020-01-01T10:00:00+08:00,250,0,\n`, "temperature")).toEqual([]);
+    expect(parseValueCsv(`${H_HEADER}\n2020-01-01T10:00:00+08:00,70,0,\n`, "temperature")).toEqual([]);
+    expect(parseValueCsv("time,ammonia_ppm,error\n2020-01-01T10:00:00+08:00,,no ammonia sensor connected\n", "humidity")).toEqual([]);
+  });
+
+  test("the newest days are picked, the separate files win over an old combined one, and other readings are ignored", () => {
+    const files = [
+      { name: "temperature-2020-01-03.csv", path: "temperature/temperature-2020-01-03.csv", folder: "temperature" },
+      { name: "humidity-2020-01-03.csv", path: "humidity/humidity-2020-01-03.csv", folder: "humidity" },
+      { name: "ammonia-2020-01-03.csv", path: "ammonia/ammonia-2020-01-03.csv", folder: "ammonia" },
+      { name: "behavior-2020-01-03.csv", path: "behavior/behavior-2020-01-03.csv", folder: "behavior" },
+      { name: "sensors-2020-01-02.csv" }, // a Pi from before the folders gives only the name
+      { name: "sensors-2020-01-01.csv", path: "sensors-2020-01-01.csv", folder: null },
+    ];
+    expect(sensorDays(files, 2)).toEqual([
+      { date: "2020-01-03", temperature: "temperature/temperature-2020-01-03.csv", humidity: "humidity/humidity-2020-01-03.csv" },
+      { date: "2020-01-02", combined: "sensors-2020-01-02.csv" },
+    ]);
+  });
+});
+
 describe("which rows fill a gap", () => {
   const row = (iso: string) => ({ at: at(iso), temperature: 28, humidity: 70 });
   test("a row with a stored reading close by adds nothing; a row in a gap is kept", () => {
@@ -86,6 +124,7 @@ describe("filling a gap from the Pi, through the database", () => {
   let app: Awaited<ReturnType<(typeof import("../src/app.js"))["buildApp"]>>;
   let pi: Server;
   let base = "";
+  // The day before the change: one combined file at the top. The day after: one folder per reading.
   const FILE = "sensors-2020-01-01.csv";
   const csv = [
     HEADER,
@@ -94,6 +133,11 @@ describe("filling a gap from the Pi, through the database", () => {
     "2020-01-01T10:02:30+08:00,,,,the sensor did not answer (check the wires and the 3.3 V)",
     "",
   ].join("\n");
+  const TEMP = "temperature/temperature-2020-01-02.csv";
+  const HUM = "humidity/humidity-2020-01-02.csv";
+  const tempCsv = ["time,temperature_c,reading_age_s,error", "2020-01-02T10:00:30+08:00,29.1,30,", ""].join("\n");
+  const humCsv = ["time,humidity_pct,reading_age_s,error", "2020-01-02T10:00:30+08:00,68.5,30,", ""].join("\n");
+  const served: Record<string, string> = { [FILE]: csv, [TEMP]: tempCsv, [HUM]: humCsv };
   const stored = async () =>
     Number((await app.sqlRead`SELECT count(*)::int AS n FROM sensor_readings WHERE recorded_at < '2021-01-01'`)[0]!.n);
   const clean = () =>
@@ -103,10 +147,19 @@ describe("filling a gap from the Pi, through the database", () => {
     pi = createServer((req, res) => {
       if (req.headers["x-vision-token"] !== "test-token") return void res.writeHead(401).end("{}");
       if (req.url === "/logs")
-        return void res
-          .writeHead(200, { "content-type": "application/json" })
-          .end(JSON.stringify({ files: [{ name: FILE }, { name: "behavior-2020-01-01.csv" }] }));
-      if (req.url === `/logs/${FILE}`) return void res.writeHead(200, { "content-type": "text/csv" }).end(csv);
+        return void res.writeHead(200, { "content-type": "application/json" }).end(
+          JSON.stringify({
+            files: [
+              { name: "temperature-2020-01-02.csv", path: TEMP, folder: "temperature" },
+              { name: "humidity-2020-01-02.csv", path: HUM, folder: "humidity" },
+              { name: "ammonia-2020-01-02.csv", path: "ammonia/ammonia-2020-01-02.csv", folder: "ammonia" },
+              { name: FILE, path: FILE, folder: null },
+              { name: "behavior-2020-01-01.csv", path: "behavior-2020-01-01.csv", folder: null },
+            ],
+          }),
+        );
+      const wanted = req.url?.startsWith("/logs/") ? served[req.url.slice("/logs/".length)] : undefined;
+      if (wanted !== undefined) return void res.writeHead(200, { "content-type": "text/csv" }).end(wanted);
       res.writeHead(404).end("{}");
     });
     await new Promise<void>((resolve) => pi.listen(0, "127.0.0.1", resolve));
@@ -127,19 +180,23 @@ describe("filling a gap from the Pi, through the database", () => {
     pi?.close();
   }, 60_000);
 
-  test("the readings in the file are stored once, with the temperature and humidity of each", async () => {
+  test("both layouts are stored once, with the temperature and humidity of each reading", async () => {
     const done = await backfillSensors(app, 2, { baseUrl: base, token: "test-token" });
-    expect(done).toEqual({ files: 1, stored: 4 }); // two readings with both values; the blank row is not stored
-    expect(await stored()).toBe(4);
+    // Old day: two readings with both values (the blank row is not stored). New day: one reading from two files.
+    expect(done).toEqual({ files: 3, stored: 6 });
+    expect(await stored()).toBe(6);
     const t =
       await app.sqlRead`SELECT value::float AS v FROM sensor_readings WHERE sensor_id = 'SN-DHT22-T' AND recorded_at < '2021-01-01' ORDER BY recorded_at`;
-    expect(t.map((r) => r.v)).toEqual([28.4, 28.6]);
+    expect(t.map((r) => r.v)).toEqual([28.4, 28.6, 29.1]);
+    const h =
+      await app.sqlRead`SELECT value::float AS v FROM sensor_readings WHERE sensor_id = 'SN-DHT22-H' AND recorded_at < '2021-01-01' ORDER BY recorded_at`;
+    expect(h.map((r) => r.v)).toEqual([70.8, 71.0, 68.5]);
   });
 
   test("running it again adds nothing", async () => {
     const done = await backfillSensors(app, 2, { baseUrl: base, token: "test-token" });
     expect(done.stored).toBe(0);
-    expect(await stored()).toBe(4);
+    expect(await stored()).toBe(6);
   });
 
   test("a Pi that refuses the token is an error, not an empty success", async () => {
