@@ -213,8 +213,17 @@ class Detector:
 
     # -- inference ---------------------------------------------------------
 
-    def detect(self, frame: np.ndarray) -> list[Detection]:
-        """Run the graph on one frame and return bird boxes in frame pixels."""
+    def detect(
+        self,
+        frame: np.ndarray,
+        conf_min: float | None = None,
+        nms_iou: float | None = None,
+    ) -> list[Detection]:
+        """Run the graph on one frame and return bird boxes in frame pixels.
+
+        conf_min and nms_iou default to CHICKEN_CONF_MIN and CHICKEN_NMS_IOU.
+        The clip tracker passes its own (0.1 and 0.7, what Ultralytics uses for
+        klydel's runs): ByteTrack needs the weak boxes the live reading drops."""
         if self.session is None or frame is None or frame.size == 0:
             return []
 
@@ -232,11 +241,11 @@ class Detector:
         if rows.size == 0:
             return []
 
-        boxes_xyxy, scores, class_ids = self._decode(rows)
+        boxes_xyxy, scores, class_ids = self._decode(rows, CONF_MIN if conf_min is None else conf_min)
         if len(scores) == 0:
             return []
 
-        keep = _nms(boxes_xyxy, scores, NMS_IOU)
+        keep = _nms(boxes_xyxy, scores, NMS_IOU if nms_iou is None else nms_iou)
 
         frame_h, frame_w = frame.shape[:2]
         detections: list[Detection] = []
@@ -263,7 +272,7 @@ class Detector:
             )
         return detections
 
-    def _decode(self, rows: np.ndarray):
+    def _decode(self, rows: np.ndarray, conf_min: float | None = None):
         """
         Split a result matrix into clean xyxy boxes, scores and class indices.
 
@@ -278,7 +287,7 @@ class Detector:
             boxes = rows[:, :4].copy()
             scores = rows[:, 4]
             class_ids = rows[:, 5].astype(int)
-            return self._filter(boxes, scores, class_ids)
+            return self._filter(boxes, scores, class_ids, conf_min)
 
         # 4 box values plus at least one class score. A single-class export is
         # only 5 columns wide, which is the common case here.
@@ -302,13 +311,13 @@ class Detector:
         else:
             prob = rows[:, 4:]
 
-        return self._filter(boxes, prob.max(axis=1), prob.argmax(axis=1))
+        return self._filter(boxes, prob.max(axis=1), prob.argmax(axis=1), conf_min)
 
-    def _filter(self, boxes, scores, class_ids):
+    def _filter(self, boxes, scores, class_ids, conf_min: float | None = None):
         """Keep confident boxes whose class is one we were told to look for."""
         scores = np.asarray(scores, dtype=np.float32).reshape(-1)
         class_ids = np.asarray(class_ids).reshape(-1).astype(int)
-        mask = scores >= CONF_MIN
+        mask = scores >= (CONF_MIN if conf_min is None else conf_min)
 
         # Class filtering only makes sense when the operator's list is the same
         # length as the model's class count. A mismatch means indices cannot be

@@ -471,4 +471,132 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // Tracked scan: every bird followed through the whole clip (packages/vision/clip_scan.py).
+  // It runs in the vision service's background; these routes start it, report
+  // progress, stop it and hand back what it found. Like every clip test it
+  // writes nothing to the database.
+  // ---------------------------------------------------------------------------
+
+  // POST /visual/video/:clipId/track — start. Body (optional): { interval?: seconds, exclude?: ["HH:MM:SS-HH:MM:SS"] }
+  app.post(
+    "/video/:clipId/track",
+    { preHandler: [requireAuth], config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { clipId } = request.params as { clipId: string };
+      const body = (request.body ?? {}) as { interval?: unknown; exclude?: unknown };
+      const forward: { interval?: number; exclude?: string[] } = {};
+      if (body.interval !== undefined && body.interval !== null && body.interval !== "") {
+        const interval = Number(body.interval);
+        if (!Number.isFinite(interval)) return reply.code(400).send({ error: "invalid_settings", detail: "interval must be a number of seconds" });
+        forward.interval = interval;
+      }
+      if (body.exclude !== undefined) {
+        if (!Array.isArray(body.exclude) || body.exclude.length > 50 || !body.exclude.every((x) => typeof x === "string" && x.length <= 40)) {
+          return reply.code(400).send({ error: "invalid_exclude", detail: "exclude must be a list of 'HH:MM:SS-HH:MM:SS'" });
+        }
+        forward.exclude = body.exclude as string[];
+      }
+      try {
+        const res = await fetch(`${VISION_BASE}/video/${encodeURIComponent(clipId)}/track`, {
+          method: "POST",
+          headers: { ...visionHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify(forward),
+          signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+        });
+        if (!res.ok) return forwardError(reply, res);
+        return reply.code(202).send(await res.json());
+      } catch {
+        return reply.code(503).send({ error: "vision_service_unavailable" });
+      }
+    },
+  );
+
+  // GET /visual/video/:clipId/track?samples=1&from=&limit= — progress and summary, optionally the frames
+  app.get("/video/:clipId/track", { preHandler: [requireAuth] }, async (request, reply) => {
+    const { clipId } = request.params as { clipId: string };
+    const query = request.query as { samples?: string; from?: string; limit?: string };
+    const params = new URLSearchParams();
+    if (query.samples === "1" || query.samples === "true") {
+      params.set("samples", "1");
+      const from = Number(query.from ?? 0);
+      const limit = Number(query.limit ?? 2000);
+      if (!Number.isInteger(from) || from < 0 || !Number.isInteger(limit) || limit < 1) {
+        return reply.code(400).send({ error: "invalid_paging" });
+      }
+      params.set("from", String(from));
+      params.set("limit", String(Math.min(limit, 5000)));
+    }
+    try {
+      const res = await fetch(`${VISION_BASE}/video/${encodeURIComponent(clipId)}/track?${params}`, {
+        headers: visionHeaders(),
+        signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      });
+      if (!res.ok) return forwardError(reply, res);
+      return reply.send(await res.json());
+    } catch {
+      return reply.code(503).send({ error: "vision_service_unavailable" });
+    }
+  });
+
+  // DELETE /visual/video/:clipId/track — stop a running scan (what it found so far is kept)
+  app.delete("/video/:clipId/track", { preHandler: [requireAuth] }, async (request, reply) => {
+    const { clipId } = request.params as { clipId: string };
+    try {
+      const res = await fetch(`${VISION_BASE}/video/${encodeURIComponent(clipId)}/track`, {
+        method: "DELETE",
+        headers: visionHeaders(),
+        signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      });
+      if (!res.ok) return forwardError(reply, res);
+      return reply.send(await res.json());
+    } catch {
+      return reply.code(503).send({ error: "vision_service_unavailable" });
+    }
+  });
+
+  // GET /visual/video/:clipId/track.csv?kind=mot — download: per-frame CSV, or MOTChallenge rows for scoring
+  app.get("/video/:clipId/track.csv", { preHandler: [requireAuth] }, async (request, reply) => {
+    const { clipId } = request.params as { clipId: string };
+    const kind = (request.query as { kind?: string }).kind === "mot" ? "mot" : "samples";
+    try {
+      const res = await fetch(`${VISION_BASE}/video/${encodeURIComponent(clipId)}/track.csv?kind=${kind}`, {
+        headers: visionHeaders(),
+        signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      });
+      if (!res.ok) return forwardError(reply, res);
+      const disposition = res.headers.get("content-disposition");
+      if (disposition) reply.header("Content-Disposition", disposition);
+      reply.header("Cache-Control", "no-store");
+      reply.type(kind === "mot" ? "text/plain; charset=utf-8" : "text/csv; charset=utf-8");
+      return reply.send(await res.text());
+    } catch {
+      return reply.code(503).send({ error: "vision_service_unavailable" });
+    }
+  });
+
+  // GET /visual/video/:clipId/track/frame?t= — the sampled frame nearest t, bird numbers drawn, as base64 JPEG
+  app.get("/video/:clipId/track/frame", { preHandler: [requireAuth] }, async (request, reply) => {
+    const { clipId } = request.params as { clipId: string };
+    const t = Number((request.query as { t?: string }).t ?? 0);
+    if (!Number.isFinite(t) || t < 0) return reply.code(400).send({ error: "invalid_time" });
+    try {
+      const res = await fetch(`${VISION_BASE}/video/${encodeURIComponent(clipId)}/track/frame?t=${t}`, {
+        headers: visionHeaders(),
+        signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+      });
+      if (!res.ok) return forwardError(reply, res);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      return reply.send({
+        t: Number(res.headers.get("x-sample-time") ?? t),
+        status: res.headers.get("x-sample-status"),
+        content_type: "image/jpeg",
+        size_bytes: buffer.length,
+        image: buffer.toString("base64"),
+      });
+    } catch {
+      return reply.code(503).send({ error: "vision_service_unavailable" });
+    }
+  });
 }

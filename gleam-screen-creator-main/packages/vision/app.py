@@ -26,6 +26,11 @@ Endpoints:
     POST /video/<id>/analyze  — one measurement on that clip
     POST /video/<id>/sweep    — the same measurement across the whole clip
     POST /video/<id>/weights  — the depth-to-mass estimate across the clip
+    POST /video/<id>/track    — start a tracked scan of the whole clip (background)
+    GET  /video/<id>/track    — its progress and summary (?samples=1 for the frames)
+    GET  /video/<id>/track.csv — per-frame CSV, or ?kind=mot for MOTChallenge rows
+    GET  /video/<id>/track/frame — one sampled frame with the bird numbers drawn
+    DELETE /video/<id>/track  — stop the scan
     DELETE /video/<clip_id>   — forget it
 """
 
@@ -46,6 +51,7 @@ load_dotenv()
 from camera import CameraManager, probe_source
 from detector import Detector, analyse_pair
 import camera_config
+import clip_scan
 import video as clip_store
 import weight
 import zones as zone_store
@@ -377,6 +383,7 @@ def video_info(clip_id: str):
 
 @app.route("/video/<clip_id>", methods=["DELETE"])
 def video_delete(clip_id: str):
+    clip_scan.registry.forget(clip_id)
     if not clip_store.remove(clip_id):
         return jsonify({"error": "unknown_clip", "clip_id": clip_id}), 404
     return jsonify({"ok": True, "clip_id": clip_id})
@@ -412,6 +419,123 @@ def video_frame(clip_id: str):
         jpeg,
         mimetype="image/jpeg",
         headers={"Cache-Control": "no-store"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tracked scan: every bird followed through the whole clip (clip_scan.py)
+# ---------------------------------------------------------------------------
+
+def _scan_or_404(clip_id: str):
+    clip, missing = _clip_or_404(clip_id)
+    if missing:
+        clip_scan.registry.forget(clip_id)
+        return None, None, missing
+    job = clip_scan.registry.get(clip_id)
+    if job is None:
+        return clip, None, (jsonify({"error": "no_scan", "clip_id": clip_id}), 404)
+    return clip, job, None
+
+
+@app.route("/video/<clip_id>/track", methods=["POST"])
+def video_track_start(clip_id: str):
+    """
+    Start following every bird through the clip, one frame every `interval`
+    seconds. Runs in the background; poll GET for progress. Body (optional):
+    {"interval": 2, "exclude": ["00:41:02-00:46:19"]} — known-bad stretches.
+    """
+    clip, missing = _clip_or_404(clip_id)
+    if missing:
+        return missing
+    if not detector.available:
+        return jsonify({"error": "model_unavailable", "detail": detector.load_error}), 503
+
+    payload = request.get_json(silent=True) or {}
+    exclude = payload.get("exclude") or []
+    if not isinstance(exclude, list) or not all(isinstance(x, str) for x in exclude):
+        return jsonify({"error": "invalid_exclude", "detail": "exclude must be a list of 'HH:MM:SS-HH:MM:SS'"}), 400
+    try:
+        settings = clip_scan.DEFAULT_SETTINGS.with_overrides(
+            interval=payload.get("interval"), exclude=exclude)
+    except (TypeError, ValueError) as err:
+        return jsonify({"error": "invalid_settings", "detail": str(err)}), 400
+
+    try:
+        job = clip_scan.registry.start(clip, clip_scan.detector_fn(detector, settings), settings)
+    except clip_scan.ScanBusy as busy:
+        return jsonify({"error": "scan_busy", "detail": "Another clip is being scanned.",
+                        "clip_id": str(busy)}), 409
+    return jsonify(job.summary()), 202
+
+
+@app.route("/video/<clip_id>/track", methods=["GET"])
+def video_track_status(clip_id: str):
+    """Progress and summary. ?samples=1 adds the frames (?from=&limit= to page them)."""
+    _, job, missing = _scan_or_404(clip_id)
+    if missing:
+        return missing
+    body = job.summary()
+    if request.args.get("samples") in ("1", "true", "yes"):
+        try:
+            start = max(0, int(request.args.get("from", "0")))
+            limit = max(1, min(int(request.args.get("limit", "2000")), 5000))
+        except ValueError:
+            return jsonify({"error": "invalid_paging"}), 400
+        samples = job.snapshot()
+        body["samples_total"] = len(samples)
+        body["samples"] = [s.as_dict() for s in samples[start:start + limit]]
+    return jsonify(body)
+
+
+@app.route("/video/<clip_id>/track", methods=["DELETE"])
+def video_track_cancel(clip_id: str):
+    _, job, missing = _scan_or_404(clip_id)
+    if missing:
+        return missing
+    job.cancel.set()
+    return jsonify({"ok": True, "status": job.status})
+
+
+@app.route("/video/<clip_id>/track.csv", methods=["GET"])
+def video_track_csv(clip_id: str):
+    """Per-frame CSV (klydel's gap-aware columns first), or ?kind=mot for MOTChallenge rows."""
+    _, job, missing = _scan_or_404(clip_id)
+    if missing:
+        return missing
+    mot = request.args.get("kind") == "mot"
+    text = job.mot_text() if mot else job.samples_csv()
+    stem = os.path.splitext(job.clip_name)[0] or "clip"
+    filename = f"{stem}_{'pred.txt' if mot else 'tracking.csv'}"
+    return Response(
+        text,
+        mimetype="text/plain" if mot else "text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
+    )
+
+
+@app.route("/video/<clip_id>/track/frame", methods=["GET"])
+def video_track_frame(clip_id: str):
+    """The sampled frame nearest ?t=, with each tracked bird's number drawn on it."""
+    clip, job, missing = _scan_or_404(clip_id)
+    if missing:
+        return missing
+    t = _time_param()
+    if t is None:
+        return jsonify({"error": "invalid_time"}), 400
+    sample = job.sample_near(t)
+    if sample is None:
+        return jsonify({"error": "no_tracked_frame_yet", "t": t}), 422
+    frame = clip_store.frame_at(clip, sample.t)
+    if frame is None:
+        return jsonify({"error": "video_frame_unavailable", "t": sample.t}), 422
+    jpeg = clip_store.encode_jpeg(clip_scan.annotate(frame, sample))
+    if jpeg is None:
+        return jsonify({"error": "encode_failed"}), 500
+    return Response(
+        jpeg,
+        mimetype="image/jpeg",
+        headers={"Cache-Control": "no-store", "X-Sample-Time": f"{sample.t:.3f}",
+                 "X-Sample-Status": sample.status},
     )
 
 
