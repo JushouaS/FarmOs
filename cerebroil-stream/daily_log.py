@@ -44,6 +44,13 @@ FILE_NAME = re.compile(
     r"^(temperature|humidity|ammonia|behavior|sensors|kinect-weights|kinect-birds)-(\d{4})-(\d{2})-(\d{2})\.csv$"
 )
 
+#: A day's file set aside because its columns changed (see DailyCsv._set_aside_if_columns_changed). Kept and deleted
+#: with the others after LOG_KEEP_DAYS, but not listed or served.
+SET_ASIDE = re.compile(
+    r"^(temperature|humidity|ammonia|behavior|sensors|kinect-weights|kinect-birds)-(\d{4})-(\d{2})-(\d{2})"
+    r"\.before-\d{6}\.csv$"
+)
+
 #: The readings that have a folder of their own under LOG_DIR.
 FOLDERS = ("temperature", "humidity", "ammonia", "behavior")
 
@@ -82,6 +89,7 @@ class DailyCsv:
         self._now = now
         self._free_bytes = free_bytes or (lambda path: shutil.disk_usage(path).free)
         self._pruned_on: date | None = None
+        self._checked: set[Path] = set()   # files whose header was checked by this writer
 
     def path_for(self, ts: float) -> Path:
         return self.directory / f"{self.name}-{datetime.fromtimestamp(ts).date().isoformat()}.csv"
@@ -98,6 +106,9 @@ class DailyCsv:
             line = io.StringIO()
             writer = csv.writer(line, lineterminator="\n")
             exists = path.exists() and path.stat().st_size > 0
+            if exists and path not in self._checked:
+                exists = self._set_aside_if_columns_changed(path, ts)
+            self._checked.add(path)
             if not exists:
                 writer.writerow(self.columns)
             writer.writerow(["" if row.get(c) is None else row.get(c) for c in self.columns])
@@ -112,13 +123,25 @@ class DailyCsv:
         except OSError:
             return False
 
+    def _set_aside_if_columns_changed(self, path: Path, ts: float) -> bool:
+        """An update can change a file's columns in the middle of a day. Rows under the wrong header would be
+        misread, so the day's file so far is renamed <name>-<date>.before-HHMMSS.csv (kept, not listed or served)
+        and a new file is started. Returns whether `path` still exists with the right header."""
+        with open(path, "r", encoding="utf-8", errors="replace", newline="") as handle:
+            first = handle.readline().rstrip("\r\n")
+        if first == ",".join(self.columns):
+            return True
+        stamp = datetime.fromtimestamp(ts).strftime("%H%M%S")
+        path.rename(path.with_name(f"{path.stem}.before-{stamp}.csv"))
+        return False
+
     def _prune(self, today: date) -> None:
         if self._pruned_on == today:
             return
         self._pruned_on = today
         cutoff = today - timedelta(days=self.keep)
         for path in self.directory.glob(f"{self.name}-*.csv"):
-            found = FILE_NAME.match(path.name)
+            found = FILE_NAME.match(path.name) or SET_ASIDE.match(path.name)
             if not found or found[1] != self.name:   # "kinect-*" must not match a "kinect-birds" file
                 continue
             try:

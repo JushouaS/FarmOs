@@ -576,7 +576,24 @@ also writes its own files every day in `~/cerebroil-stream/logs/`, one folder pe
 | `temperature/temperature-YYYY-MM-DD.csv` | the sensor reader, always | `time, temperature_c, reading_age_s, error` |
 | `humidity/humidity-YYYY-MM-DD.csv` | the sensor reader, always | `time, humidity_pct, reading_age_s, error` |
 | `ammonia/ammonia-YYYY-MM-DD.csv` | the sensor reader, always | `time, ammonia_ppm, error` |
-| `behavior/behavior-YYYY-MM-DD.csv` | the live behaviour monitor, only while `LIVE_BEHAVIOR=1` is set in the Pi's `.env` | `time, birds, still_birds, huddled_birds, flock_moving, huddle_fdi, error` |
+| `behavior/behavior-YYYY-MM-DD.csv` | the live behaviour monitor, only while `LIVE_BEHAVIOR=1` is set in the Pi's `.env` | `time, summary, birds_seen, still_birds, birds_judged, huddled_birds, huddled_pct, moving_pct, still_window_min, huddle_window_min, problem` |
+
+The behaviour file is written to be read by people. Each row starts with a sentence, then the numbers behind it:
+
+| Column | Meaning |
+|---|---|
+| `summary` | the minute in words, e.g. `25 birds seen; 2 still for 30+ min (of 23 watched long enough); 4 in a huddle (16% of the flock).` |
+| `birds_seen` | birds the detector found in the picture |
+| `still_birds` | birds that did not move for the whole still window |
+| `birds_judged` | birds followed long enough to say whether they were still; for the first `still_window_min` minutes after a restart nobody is, and the summary says it is too early to tell |
+| `huddled_birds`, `huddled_pct` | birds in a huddle that has lasted at least `huddle_window_min`, and that as a share of the birds seen (0 to 100; 35 or more is called out as above the warning level) |
+| `moving_pct` | share of the judged birds that moved (0 to 100; blank with fewer than 3 judged) |
+| `still_window_min`, `huddle_window_min` | the two times the rows are judged by (`LIVE_INACTIVE_SECONDS`, default 30 min; `LIVE_HUDDLE_SECONDS`, default 10 min) |
+| `problem` | why there is no reading that minute, in words (`The camera gave no picture.`, `The bird detector is not installed ...`); blank when all is well |
+
+"Still" is not "sick": the Pi does not know the lighting hours, so at night still birds are resting. If an update changes a
+file's columns during the day, the day's rows so far are kept as `behavior-<date>.before-HHMMSS.csv` (not listed or served)
+and a new file is started, so no row sits under the wrong header.
 
 Temperature and humidity come from the one DHT22, so a failed read leaves both blank with the same reason. **No ammonia
 sensor is connected yet:** every ammonia row has an empty `ammonia_ppm` and says `no ammonia sensor connected`, so the

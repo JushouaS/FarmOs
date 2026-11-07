@@ -11,7 +11,13 @@
 #   ~/cerebroil-stream/logs/ammonia/ammonia-YYYY-MM-DD.csv           time, ammonia_ppm, error
 #                                                                    (empty ppm and "no ammonia sensor connected"
 #                                                                     until an ammonia sensor is wired)
-#   ~/cerebroil-stream/logs/behavior/behavior-YYYY-MM-DD.csv         same columns as before, only while LIVE_BEHAVIOR=1
+#   ~/cerebroil-stream/logs/behavior/behavior-YYYY-MM-DD.csv         a sentence per minute (summary), then the numbers:
+#                                                                    birds_seen, still_birds, birds_judged, huddled_birds,
+#                                                                    huddled_pct, moving_pct, the two time windows, problem
+#                                                                    (only while LIVE_BEHAVIOR=1)
+#
+# Running it again after a later update is fine: it downloads and restarts again. A file whose columns changed is kept
+# as <name>-<date>.before-HHMMSS.csv and a new one is started.
 #
 # The older files (logs/sensors-*.csv and logs/behavior-*.csv) stay where they are; the laptop still reads them.
 # Your .env and the .venv are NOT touched.
