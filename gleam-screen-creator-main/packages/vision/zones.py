@@ -29,7 +29,9 @@ logger = logging.getLogger(__name__)
 
 CACHE_SECONDS = float(os.getenv("ZONES_CACHE_SECONDS", "30"))
 
-_raw = os.getenv("DATABASE_URL", "")
+# ZONES_DATABASE_URL lets a service read the zones without also taking the camera link from the database
+# (scripts/run-vision.ps1 uses it on the laptop, where the camera is only reachable through the Pi).
+_raw = os.getenv("ZONES_DATABASE_URL") or os.getenv("DATABASE_URL", "")
 DATABASE_URL = _raw.replace("postgresql+psycopg2://", "postgresql://").replace(
     "postgres://", "postgresql://"
 )

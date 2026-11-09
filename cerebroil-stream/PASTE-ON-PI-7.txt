@@ -1,0 +1,46 @@
+# FIRST, on its own, run:   sudo -v   and type the Pi's password. Then paste the rest. If sudo has to ask for the
+# password in the middle of a paste, it reads the NEXT pasted line as the password and the restart below never happens.
+#
+# Paste ALL of this into the Raspberry Pi Connect terminal (one go) and press Enter, AFTER the new files are on GitHub
+# (the branch responsive-login-local-db). It takes about 1 minute. At the end copy everything it printed and send it back.
+#
+# What changes: the live behaviour monitor (LIVE_BEHAVIOR=1) now follows the birds with the same tracker and rules as
+# the laptop's "Follow every bird" scan: ByteTrack, klydel's stable bird numbers, and klydel's huddling and inactivity
+# rules (BehaviorMonitoring, branch klydel, commit a365f3d). Also new:
+#   - a frozen camera picture is no longer read as "every bird is still": it is skipped and the problem column says so;
+#   - after a gap (no picture for a while) the birds' numbers and the 30-minute clock start over;
+#   - the feeder and drinker zones drawn in Settings reach the Pi: the laptop's API sends them on its next poll and the
+#     Pi keeps them in ~/cerebroil-stream/behavior_zones.json, so they still apply without internet.
+#
+# The minute files (logs/behavior/behavior-YYYY-MM-DD.csv) keep the same columns. The daily recordings, the sensor
+# reader, your .env and the .venv are NOT touched. To go back to the old monitor: add LIVE_ENGINE=old to .env and
+# run  sudo systemctl restart cerebroil-stream
+#
+# Waiting is normal: a bird needs 30 minutes of watching before it can be called still, and a huddle 10 minutes.
+
+echo; echo "=== A. Getting the latest files"
+command -v git >/dev/null || sudo apt-get install -y git
+rm -rf ~/farmos-src
+git clone --quiet --depth 1 --filter=blob:none --sparse -b responsive-login-local-db https://github.com/JushouaS/FarmOs.git ~/farmos-src
+git -C ~/farmos-src sparse-checkout set cerebroil-stream
+cp -a ~/farmos-src/cerebroil-stream/. ~/cerebroil-stream/
+ls ~/cerebroil-stream/live_rules.py ~/cerebroil-stream/klydel/behavior_rules.py
+
+echo; echo "=== B. Checking the new monitor on this Pi (its own tests, about 30 s)"
+cd ~/cerebroil-stream
+if .venv/bin/python -c "import pytest" 2>/dev/null; then
+  .venv/bin/python -m pytest -q test_live_rules.py test_behavior_log.py 2>&1 | tail -3
+else
+  .venv/bin/python -c "import live_rules; e = live_rules.LiveRules(); print('live_rules loads:', e.status(False)['rules'])"
+fi
+
+echo; echo "=== C. Restarting the camera service"
+sudo systemctl restart cerebroil-stream
+sleep 45
+
+echo; echo "=== D. What the monitor says now"
+journalctl -u cerebroil-stream --since "-2 min" --no-pager | grep "\[behavior\]" | tail -3
+TOKEN=$(grep -E '^VISION_SERVICE_TOKEN=' ~/cerebroil-stream/.env | cut -d= -f2-)
+curl -s -m 5 -H "X-Vision-Token: $TOKEN" "http://127.0.0.1:5000/behavior/status?night=0"; echo
+echo "--- the service state:"
+systemctl is-active cerebroil-stream

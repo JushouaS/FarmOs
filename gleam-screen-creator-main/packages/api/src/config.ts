@@ -127,6 +127,8 @@ const schema = z.object({
   // camera service which birds are inactive or huddling and raises alerts. "off" disables it.
   BEHAVIOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
   BEHAVIOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(30)),
+  // Which camera's Settings > Feeder zones the live monitor on the Pi uses (sent to it when they change).
+  BEHAVIOR_ZONE_CAMERA: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).default("CAM-01")),
 
   // Live sensor monitor (sensor-monitor.ts): every SENSOR_POLL_SECONDS the API asks the camera service for
   // the DHT22's newest temperature and humidity and stores them. "off" disables it.

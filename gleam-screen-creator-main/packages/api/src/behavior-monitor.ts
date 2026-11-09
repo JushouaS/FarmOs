@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { env } from "./config.js";
 import { readLighting, type Lighting } from "./lighting.js";
@@ -48,6 +49,31 @@ export interface BehaviorStatus {
   /** Most of the flock still for longer than the inactive time (by day). */
   flock_inactive: { still_seconds: number } | null;
   huddle: { birds: number; fdi: number; seconds: number; warning: boolean } | null;
+  /** Which copy of the feeder zones the camera service holds (absent on a camera service that takes none). */
+  zones_version?: string | null;
+}
+
+/** The enabled feeder/drinker polygons saved for a camera, and a version that changes whenever they do. */
+export async function zonesForCamera(app: FastifyInstance, cameraId: string): Promise<{ version: string; zones: number[][][] }> {
+  const rows = await app.sqlRead`
+    SELECT polygon FROM camera_zones WHERE camera_id = ${cameraId} AND enabled ORDER BY created_at`;
+  const zones = rows.map((r: any) => (typeof r.polygon === "string" ? JSON.parse(r.polygon) : r.polygon) as number[][]);
+  const version = createHash("sha1").update(JSON.stringify(zones)).digest("hex").slice(0, 16);
+  return { version, zones };
+}
+
+/** Sends the zones when the camera service holds another version. Best effort: the next poll tries again. */
+async function syncZones(app: FastifyInstance, status: BehaviorStatus): Promise<void> {
+  if (!("zones_version" in status)) return; // an older camera service: it has nowhere to put them
+  const { version, zones } = await zonesForCamera(app, env.BEHAVIOR_ZONE_CAMERA);
+  if (status.zones_version === version) return;
+  const res = await fetch(`${env.VISION_SERVICE_URL}/behavior/zones`, {
+    method: "PUT",
+    headers: { "X-Vision-Token": env.VISION_SERVICE_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ version, zones }),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (res.ok) app.log.info({ zones: zones.length, camera: env.BEHAVIOR_ZONE_CAMERA }, "behavior monitor: feeder zones sent to the camera service");
 }
 
 const minutesOf = (seconds: number): number => Math.max(1, Math.round(seconds / 60));
@@ -116,6 +142,7 @@ export function startBehaviorMonitor(app: FastifyInstance): void {
       return;
     }
     warned = false;
+    await syncZones(app, status).catch((err) => app.log.warn({ err: err instanceof Error ? err.message : err }, "behavior monitor: could not send the feeder zones"));
     if (!status.running) return;
     const raised = await applyStatus(app, status, lastRaised);
     if (raised.length > 0) app.log.info({ raised }, "behavior monitor: alerts raised");

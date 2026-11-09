@@ -77,8 +77,11 @@ def _letterbox(img: np.ndarray, size: int) -> tuple[np.ndarray, float, int, int]
     return canvas, r, left, top
 
 
-def _infer(frame: np.ndarray) -> list[list[float]]:
-    """Boxes as [x, y, w, h, confidence, class] in the frame's own pixels."""
+def _infer(frame: np.ndarray, conf_min: float | None = None, nms_iou: float | None = None) -> list[list[float]]:
+    """Boxes as [x, y, w, h, confidence, class] in the frame's own pixels. conf_min and nms_iou default to
+    DETECTOR_CONFIDENCE and 0.45; the live tracker asks for 0.1 and 0.7 (ByteTrack wants the weak boxes too)."""
+    floor = CONFIDENCE if conf_min is None else conf_min
+    iou = IOU if nms_iou is None else nms_iou
     h0, w0 = frame.shape[:2]
     canvas, r, left, top = _letterbox(frame, _size)
     blob = cv2.dnn.blobFromImage(canvas, 1 / 255.0, (_size, _size), swapRB=True)
@@ -88,7 +91,7 @@ def _infer(frame: np.ndarray) -> list[list[float]]:
     scores = out[:, 4:]
     conf = scores.max(axis=1)
     cls = scores.argmax(axis=1)
-    keep = conf >= CONFIDENCE
+    keep = conf >= floor
     if not keep.any():
         return []
     out, conf, cls = out[keep], conf[keep], cls[keep]
@@ -96,7 +99,7 @@ def _infer(frame: np.ndarray) -> list[list[float]]:
     x = (cx - w / 2 - left) / r
     y = (cy - h / 2 - top) / r
     boxes = np.stack([x, y, w / r, h / r], axis=1)
-    picked = cv2.dnn.NMSBoxes(boxes.tolist(), conf.tolist(), CONFIDENCE, IOU)
+    picked = cv2.dnn.NMSBoxes(boxes.tolist(), conf.tolist(), floor, iou)
     result = []
     for i in np.array(picked).flatten():
         bx, by, bw, bh = boxes[i]
@@ -141,13 +144,13 @@ def convert_to_mp4(src: str, dst: str) -> None:
         raise UnreadableVideo()
 
 
-def detect_frame(frame: np.ndarray) -> list[list[float]] | None:
+def detect_frame(frame: np.ndarray, conf_min: float | None = None, nms_iou: float | None = None) -> list[list[float]] | None:
     """Boxes [x, y, w, h, confidence, class] in one frame, or None when the detector is busy with an uploaded video."""
     if not _lock.acquire(blocking=False):
         return None
     try:
         _load()
-        return _infer(frame)
+        return _infer(frame, conf_min, nms_iou)
     finally:
         _lock.release()
 

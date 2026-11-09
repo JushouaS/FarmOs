@@ -856,6 +856,133 @@ export async function sweepClip(
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Tracked scan: every bird followed through a clip (vision clip_scan.py)    */
+/* -------------------------------------------------------------------------- */
+
+export type TrackStatus = "running" | "done" | "cancelled" | "failed";
+export type TrackFrameStatus = "VALID" | "GAP" | "RECOVERING";
+
+export interface TrackSummary {
+  job_id: string;
+  clip_id: string;
+  clip_name: string;
+  status: TrackStatus;
+  error: string | null;
+  progress: {
+    frames_done: number;
+    frames_expected: number;
+    video_seconds_done: number;
+    video_seconds_total: number;
+    elapsed_s: number;
+    eta_s: number | null;
+  };
+  counts: Record<TrackFrameStatus, number>;
+  gap_reasons: Record<string, number>;
+  sessions: number;
+  tracking: {
+    distinct_ids: number;
+    mean_birds_per_frame: number;
+    ids_per_bird: number | null;
+    median_id_lifetime_s: number | null;
+    longest_id_lifetime_s: number | null;
+    recovered_boxes: number;
+  };
+  behaviour: {
+    judged_frames: number;
+    frames_with_huddling: number;
+    huddling_share: number | null;
+    huddle_groups: number;
+    huddle_groups_by_origin: Record<string, number>;
+    max_birds_huddled: number;
+    /** Detections the tracker missed that took part in huddles (counted for huddling only). */
+    huddle_only_detections: number;
+    temporal_added: number;
+    frames_with_inactivity: number;
+    /** First and last time each bird was flagged; not necessarily one unbroken stretch. */
+    inactive_birds: { bird: number; from_s: number; to_s: number }[];
+    inactivity_window_s: number;
+    longest_judged_stretch_s: number;
+    window_fits: boolean;
+  };
+  settings: {
+    interval: number;
+    inactivity_window_s: number;
+    zones: { source: string; count: number };
+    klydel_commit: string;
+    [key: string]: unknown;
+  };
+}
+
+/** One sampled frame. birds: [id, cx, cy, w, h, score, recovered]. Behaviour is null when the frame was not judged. */
+export interface TrackSample {
+  t: number;
+  frame_no: number | null;
+  status: TrackFrameStatus;
+  reason: string;
+  session: number;
+  n_birds: number | null;
+  huddles: { birds: number[]; origin: string }[] | null;
+  inactive: number[] | null;
+  feeding: number | null;
+}
+
+export interface TrackWithSamples extends TrackSummary {
+  samples_total: number;
+  samples: TrackSample[];
+}
+
+/** Start following every bird through the clip. Runs in the background: poll trackStatus. */
+export async function startTrack(
+  clipId: string,
+  options: { interval?: number; inactivity_window_s?: number; exclude?: string[] } = {},
+): Promise<TrackSummary> {
+  return apiFetch<TrackSummary>(`/visual/video/${encodeURIComponent(clipId)}/track`, {
+    method: "POST",
+    body: JSON.stringify(options),
+  });
+}
+
+/** Progress and summary; with `samples`, every sampled frame too (paged by the vision service, 5000 at most). */
+export async function trackStatus(clipId: string, samples = false): Promise<TrackWithSamples> {
+  const query = samples ? "?samples=1&from=0&limit=5000" : "";
+  return apiFetch<TrackWithSamples>(`/visual/video/${encodeURIComponent(clipId)}/track${query}`);
+}
+
+/** Stop a running scan; what it found so far is kept. */
+export async function stopTrack(clipId: string): Promise<{ ok: boolean; status: TrackStatus }> {
+  return apiFetch<{ ok: boolean; status: TrackStatus }>(`/visual/video/${encodeURIComponent(clipId)}/track`, {
+    method: "DELETE",
+  });
+}
+
+/** The sampled frame nearest `t`, with bird numbers, huddles and inactive birds drawn. */
+export async function trackFrame(
+  clipId: string,
+  t: number,
+): Promise<{ t: number; status: TrackFrameStatus | null; content_type: string; image: string }> {
+  return apiFetch(`/visual/video/${encodeURIComponent(clipId)}/track/frame?t=${t}`);
+}
+
+/** The scan as a file: the per-frame CSV, or MOTChallenge rows ("mot") for scoring against ground truth. */
+export async function trackFile(clipId: string, kind: "samples" | "mot"): Promise<{ blob: Blob; filename: string }> {
+  const path = `/visual/video/${encodeURIComponent(clipId)}/track.csv?kind=${kind}`;
+  const send = () => fetch(`${API_BASE}${path}`, { credentials: "include" });
+  let res = await send();
+  if (res.status === 401) {
+    await renewSession();
+    res = await send();
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new ApiError(res.status, typeof body.error === "string" ? body.error : res.statusText,
+      typeof body.detail === "string" ? body.detail : undefined);
+  }
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+  return { blob: await res.blob(), filename: named ?? (kind === "mot" ? "pred.txt" : "tracking.csv") };
+}
+
 /** One sampled frame of a depth recording. `null` mass means the frame could not be read. */
 export interface VideoWeightSample {
   t: number;

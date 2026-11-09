@@ -11,12 +11,20 @@ Switched on with LIVE_BEHAVIOR=1 in .env, because it keeps the computer busy
 (about one detector run every few seconds). The times are real ones:
 LIVE_INACTIVE_SECONDS (default 30 minutes) is how long a bird must stay still, and
 LIVE_HUDDLE_SECONDS (default 10 minutes) how long a huddle must last.
+
+The judge is live_rules.LiveRules: the same ByteTrack, stable bird numbers and
+klydel huddling/inactivity rules as the laptop's "Follow every bird" scan.
+LIVE_ENGINE=old goes back to the earlier behavior.Engine. The feeder zones come
+from the API (PUT /behavior/zones) and are kept in behavior_zones.json, so they
+survive a restart without internet.
 """
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Any, Callable
 
 import cv2
@@ -26,22 +34,42 @@ import behavior
 import behavior_log
 import daily_log
 import demo_detect
+import live_rules
 import pixels
 
 SAMPLE_SECONDS = float(os.getenv("LIVE_SAMPLE_SECONDS", "3"))
 INACTIVE_SECONDS = float(os.getenv("LIVE_INACTIVE_SECONDS", "1800"))
 HUDDLE_SECONDS = float(os.getenv("LIVE_HUDDLE_SECONDS", "600"))
 LOG_SECONDS = float(os.getenv("LOG_SECONDS", "60"))
+ENGINE = os.getenv("LIVE_ENGINE", "klydel").strip().lower()
+# ByteTrack wants the weak boxes too: the floor and NMS overlap klydel's runs get from Ultralytics (as clip_scan.py).
+DETECT_CONF = float(os.getenv("LIVE_DETECT_CONF", "0.1"))
+DETECT_NMS = float(os.getenv("LIVE_DETECT_NMS", "0.7"))
+ZONES_FILE = Path(os.getenv("LIVE_ZONES_FILE", str(Path(__file__).with_name("behavior_zones.json"))))
+
+
+def _read_zones() -> tuple[list, str | None]:
+    try:
+        data = json.loads(ZONES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], None
+    zones = live_rules.valid_zones(data.get("zones")) if isinstance(data, dict) else None
+    return (zones, data.get("version")) if zones is not None else ([], None)
 
 
 class LiveBehavior:
     def __init__(self, get_frame: Callable[[], bytes | None]) -> None:
         self._get_frame = get_frame
-        self._engine = behavior.Engine(
-            inactive_seconds=INACTIVE_SECONDS,
-            huddle_seconds=HUDDLE_SECONDS,
-            keep_all=False,   # a live feed never ends, so finished birds are not kept
-        )
+        self._klydel = ENGINE != "old"
+        zones, self._zones_version = _read_zones()
+        if self._klydel:
+            self._engine: Any = live_rules.LiveRules(INACTIVE_SECONDS, HUDDLE_SECONDS, SAMPLE_SECONDS, zones)
+        else:
+            self._engine = behavior.Engine(
+                inactive_seconds=INACTIVE_SECONDS,
+                huddle_seconds=HUDDLE_SECONDS,
+                keep_all=False,   # a live feed never ends, so finished birds are not kept
+            )
         self._lock = threading.Lock()
         self._last_at: float | None = None
         self._error: str | None = None
@@ -56,7 +84,9 @@ class LiveBehavior:
         threading.Thread(target=self._run, daemon=True, name="live-behavior").start()
 
     def _run(self) -> None:
-        print(f"[behavior] live monitoring on: a frame every {SAMPLE_SECONDS:g} s, "
+        rules = (f"ByteTrack + klydel rules {live_rules.KLYDEL_COMMIT}, {len(self._engine.zones_norm)} feeder zones"
+                 if self._klydel else "the old engine")
+        print(f"[behavior] live monitoring on ({rules}): a frame every {SAMPLE_SECONDS:g} s, "
               f"inactive after {INACTIVE_SECONDS / 60:g} min, huddle after {HUDDLE_SECONDS / 60:g} min.")
         while True:
             started = time.time()
@@ -93,6 +123,8 @@ class LiveBehavior:
         if frame is None:
             self._error = "bad_frame"
             return False
+        if self._klydel:
+            return self._step_klydel(frame)
         boxes = demo_detect.detect_frame(frame)
         if boxes is None:            # the detector is busy with an uploaded video
             return False
@@ -107,6 +139,33 @@ class LiveBehavior:
         self._error = None
         return True
 
+    def _step_klydel(self, frame: np.ndarray) -> bool:
+        now = time.time()
+        with self._lock:
+            why_not = self._engine.check(now, frame)
+        if why_not:                  # a frozen camera: the birds did not stand still, the picture did
+            self._error = why_not
+            return False
+        boxes = demo_detect.detect_frame(frame, DETECT_CONF, DETECT_NMS)
+        if boxes is None:            # the detector is busy with an uploaded video (a gap: check() starts over after it)
+            return False
+        height, width = frame.shape[:2]
+        with self._lock:
+            self._engine.update(now, boxes, width, height)
+            self._last_at = time.time()
+        self._error = None
+        return True
+
+    def set_zones(self, zones: list, version: str | None) -> None:
+        """The feeder and drinker zones from Settings (the API sends them), kept on disk for the next start."""
+        tmp = ZONES_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"version": version, "zones": zones}), encoding="utf-8")
+        os.replace(tmp, ZONES_FILE)
+        with self._lock:
+            self._zones_version = version
+            if self._klydel:
+                self._engine.set_zones(zones)
+
     def status(self, night: bool) -> dict[str, Any]:
         """What the API asks for. `night` is whether the lights are off now (the API knows the lighting hours)."""
         with self._lock:
@@ -114,6 +173,7 @@ class LiveBehavior:
             last = self._last_at
         report["running"] = last is not None
         report["age_seconds"] = round(time.time() - last, 1) if last is not None else None
+        report["zones_version"] = self._zones_version
         if self._error:
             report["error"] = self._error
         return report

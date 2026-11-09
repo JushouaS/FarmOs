@@ -919,6 +919,22 @@ The same kind of alert is not raised again for an hour. The times are `LIVE_INAC
 `LIVE_HUDDLE_SECONDS`. Like the Test video check, these are flags to go and look, not a diagnosis, and
 the numbers should be checked on your own flock.
 
+**Which rules the Pi uses.** The live monitor follows the birds with the same tracker and rules as Settings > Test clip >
+"Follow every bird": ByteTrack with klydel's stable bird numbers, and klydel's huddling and inactivity rules
+(BehaviorMonitoring, branch klydel, commit a365f3d; the copies are in `cerebroil-stream/klydel/`). To put it on the Pi,
+paste `cerebroil-stream/PASTE-ON-PI-7.txt`. What it does on a camera that never stops:
+
+- a frozen picture (the same picture 3 times in a row) is skipped, and the minute file's `problem` column says so, so a
+  stuck camera does not read as "every bird is still";
+- after a gap (no picture for 20 seconds or 5 pictures, whichever is longer, `LIVE_MAX_GAP_SECONDS`) the bird numbers
+  and the 30-minute clock start over;
+- the feeder and drinker zones of `BEHAVIOR_ZONE_CAMERA` (in `packages\api\.env`, default `CAM-01`) are sent to the Pi
+  by the API whenever they change, and the Pi keeps them in `behavior_zones.json`, so they still apply offline;
+- the detector keeps weak boxes too (`LIVE_DETECT_CONF=0.1`, `LIVE_DETECT_NMS=0.7`), as ByteTrack expects.
+
+`LIVE_ENGINE=old` in the Pi's `.env` goes back to the earlier monitor. On the laptop, `scripts\run-vision.ps1` now gives
+the clip scans the same zones (it reads `DATABASE_URL` from `packages\api\.env` for the zones only, not the camera link).
+
 ### Weights in Flock Tracking
 
 **Flock Tracking** lists the birds of the pen the camera watches, B-001 up to the flock size set in **Settings**. Weigh a bird

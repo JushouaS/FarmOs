@@ -20,3 +20,7 @@ logs/
 
 # The daily one-hour camera recordings (recorder.py): large, and only for the Pi's card
 recordings/
+
+# The feeder zones the API sent to the live monitor (live_behavior.py)
+behavior_zones.json
+behavior_zones.tmp

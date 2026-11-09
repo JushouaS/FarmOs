@@ -788,6 +788,26 @@ def behavior_status_route() -> tuple[Response, int] | Response:
     return jsonify(LIVE.status(request.args.get("night") == "1"))
 
 
+@app.put("/behavior/zones")
+def behavior_zones_route() -> tuple[Response, int] | Response:
+    """The feeder and drinker zones from Settings, sent by the API whenever /behavior/status reports an older
+    zones_version. Body: {"version": "...", "zones": [[[x, y], ...], ...]} with points in 0..1."""
+    err = _require_vision_token()
+    if err:
+        return err
+    if LIVE is None:
+        return jsonify({"running": False, "reason": "disabled"})
+    import live_rules
+
+    body = request.get_json(silent=True) or {}
+    zones = live_rules.valid_zones(body.get("zones"))
+    version = body.get("version")
+    if zones is None or not isinstance(version, str) or len(version) > 100:
+        return jsonify({"error": "invalid_zones"}), 400
+    LIVE.set_zones(zones, version)
+    return jsonify({"ok": True, "zones": len(zones), "version": version})
+
+
 SENSOR_FILE = Path(os.getenv("DHT22_FILE", str(Path(__file__).with_name("dht22.json"))))
 
 

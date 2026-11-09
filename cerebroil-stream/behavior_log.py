@@ -33,6 +33,7 @@ PROBLEMS = {
     "no_frame": "The camera gave no picture.",
     "bad_frame": "The camera picture could not be read.",
     "model_not_installed": "The bird detector is not installed (models/detector.onnx).",
+    "frozen_picture": "The camera picture is frozen (the same picture again and again), so the birds were not judged.",
 }
 
 

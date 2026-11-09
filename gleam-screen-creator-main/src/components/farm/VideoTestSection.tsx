@@ -13,6 +13,7 @@ import {
   type VisionClip,
 } from "@/lib/api-client";
 import { Block, Hint, Section } from "./SettingsParts";
+import { TrackedScanPanel } from "./TrackedScanPanel";
 import { T, tr } from "@/lib/i18n";
 
 /**
@@ -459,6 +460,8 @@ export function VideoTestSection() {
                 )}
               </div>
             )}
+
+            <TrackedScanPanel clipId={clip.id} />
           </div>
         )}
       </Block>
