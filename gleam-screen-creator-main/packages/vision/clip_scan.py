@@ -40,6 +40,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import os
 import statistics
 import threading
 import time
@@ -53,7 +54,7 @@ import numpy as np
 
 from behavior_rules import BehaviorSettings, BehaviorTracker, Zones
 from bytetrack import ByteTrackConfig, _env_float
-from gap_guard import iter_guarded_samples, parse_exclusions
+from gap_guard import CheckedFrame, iter_guarded_samples, parse_exclusions
 from stable_ids import KLYDEL_COMMIT, BroilerTracker, HybridConfig
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,9 @@ class ScanSettings:
     inactivity_window_s: float = 1800.0   # klydel / thesis: 30 minutes
     move_frac: float = 0.5                # allowed wander, in body lengths
     min_fill: float = 0.5                 # share of the window's frames a bird must be seen in
+    # klydel's a365f3d controller has no gap guard. Ours stays on by default (a frozen stretch would otherwise read
+    # as birds standing still); TRACK_GAP_GUARD=0 matches klydel exactly: every frame judged, no resets.
+    gap_guard: bool = True
 
     @classmethod
     def from_env(cls) -> "ScanSettings":
@@ -91,6 +95,7 @@ class ScanSettings:
             inactivity_window_s=_env_float("TRACK_INACTIVITY_WINDOW_S", d.inactivity_window_s),
             move_frac=_env_float("TRACK_MOVE_FRAC", d.move_frac),
             min_fill=_env_float("TRACK_MIN_FILL", d.min_fill),
+            gap_guard=os.getenv("TRACK_GAP_GUARD", "1").strip().lower() not in ("0", "false", "no", "off"),
         )
 
     def with_overrides(self, interval: float | None = None, exclude: list[str] | None = None,
@@ -157,6 +162,8 @@ class ScanSample:
     huddles: list[tuple[list[int], str]] | None = None    # (bird ids, origin: primary / temporal_*)
     inactive: list[int] | None = None                     # bird ids
     feeding: int | None = None                            # birds in a feeder/drinker zone
+    # Detections the tracker did not output, counted for huddling only (negative, frame-local numbers).
+    huddle_only: list[TrackedBird] = field(default_factory=list)
 
     @property
     def recovered(self) -> int:
@@ -180,10 +187,12 @@ class ScanSample:
             "huddles": [{"birds": ids, "origin": origin} for ids, origin in self.huddles] if self.judged else None,
             "inactive": self.inactive,
             "feeding": self.feeding,
+            "n_huddle_raw": len(self.huddle_only) if self.judged else None,
         }
         if with_birds:
             # [id, cx, cy, w, h, score, recovered]: compact, a 1 h clip is ~1800 of these.
             out["birds"] = [b.as_list() for b in self.birds]
+            out["huddle_only"] = [b.as_list() for b in self.huddle_only]
         return out
 
 
@@ -229,11 +238,15 @@ def scan(
     stats: if given, receives {"temporal_added": n} as the scan goes."""
     tracker = tracker or BroilerTracker()
     tracker.reset()
-    guarded = iter_guarded_samples(
-        frames, interval=settings.interval, freeze_frames=settings.freeze_frames,
-        freeze_diff=settings.freeze_diff, max_step=settings.max_time_step,
-        exclusions=settings.exclusions,
-    )
+    if settings.gap_guard:
+        guarded = iter_guarded_samples(
+            frames, interval=settings.interval, freeze_frames=settings.freeze_frames,
+            freeze_diff=settings.freeze_diff, max_step=settings.max_time_step,
+            exclusions=settings.exclusions,
+        )
+    else:
+        # klydel's a365f3d controller: every readable frame is judged, nothing is reset or held back.
+        guarded = (CheckedFrame(float(t), n, img, VALID) for t, n, img in frames if img is not None)
     need_reset = False
     warmup_left = 0
     session = 0
@@ -250,9 +263,10 @@ def scan(
         for key, fb in answers:
             s = pending.pop(key)
             if fb is not None:
-                s.huddles = [([s.birds[i].id for i in members], origin) for members, origin in fb.huddles]
+                s.huddles = [(list(ids), origin) for ids, origin in fb.huddles]
                 s.inactive = list(fb.inactive_ids)
                 s.feeding = len(fb.feeding)
+                s.huddle_only = [TrackedBird(rid, *box, score, False) for rid, (box, score) in fb.raw_added.items()]
             yield s
         if rules is not None:
             stats["temporal_added"] = stats.get("temporal_added_before", 0) + rules.added
@@ -293,7 +307,7 @@ def scan(
         for b in birds:
             highest = max(highest, b.id)
 
-        if len(birds) < settings.min_visible:
+        if settings.gap_guard and len(birds) < settings.min_visible:
             yield from end_session()
             need_reset = True
             yield ScanSample(item.time, item.number, GAP, "too_few_tracked_birds", session, len(dets))
@@ -311,7 +325,8 @@ def scan(
             sample = ScanSample(item.time, item.number, VALID, "", session, len(dets), body_len, birds)
         pending[seq] = sample
         answers = rules.push(seq, [b.id for b in birds], [(b.cx, b.cy, b.w, b.h) for b in birds],
-                             body_len, item.time, judge=sample.status == VALID)
+                             body_len, item.time, judge=sample.status == VALID, frame_no=item.number or 0,
+                             raw_boxes=[d[:4] for d in dets], raw_scores=[d[4] for d in dets])
         seq += 1
         yield from release(answers)
 
@@ -468,6 +483,7 @@ class ScanJob:
             "huddle_groups": sum(len(s.huddles) for s in judged),
             "huddle_groups_by_origin": origins,
             "max_birds_huddled": max((sum(len(ids) for ids, _ in s.huddles) for s in judged), default=0),
+            "huddle_only_detections": sum(len(s.huddle_only) for s in judged),
             "temporal_added": self.stats.get("temporal_added", 0),
             "frames_with_inactivity": len(inactive_frames),
             "inactive_birds": [{"bird": bid, "from_s": round(a, 1), "to_s": round(b, 1)}
@@ -495,7 +511,7 @@ class ScanJob:
         w = csv.writer(buf)
         w.writerow(["t_s", "status", "reason", "n_birds", "n_huddles", "n_inactive", "body_len_px",
                     "recovered", "inactive_ids", "huddle_ids", "n_feeding", "huddle_origins",
-                    "frame_no", "session", "n_detections", "bird_ids"])
+                    "frame_no", "session", "n_detections", "bird_ids", "n_huddle_raw"])
         for s in self.snapshot():
             tracked = s.status != GAP
             judged = s.judged
@@ -513,6 +529,7 @@ class ScanJob:
                 s.frame_no if s.frame_no is not None else "", s.session,
                 s.n_detections if tracked else "",
                 "|".join(str(b.id) for b in s.birds),
+                len(s.huddle_only) if judged else "",
             ])
         return buf.getvalue()
 
@@ -572,6 +589,7 @@ _GREEN = (110, 200, 90)
 _AMBER = (60, 170, 240)
 _RED = (60, 60, 230)
 _VIOLET = (220, 110, 170)
+_GREY = (200, 200, 200)
 _STATUS_COLOUR = {VALID: (110, 200, 90), RECOVERING: (60, 170, 240), GAP: (70, 70, 220)}
 
 
@@ -580,10 +598,23 @@ def annotate(frame: np.ndarray, sample: ScanSample) -> np.ndarray:
     a red frame around each huddle group, and a banner saying which sample this is,
     whether it was trusted, and what the rules found."""
     out = frame.copy()
-    scale = max(0.45, min(1.2, frame.shape[1] / 1600))
+    h_img, w_img = frame.shape[:2]
+    scale = max(0.45, min(1.2, w_img / 1600))
     thick = max(1, int(round(2 * scale)))
+    font = cv2.FONT_HERSHEY_SIMPLEX
     inactive = set(sample.inactive or [])
-    by_id = {b.id: b for b in sample.birds}
+    by_id = {b.id: b for b in [*sample.birds, *sample.huddle_only]}
+
+    def tag(text: str, x: int, y: int, fill, ink, size: float) -> tuple[int, int, int, int]:
+        """A filled tag with its top-left corner at (x, y), kept inside the picture. Returns its rectangle."""
+        (tw, th), base = cv2.getTextSize(text, font, size, thick)
+        w, h = tw + 8, th + base + 6
+        x = max(0, min(x, w_img - w))
+        y = max(0, min(y, h_img - h))
+        cv2.rectangle(out, (x, y), (x + w, y + h), fill, -1)
+        cv2.putText(out, text, (x + 4, y + th + 3), font, size, ink, thick, cv2.LINE_AA)
+        return x, y, x + w, y + h
+
     for ids, origin in sample.huddles or []:
         members = [by_id[i] for i in ids if i in by_id]
         if not members:
@@ -593,28 +624,45 @@ def annotate(frame: np.ndarray, sample: ScanSample) -> np.ndarray:
         x1 = int(max(b.cx + b.w / 2 for b in members)) + 6
         y1 = int(max(b.cy + b.h / 2 for b in members)) + 6
         cv2.rectangle(out, (x0, y0), (x1, y1), _RED, thick + 1)
-        label = "huddle" if origin == "primary" else "huddle (t)"
-        cv2.putText(out, label, (x0, y1 + int(16 * scale)), cv2.FONT_HERSHEY_SIMPLEX, 0.55 * scale, _RED,
-                    thick, cv2.LINE_AA)
-    for b in sample.birds:
+        tag("huddle" if origin == "primary" else "huddle (t)", x0, y1 + 2, _RED, (255, 255, 255), 0.5 * scale)
+
+    # Each bird's number sits inside its own box, so a crowd's numbers do not stack on the bird above.
+    # A tag that would cover one already drawn moves down until it is clear.
+    placed: list[tuple[int, int, int, int]] = []
+    size = 0.5 * scale
+    # Detections the tracker missed that count for huddling only: grey, tagged "+", no number of their own.
+    for b in sample.huddle_only:
+        x0, y0 = int(round(b.cx - b.w / 2)), int(round(b.cy - b.h / 2))
+        x1, y1 = int(round(b.cx + b.w / 2)), int(round(b.cy + b.h / 2))
+        cv2.rectangle(out, (x0, y0), (x1, y1), _GREY, thick)
+        placed.append(tag("+", x0 + thick, y0 + thick, _GREY, (20, 20, 20), size))
+    for b in sorted(sample.birds, key=lambda b: (b.cy - b.h / 2, b.cx)):
         colour = _VIOLET if b.id in inactive else (_AMBER if b.recovered else _GREEN)
         x0, y0 = int(round(b.cx - b.w / 2)), int(round(b.cy - b.h / 2))
         x1, y1 = int(round(b.cx + b.w / 2)), int(round(b.cy + b.h / 2))
         cv2.rectangle(out, (x0, y0), (x1, y1), colour, thick)
-        label = str(b.id)
-        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6 * scale, thick)
-        cv2.rectangle(out, (x0, max(0, y0 - th - 6)), (x0 + tw + 6, y0), colour, -1)
-        cv2.putText(out, label, (x0 + 3, max(th, y0 - 4)), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6 * scale, (20, 20, 20), thick, cv2.LINE_AA)
-    banner = f"t={sample.t:.1f}s  {sample.status}  birds={len(sample.birds)}"
+        (tw, th), base = cv2.getTextSize(str(b.id), font, size, thick)
+        tx, ty, step = x0 + thick, y0 + thick, th + base + 6
+        for _ in range(4):
+            box = (tx, ty, tx + tw + 8, ty + step)
+            if not any(box[0] < p[2] and p[0] < box[2] and box[1] < p[3] and p[1] < box[3] for p in placed):
+                break
+            ty += step
+        placed.append(tag(str(b.id), tx, ty, colour, (20, 20, 20), size))
+
+    # Banner: a dark strip so the words read on any floor, the status in its own coloured tag.
+    strip = int(42 * scale) + 8
+    shade = out[:strip].copy()
+    cv2.rectangle(shade, (0, 0), (w_img, strip), (20, 20, 20), -1)
+    out[:strip] = cv2.addWeighted(shade, 0.72, out[:strip], 0.28, 0)
+    x = tag(sample.status, 8, 6, _STATUS_COLOUR.get(sample.status, _GREEN), (20, 20, 20), 0.6 * scale)[2] + 10
+    text = f"{int(sample.t // 60)}:{int(sample.t % 60):02d}   birds {len(sample.birds)}"
     if sample.judged:
-        banner += f"  huddles={len(sample.huddles)}  inactive={len(sample.inactive)}"
+        text += f"   huddles {len(sample.huddles)}   inactive {len(sample.inactive)}"
     if sample.reason:
-        banner += f"  ({sample.reason})"
-    cv2.putText(out, banner, (10, int(30 * scale) + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.8 * scale,
-                (0, 0, 0), thick + 3, cv2.LINE_AA)
-    cv2.putText(out, banner, (10, int(30 * scale) + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.8 * scale,
-                _STATUS_COLOUR.get(sample.status, _GREEN), thick, cv2.LINE_AA)
+        text += f"   ({sample.reason.replace('_', ' ')})"
+    (_, th), _ = cv2.getTextSize(text, font, 0.6 * scale, thick)
+    cv2.putText(out, text, (x, 6 + th + 3), font, 0.6 * scale, (245, 245, 245), thick, cv2.LINE_AA)
     return out
 
 

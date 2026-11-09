@@ -2,17 +2,33 @@
 Huddling and inactivity over tracked birds: klydel's rules.
 
 Ported from github.com/kyaanise1/BehaviorMonitoring, branch klydel, commit
-9c6f755:
+a365f3d (first ported at 9c6f755):
   behavior-pipeline/behavior.py                     (inactivity, body length)
   behavior-pipeline/hybridv2 behavior validation/
       behavior_linkage_test.py                      (linkage clustering)
-      run_pipeline_hybrid_v2_feeder_aware_linkage_test.py
-                                                    (feeder zones, strict clusters,
-                                                     local and temporal recovery)
+      behavior_huddling_v2.py                       (feeder zones, contact and strict
+                                                     clusters, local and temporal
+                                                     recovery, huddling-only detections)
+      behavior_inactivity_v2.py, run_behavior_system.py (how a frame is driven)
 The logic is theirs, unchanged, apart from one generalisation: a feeder zone
 may be a polygon (what Settings > Feeder zones saves) as well as klydel's
 axis-aligned rectangles. With rectangles every number is computed exactly as
-theirs; tests/test_behavior_rules.py replays klydel's own Day 6 run to check.
+theirs: fed klydel's own Day 6 bird positions, this module and their
+behavior_huddling_v2.py give the same huddle groups on all 1,803 frames, and
+1,802 of them match their recorded day6_rawhuddle run (huddling F1 0.83 on their
+30 checked frames). tests/test_behavior_rules.py replays part of it.
+
+What changed at a365f3d (huddling only; inactivity is the same):
+  - birds inside a feeder zone are no longer dropped from huddling (klydel: the
+    zones are broad areas, not outlines of the bowls); only a group whose box
+    is 30 % covered by the zones, widened by 15 reference pixels, is dropped;
+  - the "contact" method: groups merge by centre distance plus the gap between
+    bodies, and the trio recovery asks for touching bodies;
+  - a temporal trio may not reuse a bird already in a group;
+  - detections the tracker did not output may join huddles (never inactivity).
+
+The steps below describe the 9c6f755 rules; the a365f3d changes above replace
+step 1 and refine steps 2 and 4.
 
 The rules, in plain words:
 
@@ -57,12 +73,23 @@ Box = Sequence[float]          # (cx, cy, w, h) in pixels
 # Feeder / drinker zones
 # ---------------------------------------------------------------------------
 
+#: Settings' zones are drawn on whatever the camera gives; a margin in "reference pixels" means pixels of a picture
+#: this size, as in klydel's configs/feeding_zones.json.
+REFERENCE_SIZE = (1280, 720)
+
+
 @dataclass(frozen=True)
 class Zones:
-    """Zones in frame pixels: axis-aligned rectangles (x1, y1, x2, y2) and polygons [(x, y), ...]."""
+    """Zones in frame pixels: axis-aligned rectangles (x1, y1, x2, y2) and polygons [(x, y), ...].
+
+    scale: frame pixels per reference pixel (x, y); frame: the frame size, for clamping; grow: how far, in frame
+    pixels (x, y), the polygons reach beyond their outline after widened()."""
 
     rects: tuple[tuple[float, float, float, float], ...] = ()
     polygons: tuple[tuple[tuple[float, float], ...], ...] = ()
+    scale: tuple[float, float] = (1.0, 1.0)
+    frame: tuple[float, float] = (math.inf, math.inf)
+    grow: tuple[float, float] = (0.0, 0.0)
 
     def __bool__(self) -> bool:
         return bool(self.rects or self.polygons)
@@ -75,7 +102,8 @@ class Zones:
         """klydel's configs/feeding_zones.json: {"ref_size": [w, h], "zones": [[x1, y1, x2, y2], ...]}."""
         ref_w, ref_h = config["ref_size"]
         sx, sy = frame_w / ref_w, frame_h / ref_h
-        return cls(rects=tuple((x1 * sx, y1 * sy, x2 * sx, y2 * sy) for x1, y1, x2, y2 in config["zones"]))
+        return cls(rects=tuple((x1 * sx, y1 * sy, x2 * sx, y2 * sy) for x1, y1, x2, y2 in config["zones"]),
+                   scale=(sx, sy), frame=(float(frame_w), float(frame_h)))
 
     @classmethod
     def from_normalized(cls, polygons: Iterable[Sequence[Sequence[float]]], frame_w: float, frame_h: float) -> "Zones":
@@ -90,12 +118,28 @@ class Zones:
                 rects.append((xs[0], ys[0], xs[1], ys[1]))
             else:
                 polys.append(tuple(pts))
-        return cls(rects=tuple(rects), polygons=tuple(polys))
+        return cls(rects=tuple(rects), polygons=tuple(polys),
+                   scale=(frame_w / REFERENCE_SIZE[0], frame_h / REFERENCE_SIZE[1]), frame=(float(frame_w), float(frame_h)))
+
+    def widened(self, margin_ref_px: float) -> "Zones":
+        """Every zone reaching margin_ref_px reference pixels further, kept inside the picture (klydel's
+        expand_feeding_zones): the zones cover the equipment, and the birds feeding beside it as well."""
+        if margin_ref_px < 0:
+            raise ValueError("the feeder margin must not be negative")
+        if not margin_ref_px or not self:
+            return self
+        mx, my = margin_ref_px * self.scale[0], margin_ref_px * self.scale[1]
+        fw, fh = self.frame
+        rects = tuple((max(0.0, x1 - mx), max(0.0, y1 - my), min(fw, x2 + mx), min(fh, y2 + my))
+                      for x1, y1, x2, y2 in self.rects)
+        return Zones(rects, self.polygons, self.scale, self.frame, (self.grow[0] + mx, self.grow[1] + my))
 
     def contains(self, x: float, y: float) -> bool:
         if any(x1 <= x <= x2 and y1 <= y <= y2 for x1, y1, x2, y2 in self.rects):
             return True
-        return any(_point_in_polygon(x, y, p) for p in self.polygons)
+        if not any(self.grow):
+            return any(_point_in_polygon(x, y, p) for p in self.polygons)
+        return _raster_fraction((x - 0.5, y - 0.5, x + 0.5, y + 0.5), Zones((), self.polygons, grow=self.grow)) > 0
 
     def covered_fraction(self, rect: tuple[float, float, float, float]) -> float:
         """Share of `rect` (x1, y1, x2, y2) covered by the union of the zones."""
@@ -161,9 +205,17 @@ def _raster_fraction(rect, zones: Zones) -> float:
     for zx1, zy1, zx2, zy2 in zones.rects:
         cv2.rectangle(mask, (int(round(zx1 - x1)), int(round(zy1 - y1))),
                       (int(round(zx2 - x1)) - 1, int(round(zy2 - y1)) - 1), 1, -1)
-    for poly in zones.polygons:
-        pts = np.round(np.array([(px - x1, py - y1) for px, py in poly])).astype(np.int32)
-        cv2.fillPoly(mask, [pts], 1)
+    if zones.polygons:
+        # A widened polygon: drawn on a canvas reaching `grow` beyond the rectangle, grown by a rectangular
+        # kernel (the same shape a widened rectangle has), then cut back to the rectangle.
+        gx, gy = (int(math.ceil(g)) for g in zones.grow)
+        canvas = np.zeros((h + 2 * gy, w + 2 * gx), np.uint8)
+        for poly in zones.polygons:
+            pts = np.round(np.array([(px - x1 + gx, py - y1 + gy) for px, py in poly])).astype(np.int32)
+            cv2.fillPoly(canvas, [pts], 1)
+        if gx or gy:
+            canvas = cv2.dilate(canvas, np.ones((2 * gy + 1, 2 * gx + 1), np.uint8))
+        mask = np.maximum(mask, canvas[gy:gy + h, gx:gx + w])
     return float(mask.mean())
 
 
@@ -300,12 +352,50 @@ def detect_huddles_average_linkage(centroids, body_len_px, min_birds=3):
     return [sorted(g) for g in groups if len(g) >= min_birds]
 
 
+def silhouette_gap_between(a, b) -> float:
+    """Gap between two (cx, cy, w, h) boxes; 0 when they touch or overlap."""
+    dx = max(0.0, abs(a[0] - b[0]) - (a[2] + b[2]) / 2)
+    dy = max(0.0, abs(a[1] - b[1]) - (a[3] + b[3]) / 2)
+    return math.hypot(dx, dy)
+
+
+def detect_huddles_contact_aware(boxes, body_len_px, min_birds=3):
+    """klydel's "contact" grouping (a365f3d): the same hard rule (every pair's centres under one body length),
+    but groups are merged in order of centre distance PLUS the gap between the birds' boxes, so birds whose
+    bodies touch join each other before birds that are merely close. Takes boxes, not centres."""
+    if not body_len_px or body_len_px <= 0:
+        return []
+    groups = [[i] for i in range(len(boxes))]
+    while True:
+        best = None
+        for a in range(len(groups)):
+            for b in range(a + 1, len(groups)):
+                centers, gaps = [], []
+                for i in groups[a]:
+                    for j in groups[b]:
+                        centers.append(math.dist(boxes[i][:2], boxes[j][:2]) / body_len_px)
+                        gaps.append(silhouette_gap_between(boxes[i], boxes[j]) / body_len_px)
+                if max(centers) >= 1.0:
+                    continue
+                cand = ((sum(centers) + sum(gaps)) / len(centers), a, b)
+                if best is None or cand < best:
+                    best = cand
+        if best is None:
+            break
+        _, a, b = best
+        groups[a].extend(groups[b])
+        del groups[b]
+    return [sorted(g) for g in groups if len(g) >= min_birds]
+
+
+#: Methods that group by centres. "contact" groups by boxes (detect_huddles_contact_aware).
 HUDDLE_METHODS = {
     "connected": detect_huddles,
     "complete": detect_huddles_complete_linkage,
     "average": detect_huddles_average_no_chaining,
     "average_chaining": detect_huddles_average_linkage,
 }
+METHODS = (*HUDDLE_METHODS, "contact")
 
 
 def all_pairs_within_body_length(cluster, boxes, body_len_px) -> bool:
@@ -380,15 +470,82 @@ def recover_compact_triplets(primary, keep_indices, boxes, body_len_px, zones: Z
     return added
 
 
+def recover_contact_triplets(primary, keep_indices, boxes, body_len_px, zones: Zones, overlap_limit):
+    """klydel's contact trio recovery (a365f3d): leftover trios with every pair under one body length, mean
+    under 0.90, AND bodies touching (every box gap and the mean gap at most 0.10 body)."""
+    if not body_len_px or body_len_px <= 0:
+        return []
+    assigned = {i for cluster in primary for i in cluster}
+    available = sorted(i for i in keep_indices if i not in assigned)
+    if len(available) < 3:
+        return []
+    existing = [cluster_rectangle(g, boxes) for g in primary]
+    candidates = []
+    for triple in combinations(available, 3):
+        centers = [math.dist(boxes[i][:2], boxes[j][:2]) / body_len_px for i, j in combinations(triple, 2)]
+        if max(centers) >= 1.0 or sum(centers) / 3 > 0.90:
+            continue
+        gaps = [silhouette_gap_between(boxes[i], boxes[j]) / body_len_px for i, j in combinations(triple, 2)]
+        if max(gaps) > 0.10 or sum(gaps) / 3 > 0.10:
+            continue
+        if zones and overlap_limit > 0:
+            if cluster_zone_overlap_fraction(triple, boxes, zones) >= overlap_limit:
+                continue
+        rect = cluster_rectangle(triple, boxes)
+        if any(rectangle_iou(rect, old) > 0.30 for old in existing):
+            continue
+        candidates.append((max(gaps), sum(gaps), sum(centers), triple, rect))
+    candidates.sort()
+    out, used, accepted = [], set(), list(existing)
+    for *_, triple, rect in candidates:
+        if any(i in used for i in triple):
+            continue
+        if any(rectangle_iou(rect, old) > 0.30 for old in accepted):
+            continue
+        out.append(list(triple))
+        used.update(triple)
+        accepted.append(rect)
+    return out
+
+
 def filter_clusters(candidate_huddles, overlap_by_cluster, threshold, enable_recovery,
-                    keep_indices, boxes, body_len_px, zones: Zones):
+                    keep_indices, boxes, body_len_px, zones: Zones, contact_aware: bool = False):
     if zones and threshold > 0:
         kept = [c for c in candidate_huddles if overlap_by_cluster[tuple(c)] < threshold]
     else:
         kept = list(candidate_huddles)
     if enable_recovery:
-        kept += recover_compact_triplets(kept, keep_indices, boxes, body_len_px, zones, threshold)
+        recover = recover_contact_triplets if contact_aware else recover_compact_triplets
+        kept += recover(kept, keep_indices, boxes, body_len_px, zones, threshold)
     return kept
+
+
+def augment_with_untracked(ids, boxes, raw_boxes, raw_scores, body_len, frame_no,
+                           min_conf=0.30, max_duplicate_iou=0.40, max_neighbor_lengths=1.5):
+    """klydel's huddling-only detection recovery (a365f3d HuddlingModule.augment_with_untracked_yolo).
+
+    A detection the tracker did not output (score >= min_conf, not overlapping a box already there by IoU
+    max_duplicate_iou, within max_neighbor_lengths body lengths of a tracked bird) is added FOR HUDDLING ONLY,
+    under a frame-local negative number -(frame_no x 1000 + k + 1). It never enters the inactivity history and is
+    not a track. Returns (ids, boxes, {added id: score})."""
+    out_ids, out_boxes, added = list(ids), list(boxes), {}
+    if not body_len or not boxes:
+        return out_ids, out_boxes, added
+    tracked = list(boxes)
+    for k, (raw_box, score) in enumerate(zip(raw_boxes, raw_scores)):
+        if score < min_conf:
+            continue
+        cand = tuple(float(v) for v in raw_box)
+        rect = cluster_rectangle([0], [cand])
+        if any(rectangle_iou(rect, cluster_rectangle([0], [old])) >= max_duplicate_iou for old in out_boxes):
+            continue
+        if min(math.dist(cand[:2], old[:2]) for old in tracked) > max_neighbor_lengths * body_len:
+            continue
+        local_id = -(int(frame_no) * 1000 + k + 1)
+        out_ids.append(local_id)
+        out_boxes.append(cand)
+        added[local_id] = float(score)
+    return out_ids, out_boxes, added
 
 
 def temporal_triplet_geometry(track_ids, boxes_by_id, body_length):
@@ -425,6 +582,7 @@ def temporal_recover_huddles(target, window, zones: Zones):
     eligible = sorted(target["ids"][i] for i in target["keep_indices"])
     index_of = {tid: i for i, tid in enumerate(target["ids"])}
     primary_rects = [cluster_rectangle(c, all_boxes) for c, _ in primary]
+    primary_members = {i for group, _origin in primary for i in group}   # a365f3d: no bird in two groups at once
     neighbours = []
     for other in window:
         delta = other["seq"] - target["seq"]
@@ -442,6 +600,8 @@ def temporal_recover_huddles(target, window, zones: Zones):
         if mg > .75 or ag > .40 or mc >= 1.0 or ac > 1.5:
             continue
         indices = [index_of[tid] for tid in track_ids]
+        if any(index in primary_members for index in indices):
+            continue
         rect = cluster_rectangle(indices, all_boxes)
         zone_fraction = cluster_zone_overlap_fraction(indices, all_boxes, zones)
         if zone_fraction >= .30:
@@ -498,62 +658,85 @@ def temporal_recover_huddles(target, window, zones: Zones):
 
 @dataclass(frozen=True)
 class BehaviorSettings:
-    """klydel's current runner settings (CURRENT_WORKFLOW.md: average, no chaining,
-    feeder-aware, local and temporal recovery, overlap 0.30)."""
+    """The settings of klydel's best Day 6 huddling run (a365f3d, day6_rawhuddle: F1 0.83 on 30 frames):
+    run_behavior_system.py --huddle-method contact --cluster-zone-overlap 0.30 --local-recovery
+    --temporal-recovery --huddle-raw-recovery, feeder margin 15 px, no hard feeder exclusion. Inactivity:
+    behavior.py's defaults (30 min, half a body length, seen in half the window)."""
 
-    window_s: float = 1800.0          # inactivity window
-    move_frac: float = 0.5            # allowed wander, in body lengths
-    min_fill: float = 0.5             # share of the window's frames a bird must be seen in
+    window_s: float = 1800.0            # inactivity window
+    move_frac: float = 0.5              # allowed wander, in body lengths
+    min_fill: float = 0.5               # share of the window's frames a bird must be seen in
     min_huddle: int = 3
-    huddle_method: str = "average"
+    huddle_method: str = "contact"
     cluster_zone_overlap: float = 0.30
     local_recovery: bool = True
     temporal_recovery: bool = True
+    feeder_margin_px: float = 15.0      # zones widened by this many reference pixels for the overlap rule
+    hard_feeder_exclusion: bool = False # klydel's older rule: a bird inside a (widened) zone can never huddle
+    huddle_raw_recovery: bool = True    # detections the tracker missed count for huddling (never inactivity)
 
     def validate(self) -> None:
         if self.window_s <= 0 or self.move_frac <= 0 or not 0 < self.min_fill <= 1:
             raise ValueError("window_s and move_frac must be positive and min_fill in (0, 1]")
-        if self.min_huddle < 2 or self.huddle_method not in HUDDLE_METHODS:
-            raise ValueError("min_huddle must be >= 2 and huddle_method one of " + ", ".join(HUDDLE_METHODS))
+        if self.min_huddle < 2 or self.huddle_method not in METHODS:
+            raise ValueError("min_huddle must be >= 2 and huddle_method one of " + ", ".join(METHODS))
         if not 0 <= self.cluster_zone_overlap <= 1:
             raise ValueError("cluster_zone_overlap must be between 0 and 1")
-        if self.local_recovery and (self.min_huddle != 3 or self.huddle_method != "average"):
-            raise ValueError("local recovery needs min_huddle 3 and the average method")
+        if self.feeder_margin_px < 0:
+            raise ValueError("feeder_margin_px must not be negative")
+        if self.local_recovery and (self.min_huddle != 3 or self.huddle_method not in ("average", "contact")):
+            raise ValueError("local recovery needs min_huddle 3 and the average or contact method")
         if self.temporal_recovery and (not self.local_recovery or abs(self.cluster_zone_overlap - 0.30) > 1e-8):
             raise ValueError("temporal recovery needs local recovery and cluster_zone_overlap 0.30")
 
 
 @dataclass
 class FrameBehavior:
-    """What the rules said about one frame. Indices refer to that frame's bird list."""
+    """What the rules said about one frame, by bird number. Huddle members may include huddle-only
+    detections (negative numbers, see augment_with_untracked); raw_added holds their boxes and scores."""
 
-    huddles: list[tuple[list[int], str]] = field(default_factory=list)   # (members, origin)
+    huddles: list[tuple[list[int], str]] = field(default_factory=list)   # (bird numbers, origin)
     inactive_ids: list[int] = field(default_factory=list)
-    feeding: list[int] = field(default_factory=list)                     # indices of birds in a zone
+    feeding: list[int] = field(default_factory=list)                     # numbers of birds inside a zone (as drawn)
+    raw_added: dict[int, tuple[tuple[float, float, float, float], float]] = field(default_factory=dict)
 
 
-def frame_pass(ids, boxes, body_len, zones: Zones, settings: BehaviorSettings,
-               history, t, interval) -> tuple[list[list[int]], list[int], list[int]]:
-    """One frame of klydel's linkage runner, before temporal recovery.
-    Updates `history`; returns (huddles, inactive ids, keep indices)."""
+def frame_pass(ids, boxes, body_len, zones: Zones, settings: BehaviorSettings, history, t, interval,
+               frame_no: int = 0, raw_boxes=None, raw_scores=None, wide_zones: Zones | None = None) -> dict:
+    """One frame of klydel's run_behavior_system.py (a365f3d), before temporal recovery. Updates `history`.
+
+    Inactivity sees only the tracked birds. Huddling sees them plus, with huddle_raw_recovery, the detections
+    the tracker missed. `zones` are the zones as drawn (used to count birds at a feeder); `wide_zones` are the
+    same widened by the feeder margin (used for the overlap rule)."""
+    wide = wide_zones if wide_zones is not None else zones.widened(settings.feeder_margin_px)
     for tid, box in zip(ids, boxes):
         history[tid].append((t, box[0], box[1]))
     prune_history(history, t, settings.window_s, interval)
-    centroids = [(b[0], b[1]) for b in boxes]
-    keep = huddling_indices(centroids, zones)
-    huddles, inactive = [], []
+    inactive = []
     if body_len:
-        fn = HUDDLE_METHODS[settings.huddle_method]
-        found = fn([centroids[i] for i in keep], body_len, settings.min_huddle)
-        candidates = [[keep[i] for i in c] for c in found]
-        overlap = {tuple(c): (cluster_zone_overlap_fraction(c, boxes, zones) if zones and settings.cluster_zone_overlap > 0
-                              else 0.0) for c in candidates}
-        huddles = filter_clusters(candidates, overlap, settings.cluster_zone_overlap, settings.local_recovery,
-                                  keep, boxes, body_len, zones)
-        huddles = [c for c in huddles if all_pairs_within_body_length(c, boxes, body_len)]
         min_samples = max(1, int(settings.min_fill * settings.window_s / interval))
         inactive = update_inactivity(history, t, settings.window_s, settings.move_frac * body_len, min_samples)
-    return huddles, inactive, keep
+
+    h_ids, h_boxes, raw_added = list(ids), [tuple(b) for b in boxes], {}
+    if settings.huddle_raw_recovery and raw_boxes is not None:
+        h_ids, h_boxes, raw_added = augment_with_untracked(ids, h_boxes, raw_boxes, raw_scores, body_len, frame_no)
+    centroids = [(b[0], b[1]) for b in h_boxes]
+    feeding = [h_ids[i] for i in range(len(h_ids)) if i not in set(huddling_indices(centroids, zones))]
+    keep = huddling_indices(centroids, wide) if settings.hard_feeder_exclusion else list(range(len(h_ids)))
+    huddles = []
+    if body_len:
+        if settings.huddle_method == "contact":
+            found = detect_huddles_contact_aware([h_boxes[i] for i in keep], body_len, settings.min_huddle)
+        else:
+            found = HUDDLE_METHODS[settings.huddle_method]([centroids[i] for i in keep], body_len, settings.min_huddle)
+        candidates = [[keep[i] for i in c] for c in found]
+        overlap = {tuple(c): (cluster_zone_overlap_fraction(c, h_boxes, wide) if wide and settings.cluster_zone_overlap > 0
+                              else 0.0) for c in candidates}
+        huddles = filter_clusters(candidates, overlap, settings.cluster_zone_overlap, settings.local_recovery,
+                                  keep, h_boxes, body_len, wide, contact_aware=settings.huddle_method == "contact")
+        huddles = [c for c in huddles if all_pairs_within_body_length(c, h_boxes, body_len)]
+    return {"ids": h_ids, "boxes": h_boxes, "raw_added": raw_added, "keep_indices": keep,
+            "feeding": feeding, "huddles": huddles, "inactive": inactive}
 
 
 class BehaviorTracker:
@@ -565,6 +748,7 @@ class BehaviorTracker:
         settings.validate()
         self.settings = settings
         self.zones = zones
+        self.wide_zones = zones.widened(settings.feeder_margin_px)
         self.interval = interval
         self.reset()
 
@@ -574,16 +758,17 @@ class BehaviorTracker:
         self.seq = 0
         self.added = 0
 
-    def push(self, key, ids, boxes, body_len, t, judge: bool = True) -> list[tuple[object, FrameBehavior | None]]:
-        """key identifies the frame for the caller. judge=False (a RECOVERING frame) still
-        updates the history and serves as temporal context, but gets no answer."""
-        huddles, inactive, keep = frame_pass(ids, boxes, body_len, self.zones, self.settings,
-                                             self.history, t, self.interval)
-        record = {"key": key, "judge": judge, "seq": self.seq, "t": t, "ids": list(ids), "boxes": list(boxes),
-                  "body_len": body_len, "keep_indices": keep, "huddles": huddles, "inactive": inactive}
+    def push(self, key, ids, boxes, body_len, t, judge: bool = True, frame_no: int = 0,
+             raw_boxes=None, raw_scores=None) -> list[tuple[object, FrameBehavior | None]]:
+        """key identifies the frame for the caller. judge=False (a RECOVERING frame) still updates the history and
+        serves as temporal context, but gets no answer. raw_boxes/raw_scores: every detection of the frame, for the
+        huddling-only recovery; frame_no makes their numbers unique."""
+        p = frame_pass(ids, boxes, body_len, self.zones, self.settings, self.history, t, self.interval,
+                       frame_no=frame_no, raw_boxes=raw_boxes, raw_scores=raw_scores, wide_zones=self.wide_zones)
+        record = {"key": key, "judge": judge, "seq": self.seq, "t": t, "body_len": body_len, **p}
         self.seq += 1
         if not self.settings.temporal_recovery:
-            return [(key, self._finish(record, [(c, "primary") for c in huddles]) if judge else None)]
+            return [(key, self._finish(record, [(c, "primary") for c in p["huddles"]]) if judge else None)]
         self.buffer.append(record)
         out = []
         if len(self.buffer) >= 3:
@@ -604,14 +789,15 @@ class BehaviorTracker:
     def _resolve(self, record):
         if not record["judge"]:
             return record["key"], None
-        clusters, added = temporal_recover_huddles(record, list(self.buffer), self.zones)
+        clusters, added = temporal_recover_huddles(record, list(self.buffer), self.wide_zones)
         self.added += len(added)
         return record["key"], self._finish(record, clusters)
 
     def _finish(self, record, clusters) -> FrameBehavior:
-        keep = set(record["keep_indices"])
+        ids, boxes = record["ids"], record["boxes"]
         return FrameBehavior(
-            huddles=[(sorted(c), origin) for c, origin in clusters],
+            huddles=[(sorted(ids[i] for i in c), origin) for c, origin in clusters],
             inactive_ids=sorted(record["inactive"]),
-            feeding=[i for i in range(len(record["ids"])) if i not in keep],
+            feeding=list(record["feeding"]),
+            raw_added={rid: (tuple(boxes[ids.index(rid)]), score) for rid, score in record["raw_added"].items()},
         )

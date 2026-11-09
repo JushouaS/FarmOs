@@ -138,7 +138,7 @@ def test_job_summary_and_exports():
     assert s["gap_reasons"] == {"frozen_frame": 4, "tracker_warmup": 3}
     assert s["tracking"]["distinct_ids"] == 4 and s["sessions"] == 2
     assert s["progress"]["frames_done"] == 20
-    assert s["settings"]["klydel_commit"] == "9c6f755"
+    assert s["settings"]["klydel_commit"] == "a365f3d"
 
     rows = job.samples_csv().strip().splitlines()
     assert rows[0].startswith("t_s,status,reason,n_birds,n_huddles,n_inactive,body_len_px,recovered")
@@ -310,3 +310,35 @@ def test_real_video_file(tmp_path):
     out = list(cs.scan(cs.sample_frames(str(path), 2.0), white_box_detector, SETTINGS))
     assert [round(s.t, 1) for s in out] == [0.0, 2.0, 4.0, 6.0, 8.0, 10.0]
     assert all(s.status == "VALID" and len(s.birds) == 2 for s in out)
+
+
+def test_without_the_gap_guard_every_frame_is_judged_like_klydel():
+    times = [2.0 * i for i in range(20)]
+    samples = frames(times, freeze_after=10.0, freeze_len=8.0)
+    settings = cs.ScanSettings(interval=2.0, inactivity_window_s=10.0, gap_guard=False)
+    out = list(cs.scan(samples, white_box_detector, settings))
+    assert [s.status for s in out] == ["VALID"] * 20 and all(s.judged for s in out)
+    assert {s.session for s in out} == {0}
+
+
+def test_gap_guard_setting_from_env(monkeypatch):
+    monkeypatch.setenv("TRACK_GAP_GUARD", "0")
+    assert cs.ScanSettings.from_env().gap_guard is False
+    monkeypatch.delenv("TRACK_GAP_GUARD")
+    assert cs.ScanSettings.from_env().gap_guard is True
+
+
+def test_a_huddle_only_detection_is_kept_apart_from_the_tracked_birds():
+    tracked = (60, 60, 40, 40, 0.9), (85, 60, 40, 40, 0.9)
+    extra = (72, 82, 40, 40, 0.45)                       # too weak for the tracker, enough for huddling
+
+    def detector(frame):
+        return [tracked[0], tracked[1], extra]
+    out = list(cs.scan(flock_frames([2.0 * i for i in range(6)]), detector, SHORT))
+    last = out[-1]
+    assert sorted(b.id for b in last.birds) == [1, 2]
+    assert len(last.huddle_only) == 1 and last.huddle_only[0].id < 0
+    assert sorted(last.huddles[0][0])[1:] == [1, 2] and last.huddles[0][0][0] < 0
+    assert last.as_dict()["n_huddle_raw"] == 1
+    img = cs.annotate(flock_frame(10.0), last)
+    assert (img == np.array(cs._GREY, np.uint8)).all(axis=2).any()

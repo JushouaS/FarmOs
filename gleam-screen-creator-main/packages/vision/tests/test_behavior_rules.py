@@ -174,7 +174,7 @@ def test_temporal_answers_arrive_two_frames_late_and_flush_gives_the_rest():
     assert [key for key, _ in out] == [0, 1, 2]
     rest = bt.flush()
     assert [key for key, _ in rest] == [3, 4]
-    assert all(fb.huddles and sorted(fb.huddles[0][0]) == [0, 1, 2] for _, fb in out + rest)
+    assert all(fb.huddles and sorted(fb.huddles[0][0]) == [1, 2, 3] for _, fb in out + rest)   # bird numbers
 
 
 def _record(seq, gap):
@@ -230,4 +230,93 @@ def test_feeding_birds_are_reported():
     zones = br.Zones(rects=((0, 0, 50, 50),))
     bt = br.BehaviorTracker(br.BehaviorSettings(temporal_recovery=False), zones, 2.0)
     (_, fb), = bt.push(0, [1, 2], [(10, 10, 10, 10), (300, 300, 10, 10)], 10.0, 0.0)
-    assert fb.feeding == [0]
+    assert fb.feeding == [1]                     # bird 1 is inside the zone
+
+
+# ---------------------------------------------------------------------------
+# klydel a365f3d: their best Day 6 run, and each rule it changed
+# ---------------------------------------------------------------------------
+
+DATA_A365 = Path(__file__).with_name("data") / "klydel_a365f3d_day6_first300.json.gz"
+
+
+def _groups(text):
+    return sorted(tuple(sorted(int(x) for x in g.split("|"))) for g in text.split(";")) if text else []
+
+
+def test_a365f3d_day6_run_is_reproduced():
+    """Their tracked birds and detections in, their recorded huddle groups out (contact method, overlap 0.30,
+    trio and temporal recovery, 15 px feeder margin, huddling-only detections). The full 1,803 frames were
+    checked when porting: identical to their module on all, 1,802 equal to their log."""
+    data = json.loads(gzip.decompress(DATA_A365.read_bytes()))
+    zones = br.Zones.from_klydel(data["zones"], 1280, 720)
+    bt = br.BehaviorTracker(br.BehaviorSettings(), zones, 2.0)
+    got = {}
+    for f in data["frames"]:
+        for key, fb in bt.push(f["t"], f["ids"], f["boxes"], f["body"], f["t"], frame_no=f["n"],
+                               raw_boxes=f["raw_boxes"], raw_scores=f["raw_scores"]):
+            got[key] = sorted(tuple(ids) for ids, _o in fb.huddles)
+    for key, fb in bt.flush():
+        got[key] = sorted(tuple(ids) for ids, _o in fb.huddles)
+    wrong = [f["t"] for f in data["frames"] if got[f["t"]] != _groups(f["huddle_ids"])]
+    assert wrong == []
+    assert any(g < 0 for f in data["frames"] for grp in _groups(f["huddle_ids"]) for g in grp)   # raw birds took part
+    assert bt.added > 0                                                                           # and temporal recovery
+
+
+def test_birds_inside_a_zone_can_huddle_unless_the_group_is_mostly_covered():
+    zone = br.Zones(rects=((0, 0, 100, 100),), frame=(1280, 720))
+    trio = [(50, 50, 10, 10), (58, 50, 10, 10), (54, 57, 10, 10)]
+    settings = br.BehaviorSettings(temporal_recovery=False, huddle_raw_recovery=False)
+    p = br.frame_pass([1, 2, 3], trio, 10.0, zone, settings, defaultdict(deque), 0.0, 2.0)
+    assert p["huddles"] == [] and p["feeding"] == [1, 2, 3]            # covered: feeding, not huddling
+    small = br.Zones(rects=((0, 0, 55, 54),), frame=(1280, 720))
+    p = br.frame_pass([1, 2, 3], trio, 10.0, small, settings, defaultdict(deque), 0.0, 2.0, wide_zones=small)
+    assert p["huddles"] == [[0, 1, 2]] and p["feeding"] == [1]          # bird 1 is in the zone, the group still counts
+    old = br.BehaviorSettings(temporal_recovery=False, huddle_raw_recovery=False, hard_feeder_exclusion=True)
+    assert br.frame_pass([1, 2, 3], trio, 10.0, small, old, defaultdict(deque), 0.0, 2.0, wide_zones=small)["huddles"] == []
+
+
+def test_zones_are_widened_in_reference_pixels_and_kept_in_the_picture():
+    z = br.Zones.from_klydel({"ref_size": [640, 360], "zones": [[0, 100, 200, 150]]}, 1280, 720)
+    assert z.widened(15).rects == ((0.0, 170.0, 430.0, 330.0),)        # 15 ref px = 30 frame px; x clamped at 0
+    poly = br.Zones.from_normalized([[[0.4, 0.4], [0.6, 0.4], [0.5, 0.6]]], 1280, 720).widened(15)
+    assert poly.contains(512, 300) and not poly.contains(400, 300)     # 13 px left of the outline: inside the margin
+
+
+def test_contact_grouping_prefers_birds_whose_bodies_touch():
+    # By centres alone birds 0, 1 and 2 group; bird 3's body touches bird 1's, so the contact method takes 1, 2, 3.
+    boxes = [(13, 4, 2, 2), (7, 2, 8, 8), (7, 8, 2, 2), (0, 4, 8, 8)]
+    assert br.detect_huddles_average_no_chaining([b[:2] for b in boxes], 10, 3) == [[0, 1, 2]]
+    assert br.detect_huddles_contact_aware(boxes, 10, 3) == [[1, 2, 3]]
+    # The hard rule still holds: a pair one body length apart or more never shares a group.
+    assert br.detect_huddles_contact_aware([(0, 0, 4, 4), (20, 0, 4, 4), (10, 15, 4, 4)], 10, 3) == []
+
+
+def test_contact_trio_recovery_needs_touching_bodies():
+    touching = [(0, 0, 9, 9), (8.6, 0, 9, 9), (4.3, 7.5, 9, 9)]
+    assert br.recover_contact_triplets([], [0, 1, 2], touching, 10, br.Zones(), 0.30) == [[0, 1, 2]]
+    apart = [(0, 0, 4, 4), (8.6, 0, 4, 4), (4.3, 7.5, 4, 4)]          # same centres, small boxes: not touching
+    assert br.recover_contact_triplets([], [0, 1, 2], apart, 10, br.Zones(), 0.30) == []
+
+
+def test_huddling_only_detections_never_reach_inactivity():
+    ids, boxes = [1, 2], [(100, 100, 10, 10), (108, 100, 10, 10)]
+    raw = [(100, 100, 10, 10), (104, 107, 10, 10), (400, 400, 10, 10), (104, 108, 10, 10)]
+    scores = [0.9, 0.5, 0.9, 0.2]
+    out_ids, out_boxes, added = br.augment_with_untracked(ids, boxes, raw, scores, 10.0, frame_no=7)
+    assert added == {-7002: 0.5}           # duplicate of bird 1, too far, and too weak are all left out
+    history = defaultdict(deque)
+    settings = br.BehaviorSettings(temporal_recovery=False)
+    p = br.frame_pass(ids, boxes, 10.0, br.Zones(), settings, history, 0.0, 2.0, frame_no=7,
+                      raw_boxes=raw, raw_scores=scores)
+    assert [sorted(p["ids"][i] for i in g) for g in p["huddles"]] == [[-7002, 1, 2]]
+    assert set(history) == {1, 2}           # only tracked birds have a history
+
+
+def test_a_temporal_trio_never_reuses_a_bird_in_a_group():
+    target = _record(2, 0.95)
+    target = dict(target, huddles=[[0, 1, 3]], boxes=target["boxes"][:3] + [(108, 100, 10, 10)])
+    ctx = [_record(0, 0.9), _record(1, 0.9), target, _record(3, 0.9), _record(4, 0.9)]
+    clusters, _ = br.temporal_recover_huddles(target, ctx, ZONES)
+    assert [origin for _, origin in clusters] == ["primary"]

@@ -44,7 +44,9 @@ from typing import Iterable, Sequence
 
 from bytetrack import BYTETracker, ByteTrackConfig, _env_float
 
-KLYDEL_COMMIT = "9c6f755"
+#: The klydel commit the ported tracking and behaviour rules match. The tracking (hybrid_tracker.py,
+#: hybrid_tracker_v2.py) is unchanged from 9c6f755; behavior_rules.py follows a365f3d.
+KLYDEL_COMMIT = "a365f3d"
 
 
 def _iou_cxcywh(a: Sequence[float], b: Sequence[float]) -> float:
