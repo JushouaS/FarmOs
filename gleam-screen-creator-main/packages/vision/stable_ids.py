@@ -29,6 +29,14 @@ bird's inactivity clock. This layer keeps its own numbers ("stable IDs"):
   bird ByteTrack has only just restarted (unconfirmed, so not output yet) keeps
   its old number. It never creates a new ID.
 
+  Refind (ours, not klydel's; TRACK_REFIND_SECONDS, default 300 s, 0 = off): in a closed pen a bird whose number
+  ran out was almost always hidden or missed, not gone, and every new number restarts its 30-minute inactivity
+  clock. klydel's Day 12 audit found nearly every track ended "never_spanned_full_30min_window". So a bird missed
+  for longer than max_missed keeps its number up to refind_missed frames, but only in a fourth, last pass: it may
+  take a box no seen bird claimed, one that would otherwise get a brand-new number. It never competes with a bird
+  that is being seen. On Day 12 (3 s pictures): 111 numbers -> 40, median number life 4.8 -> 30.6 min; klydel's
+  61 hand-marked tracking frames: MOTA 0.796 and IDF1 0.764 both before and after.
+
 klydel runs the detector twice per frame (once inside model.track(), once for
 the raw boxes); with the same weights and confidence both see the same boxes,
 so BroilerTracker below detects once and gives the same list to both.
@@ -75,11 +83,19 @@ class HybridIDManager:
     """Stable IDs for ByteTrack's output (klydel hybrid_tracker.py)."""
 
     def __init__(self, tight_frac: float = 0.5, wide_frac: float = 4.0, max_missed: int = 4,
-                 wide_conf: float = 0.3, max_size_ratio: float = 2.0, body_window: int = 200) -> None:
+                 wide_conf: float = 0.3, max_size_ratio: float = 2.0, body_window: int = 200,
+                 refind_missed: int = 0, refind_frac: float | None = None) -> None:
         if not (0 < tight_frac <= wide_frac):
             raise ValueError("Require 0 < tight_frac <= wide_frac")
         if max_missed < 0:
             raise ValueError("max_missed must be non-negative")
+        if refind_missed and refind_missed <= max_missed:
+            raise ValueError("refind_missed must be 0 (off) or more than max_missed")
+        # Not klydel's: a bird missed for more than max_missed frames keeps its number for up to refind_missed frames,
+        # but may only take a box no other bird claimed (one that would otherwise get a brand-new number), in a last
+        # pass. 0 = off, klydel's behaviour exactly.
+        self.refind_missed = int(refind_missed)
+        self.refind_frac = float(refind_frac if refind_frac is not None else wide_frac)
         if max_size_ratio < 1:
             raise ValueError("max_size_ratio must be >= 1")
         self.tight_frac = float(tight_frac)
@@ -136,7 +152,9 @@ class HybridIDManager:
                 self._body.append(statistics.median(body_values))
         body = self.body_length()
 
-        tids = list(self.tracks)
+        all_tids = list(self.tracks)
+        tids = [tid for tid in all_tids if self.tracks[tid].missed <= self.max_missed]
+        dormant = [tid for tid in all_tids if self.tracks[tid].missed > self.max_missed]
         dids = list(range(len(boxes)))
         matched = self._greedy(tids, dids, boxes, body, self.tight_frac)
 
@@ -165,6 +183,12 @@ class HybridIDManager:
         rem_d = [di for di in dids if di not in used_d and scores[di] >= self.wide_conf]
         matched.update(self._greedy(rem_t, rem_d, boxes, body, self.wide_frac))
 
+        # Pass 4 (refind, off by default): long-missing birds, only on the boxes still unclaimed.
+        if dormant:
+            used_d = set(matched.values())
+            left = [di for di in dids if di not in used_d and scores[di] >= self.wide_conf]
+            matched.update(self._greedy(dormant, left, boxes, body, self.refind_frac))
+
         stable: list[int | None] = [None] * len(boxes)
         for tid, di in matched.items():
             tr = self.tracks[tid]
@@ -174,10 +198,11 @@ class HybridIDManager:
             tr.hits += 1
             stable[di] = tid
 
-        for tid in tids:
+        limit = self.refind_missed or self.max_missed
+        for tid in all_tids:
             if tid not in matched:
                 self.tracks[tid].missed += 1
-                if self.tracks[tid].missed > self.max_missed:
+                if self.tracks[tid].missed > limit:
                     del self.tracks[tid]
 
         for di in dids:
@@ -198,7 +223,8 @@ class RecoveryHybrid:
     def __init__(self, tight: float = 0.5, wide: float = 4.0, max_missed: int = 4,
                  wide_conf: float = 0.3, size_ratio: float = 2.0,
                  recovery_conf: float = 0.7, recovery_distance: float = 1.5,
-                 duplicate_iou: float = 0.5, duplicate_center: float = 0.25) -> None:
+                 duplicate_iou: float = 0.5, duplicate_center: float = 0.25,
+                 refind_missed: int = 0, refind_frac: float | None = None) -> None:
         if not 0 <= recovery_conf <= 1:
             raise ValueError("recovery_conf must be between 0 and 1")
         if not 0 < recovery_distance:
@@ -206,7 +232,8 @@ class RecoveryHybrid:
         if not 0 < duplicate_iou <= 1:
             raise ValueError("duplicate_iou must be in (0,1]")
         self.manager = HybridIDManager(tight_frac=tight, wide_frac=wide, max_missed=max_missed,
-                                       wide_conf=wide_conf, max_size_ratio=size_ratio)
+                                       wide_conf=wide_conf, max_size_ratio=size_ratio,
+                                       refind_missed=refind_missed, refind_frac=refind_frac)
         self.recovery_conf = recovery_conf
         self.recovery_distance = recovery_distance
         self.duplicate_iou = duplicate_iou
@@ -290,11 +317,16 @@ class HybridConfig:
     recovery_distance: float = 1.5
     duplicate_iou: float = 0.5
     duplicate_center: float = 0.25
+    refind_missed: int = 0              # not klydel's (0 = off): see HybridIDManager pass 4
+    refind_frac: float | None = None    # how far, in body lengths, a long-missing bird may be found again (None = wide)
 
     @classmethod
     def from_env(cls) -> "HybridConfig":
         d = cls()
+        refind_frac = os.getenv("HYBRID_REFIND_FRAC")
         return cls(
+            refind_missed=int(_env_float("HYBRID_REFIND_MISSED", d.refind_missed)),
+            refind_frac=float(refind_frac) if refind_frac else None,
             tight=_env_float("HYBRID_TIGHT", d.tight),
             wide=_env_float("HYBRID_WIDE", d.wide),
             max_missed=int(_env_float("HYBRID_MAX_MISSED", d.max_missed)),
@@ -305,6 +337,27 @@ class HybridConfig:
             duplicate_iou=_env_float("HYBRID_DUPLICATE_IOU", d.duplicate_iou),
             duplicate_center=_env_float("HYBRID_DUPLICATE_CENTER", d.duplicate_center),
         )
+
+
+#: How long a missed bird keeps its number, in seconds (the refind pass). Tuned on Day 12 (one picture every 3 s,
+#: about 20 birds): 111 numbers became 40 and the median number lasted 30.6 min instead of 4.8, while klydel's
+#: hand-marked tracking frames scored the same (MOTA 0.796, IDF1 0.764). 0 = klydel's tracker exactly.
+REFIND_SECONDS = _env_float("TRACK_REFIND_SECONDS", 300.0)
+
+
+def tuned_for(interval_s: float, bytetrack: ByteTrackConfig | None = None, hybrid: HybridConfig | None = None,
+              refind_seconds: float = REFIND_SECONDS) -> tuple[ByteTrackConfig, HybridConfig]:
+    """The configs with the refind pass sized for one picture every interval_s seconds. ByteTrack's own buffer
+    is raised to the same length, so ByteTrack too keeps a lost bird long enough to hand back its old id."""
+    import dataclasses
+
+    bt = bytetrack or ByteTrackConfig()
+    hy = hybrid or HybridConfig()
+    frames = int(round(refind_seconds / interval_s)) if refind_seconds > 0 and interval_s > 0 else 0
+    if frames <= hy.max_missed or hy.refind_missed:
+        return bt, hy
+    return (dataclasses.replace(bt, track_buffer=max(bt.track_buffer, frames)),
+            dataclasses.replace(hy, refind_missed=frames))
 
 
 @dataclass(frozen=True)
@@ -335,7 +388,7 @@ class BroilerTracker:
             tight=h.tight, wide=h.wide, max_missed=h.max_missed, wide_conf=h.wide_conf,
             size_ratio=h.size_ratio, recovery_conf=h.recovery_conf,
             recovery_distance=h.recovery_distance, duplicate_iou=h.duplicate_iou,
-            duplicate_center=h.duplicate_center,
+            duplicate_center=h.duplicate_center, refind_missed=h.refind_missed, refind_frac=h.refind_frac,
         )
 
     def update(self, detections: Iterable[Sequence[float]]) -> list[Bird]:

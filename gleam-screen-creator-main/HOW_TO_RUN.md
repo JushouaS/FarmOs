@@ -930,7 +930,11 @@ paste `cerebroil-stream/PASTE-ON-PI-7.txt`. What it does on a camera that never 
   and the 30-minute clock start over;
 - the feeder and drinker zones of `BEHAVIOR_ZONE_CAMERA` (in `packages\api\.env`, default `CAM-01`) are sent to the Pi
   by the API whenever they change, and the Pi keeps them in `behavior_zones.json`, so they still apply offline;
-- the detector keeps weak boxes too (`LIVE_DETECT_CONF=0.1`, `LIVE_DETECT_NMS=0.7`), as ByteTrack expects.
+- the detector keeps weak boxes too (`LIVE_DETECT_CONF=0.1`, `LIVE_DETECT_NMS=0.7`), as ByteTrack expects;
+- a bird the detector misses keeps its number for up to 5 minutes (`TRACK_REFIND_SECONDS=300`, ours, not klydel's;
+  `0` gives klydel's tracker exactly). It can only take back a box no other bird claimed. On Day 12 this cut 111 bird
+  numbers to 38, and the birds that can be judged for inactivity after 30 minutes went from about 2 to 12 of 20,
+  with klydel's hand-marked tracking frames scoring the same (MOTA 0.796, IDF1 0.764). The laptop's clip scan uses it too.
 
 `LIVE_ENGINE=old` in the Pi's `.env` goes back to the earlier monitor. On the laptop, `scripts\run-vision.ps1` now gives
 the clip scans the same zones (it reads `DATABASE_URL` from `packages\api\.env` for the zones only, not the camera link).

@@ -70,7 +70,7 @@ def predict(args) -> None:
     from bytetrack import BYTETracker, ByteTrackConfig
     from detector import Detector
     from mot_metrics import write_mot
-    from stable_ids import KLYDEL_COMMIT, BroilerTracker, HybridConfig
+    from stable_ids import KLYDEL_COMMIT, BroilerTracker, HybridConfig, tuned_for
 
     detector = Detector()
     if not detector.available:
@@ -78,7 +78,9 @@ def predict(args) -> None:
 
     bt_cfg = ByteTrackConfig.from_env()
     if args.tracker == "hybrid":
-        tracker = BroilerTracker(bt_cfg, HybridConfig.from_env())
+        # TRACK_REFIND_SECONDS=0 scores klydel's tracker exactly.
+        bt_cfg, hy_cfg = tuned_for(args.interval, bt_cfg, HybridConfig.from_env())
+        tracker = BroilerTracker(bt_cfg, hy_cfg)
     else:
         tracker = BYTETracker(bt_cfg)
     print(f"Tracker: {args.tracker} ({bt_cfg}); stable-ID layer from klydel {KLYDEL_COMMIT}")

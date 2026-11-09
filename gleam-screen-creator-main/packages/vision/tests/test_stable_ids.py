@@ -169,3 +169,51 @@ def test_body_length_follows_the_birds():
 def test_hybrid_config_from_env(monkeypatch):
     monkeypatch.setenv("HYBRID_MAX_MISSED", "6")
     assert si.HybridConfig.from_env().max_missed == 6
+
+
+# ---------------------------------------------------------------------------
+# The refind pass (not klydel's; TRACK_REFIND_SECONDS, default 300 s)
+# ---------------------------------------------------------------------------
+
+def _manager_ids(manager, frames):
+    out = []
+    for boxes in frames:
+        ids, _, _ = manager.update(list(range(100 * len(out), 100 * len(out) + len(boxes))), boxes, [0.9] * len(boxes))
+        out.append(ids)
+    return out
+
+
+def test_refind_off_is_klydel_exactly():
+    """With the pass off, a bird missed for more than max_missed frames comes back under a new number."""
+    frames = [[[100, 100, 40, 40], [300, 100, 40, 40]]] + [[[300, 100, 40, 40]]] * 6 + [[[110, 100, 40, 40], [300, 100, 40, 40]]]
+    ids = _manager_ids(si.HybridIDManager(max_missed=4), frames)
+    assert ids[0] == [1, 2] and ids[-1] == [3, 2]
+
+
+def test_refind_gives_a_long_missing_bird_its_number_back():
+    frames = [[[100, 100, 40, 40], [300, 100, 40, 40]]] + [[[300, 100, 40, 40]]] * 6 + [[[110, 100, 40, 40], [300, 100, 40, 40]]]
+    ids = _manager_ids(si.HybridIDManager(max_missed=4, refind_missed=20), frames)
+    assert ids[-1] == [1, 2]
+
+
+def test_refind_never_takes_a_box_a_seen_bird_claims():
+    """Bird 1 goes missing; bird 2 walks to where bird 1 was. Bird 2 keeps its own number."""
+    frames = ([[[100, 100, 40, 40], [200, 100, 40, 40]]]
+              + [[[200 - 15 * k, 100, 40, 40]] for k in range(1, 7)])
+    ids = _manager_ids(si.HybridIDManager(max_missed=4, refind_missed=20), frames)
+    assert all(row == [2] for row in ids[1:])
+
+
+def test_refind_lets_a_number_go_after_its_time():
+    frames = [[[100, 100, 40, 40]]] + [[]] * 21 + [[[100, 100, 40, 40]]]
+    ids = _manager_ids(si.HybridIDManager(max_missed=4, refind_missed=20), frames)
+    assert ids[-1] == [2]
+
+
+def test_tuned_for_sizes_the_pass_in_seconds():
+    bt_cfg, hy = si.tuned_for(3.0, refind_seconds=300)
+    assert hy.refind_missed == 100 and bt_cfg.track_buffer == 100
+    bt_cfg, hy = si.tuned_for(2.0, refind_seconds=300)
+    assert hy.refind_missed == 150 and bt_cfg.track_buffer == 150
+    bt_cfg, hy = si.tuned_for(2.0, refind_seconds=0)
+    assert hy.refind_missed == 0 and bt_cfg.track_buffer == bt.ByteTrackConfig().track_buffer

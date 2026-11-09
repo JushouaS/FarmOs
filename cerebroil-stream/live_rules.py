@@ -36,7 +36,7 @@ import numpy as np
 
 import behavior
 from klydel.behavior_rules import BehaviorSettings, BehaviorTracker, Zones
-from klydel.stable_ids import KLYDEL_COMMIT, BroilerTracker
+from klydel.stable_ids import KLYDEL_COMMIT, REFIND_SECONDS, BroilerTracker, tuned_for
 
 FREEZE_FRAMES = 3          # this many near-identical pictures in a row = a frozen camera (klydel gap_guard)
 FREEZE_DIFF = 0.25         # mean grey difference of a 64x48 thumbnail at or below which two pictures are the same
@@ -83,7 +83,7 @@ class LiveRules:
         self.settings = BehaviorSettings(window_s=self.inactive_seconds)
         self.settings.validate()
         self.zones_norm: list = list(zones or [])
-        self.tracker = BroilerTracker()
+        self.tracker = BroilerTracker(*tuned_for(self.interval))   # a missed bird keeps its number 300 s
         self.rules: BehaviorTracker | None = None   # made at the first picture, once its size is known
         self.last: dict[str, Any] | None = None
         self.gap: dict[str, Any] | None = None       # the latest gap, for the status
@@ -280,7 +280,7 @@ class LiveRules:
     def status(self, night: bool) -> dict[str, Any]:
         """behavior.Engine.status, from the newest judged picture, plus which rules made it."""
         last = self.last
-        extra = {"rules": f"klydel {KLYDEL_COMMIT}", "zones": len(self.zones_norm), "restarts": self.restarts,
+        extra = {"rules": f"klydel {KLYDEL_COMMIT}", "refind_seconds": REFIND_SECONDS,"zones": len(self.zones_norm), "restarts": self.restarts,
                  "gap": self.gap, "interval_seconds": round(self.measured_interval(), 2)}
         if last is None:
             return {"birds": 0, "night": night, "inactive": [], "flock_inactive": None, "huddle": None, **extra}

@@ -55,7 +55,7 @@ import numpy as np
 from behavior_rules import BehaviorSettings, BehaviorTracker, Zones
 from bytetrack import ByteTrackConfig, _env_float
 from gap_guard import CheckedFrame, iter_guarded_samples, parse_exclusions
-from stable_ids import KLYDEL_COMMIT, BroilerTracker, HybridConfig
+from stable_ids import KLYDEL_COMMIT, BroilerTracker, HybridConfig, tuned_for
 
 logger = logging.getLogger(__name__)
 
@@ -353,8 +353,7 @@ class ScanJob:
         self.zones = zones or []
         self.zones_source = zones_source
         self.stats: dict = {}
-        self.bytetrack = ByteTrackConfig.from_env()
-        self.hybrid = HybridConfig.from_env()
+        self.bytetrack, self.hybrid = tuned_for(settings.interval, ByteTrackConfig.from_env(), HybridConfig.from_env())
         self.status = "running"
         self.error: str | None = None
         self.started = time.time()

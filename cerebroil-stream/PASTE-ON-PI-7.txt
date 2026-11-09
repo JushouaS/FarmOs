@@ -9,6 +9,8 @@
 # rules (BehaviorMonitoring, branch klydel, commit a365f3d). Also new:
 #   - a frozen camera picture is no longer read as "every bird is still": it is skipped and the problem column says so;
 #   - after a gap (no picture for a while) the birds' numbers and the 30-minute clock start over;
+#   - (update of Nov 10) a bird the detector misses keeps its number for up to 5 minutes, so about 12 of 20 birds can
+#     be judged for inactivity after 30 minutes instead of about 2 (TRACK_REFIND_SECONDS=300; 0 = the old behaviour);
 #   - the feeder and drinker zones drawn in Settings reach the Pi: the laptop's API sends them on its next poll and the
 #     Pi keeps them in ~/cerebroil-stream/behavior_zones.json, so they still apply without internet.
 #
