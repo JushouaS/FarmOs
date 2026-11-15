@@ -45,8 +45,56 @@ export function statusFor(value: number, lower: number | null, upper: number | n
   return out > span * 0.2 ? "critical" : "warning";
 }
 
+/** How long a reading must stay outside its bounds before an alert is raised: one odd reading is not a problem. */
+export const OUT_OF_RANGE_MINUTES = 10;
+
+export interface RangeAlert {
+  kind: string;
+  severity: "warning" | "critical";
+  message: string;
+}
+
+/**
+ * Watches one reading (temperature or humidity) and says when it has stayed outside its bounds for
+ * OUT_OF_RANGE_MINUTES. It fires once per excursion; the reading has to come back inside before it can fire again,
+ * and raiseAlert's de-duplication keeps a long excursion from repeating within the hour.
+ */
+export class RangeWatch {
+  private outSince: number | null = null;
+  private fired = false;
+  private worst: "warning" | "critical" = "warning";
+
+  constructor(private readonly label: string, private readonly unit: string, private readonly minutes = OUT_OF_RANGE_MINUTES) {}
+
+  update(value: number, status: "nominal" | "warning" | "critical", lower: number | null, upper: number | null, now: number): RangeAlert | null {
+    if (status === "nominal") {
+      this.outSince = null;
+      this.fired = false;
+      this.worst = "warning";
+      return null;
+    }
+    if (status === "critical") this.worst = "critical";
+    this.outSince ??= now;
+    if (this.fired || now - this.outSince < this.minutes * 60_000) return null;
+    this.fired = true;
+    const side = upper != null && value > upper ? "above" : "below";
+    const limit = side === "above" ? upper : lower;
+    const range = lower != null && upper != null ? `${lower}-${upper} ${this.unit}` : `${limit} ${this.unit}`;
+    return {
+      kind: `${this.label} Out of Range`,
+      severity: this.worst,
+      message: `${this.label} has been ${side} the safe range (${range}) for ${this.minutes} minutes; now ${value} ${this.unit}. Check the house ventilation, heating and drinkers.`,
+    };
+  }
+}
+
 /** Stores one report. Returns how many readings were written (0 when it was too old or empty). */
-export async function storeReport(app: FastifyInstance, report: SensorReport, now = Date.now()): Promise<number> {
+export async function storeReport(
+  app: FastifyInstance,
+  report: SensorReport,
+  now = Date.now(),
+  watches?: Record<string, RangeWatch>,
+): Promise<number> {
   if (!report.running || report.ageSeconds == null || report.ageSeconds > MAX_AGE_SECONDS) return 0;
   const recordedAt = new Date(now - report.ageSeconds * 1000);
   let stored = 0;
@@ -61,10 +109,13 @@ export async function storeReport(app: FastifyInstance, report: SensorReport, no
       ORDER BY effective_from DESC LIMIT 1`;
     const lower = bounds[0]?.lower != null ? Number(bounds[0].lower) : null;
     const upper = bounds[0]?.upper != null ? Number(bounds[0].upper) : null;
+    const status = statusFor(value, lower, upper);
     await app.sqlWrite`
       INSERT INTO sensor_readings (sensor_id, value, unit, status, recorded_at)
-      VALUES (${sensor.id}, ${value}, ${sensor.unit}, ${statusFor(value, lower, upper)}, ${recordedAt})`;
+      VALUES (${sensor.id}, ${value}, ${sensor.unit}, ${status}, ${recordedAt})`;
     stored++;
+    const alert = watches?.[sensor.id]?.update(value, status, lower, upper, now);
+    if (alert) await raiseAlert(app, { ...alert, dedupeMinutes: 60 });
   }
   return stored;
 }
@@ -83,6 +134,11 @@ export function startSensorMonitor(app: FastifyInstance): void {
   // When a reading was last stored (null: never), and whether this silence has been reported already.
   let lastGoodAt: number | null = null;
   let reported = false;
+  // Out-of-range alerts for the live readings: alert when a reading stays outside its stored bounds (Sensors page).
+  const watches: Record<string, RangeWatch> = {
+    "SN-DHT22-T": new RangeWatch("Temperature", "°C"),
+    "SN-DHT22-H": new RangeWatch("Humidity", "%"),
+  };
   void newestStoredReading(app).then((at) => {
     lastGoodAt = lastGoodAt ?? at;
   }).catch(() => {});
@@ -125,7 +181,7 @@ export function startSensorMonitor(app: FastifyInstance): void {
     // The same reading is not stored twice when the reader is slower than this poll.
     const at = report.ageSeconds != null ? Date.now() - report.ageSeconds * 1000 : 0;
     if (Math.abs(at - lastAt) < 2_000) return;
-    const stored = await storeReport(app, report);
+    const stored = await storeReport(app, report, Date.now(), watches);
     if (stored > 0) {
       lastAt = at;
       lastGoodAt = Date.now();
