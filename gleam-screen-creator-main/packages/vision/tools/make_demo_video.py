@@ -98,12 +98,13 @@ def stamp(frame: np.ndarray, seconds: float) -> None:
                 (245, 245, 245), 2, cv2.LINE_AA)
 
 
-def callout(frame: np.ndarray, text: str) -> None:
-    """A large violet caption in the lower third."""
+def callout(frame: np.ndarray, text: str, bird_y: float | None = None) -> None:
+    """A large violet caption, in the half of the picture away from the bird it is about."""
     h, w = frame.shape[:2]
     scale = max(0.6, min(1.4, w / 1100))
     (tw, th), base = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 2)
-    x, y = max(10, (w - tw) // 2), int(h * 0.80)
+    low = bird_y is None or bird_y < h / 2
+    x, y = max(10, (w - tw) // 2), int(h * (0.80 if low else 0.22))
     cv2.rectangle(frame, (x - 14, y - th - 14), (x + tw + 14, y + base + 10), (150, 60, 120), -1)
     cv2.putText(frame, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, (255, 255, 255), 2, cv2.LINE_AA)
 
@@ -246,7 +247,9 @@ def main() -> None:
             stamp(frame, clock0 + t)
         repeat = 1
         if s is not None and s.inactive:
-            callout(frame, f"Bird {', '.join(map(str, s.inactive))}: still for 30+ minutes (inactive)")
+            ys = [b.cy for b in s.birds if b.id in s.inactive]
+            callout(frame, f"Bird {', '.join(map(str, s.inactive))}: still for 30+ minutes (inactive)",
+                    sum(ys) / len(ys) if ys else None)
             repeat = max(1, int(round(args.hold * args.fps)))
         demo_at.setdefault(n, written / args.fps)
         data = frame.tobytes()
