@@ -1,0 +1,40 @@
+# FIRST, on its own, run:   sudo -v   and type the Pi's password. Then paste the rest. If sudo has to ask for the
+# password in the middle of a paste, it reads the NEXT pasted line as the password and the restarts below never happen.
+#
+# Paste ALL of this into the Raspberry Pi Connect terminal (one go) and press Enter, AFTER the new files are on GitHub
+# (the branch responsive-login-local-db). It takes about 1 minute. At the end copy everything it printed and send it back.
+#
+# What changes: when the temperature/humidity sensor fails, it now restarts by itself.
+#   - The DHT22 reader stops itself after 2 minutes without one good reading (DHT22_RESTART_AFTER, seconds), and the
+#     service starts it again 10 s later. A stuck sensor used to fail forever until someone restarted it by hand.
+#   - The sensor reader, the camera service and the recorder are told never to give up restarting, however often they
+#     fail (StartLimitIntervalSec=0).
+# Your .env, the logs and the recordings are NOT touched.
+
+echo; echo "=== A. Getting the latest files"
+command -v git >/dev/null || sudo apt-get install -y git
+rm -rf ~/farmos-src
+git clone --quiet --depth 1 --filter=blob:none --sparse -b responsive-login-local-db https://github.com/JushouaS/FarmOs.git ~/farmos-src
+git -C ~/farmos-src sparse-checkout set cerebroil-stream
+cp -a ~/farmos-src/cerebroil-stream/. ~/cerebroil-stream/
+grep -c "DHT22_RESTART_AFTER" ~/cerebroil-stream/dht22_reader.py
+
+echo; echo "=== B. Never give up restarting (sensor reader, camera service, recorder)"
+for s in dht22 cerebroil-stream cerebroil-recorder; do
+  f=/etc/systemd/system/$s.service
+  if [ -f "$f" ]; then
+    grep -q "^StartLimitIntervalSec=0" "$f" || sudo sed -i '/^\[Unit\]/a StartLimitIntervalSec=0' "$f"
+    grep -q "^Restart=" "$f" || sudo sed -i '/^\[Service\]/a Restart=always' "$f"
+    echo "$s: $(grep -E '^(Restart|RestartSec|StartLimitIntervalSec)=' "$f" | tr '\n' ' ')"
+  else
+    echo "$s: not installed here (skipped)"
+  fi
+done
+sudo systemctl daemon-reload
+
+echo; echo "=== C. Restarting the sensor reader with the new code"
+sudo systemctl restart dht22
+sleep 25
+systemctl is-active dht22
+cat ~/cerebroil-stream/dht22.json; echo
+journalctl -u dht22 --since "-2 min" --no-pager | tail -5

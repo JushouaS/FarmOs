@@ -44,6 +44,8 @@ fi
 sudo tee /etc/systemd/system/cerebroil-recorder.service >/dev/null <<EOF
 [Unit]
 Description=Cerebroil daily one-hour recordings (recorder.py)
+# Never give up restarting it, however often it fails.
+StartLimitIntervalSec=0
 After=network-online.target time-sync.target
 Wants=network-online.target
 

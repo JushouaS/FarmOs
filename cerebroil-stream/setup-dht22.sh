@@ -26,6 +26,8 @@ DHT22_GPIO="$GPIO" /usr/bin/python3 dht22_reader.py --once || echo "(The test re
 sudo tee /etc/systemd/system/dht22.service >/dev/null <<EOF
 [Unit]
 Description=Cerebroil DHT22 temperature and humidity sensor
+# Never give up restarting it, however often it fails.
+StartLimitIntervalSec=0
 After=multi-user.target
 
 [Service]

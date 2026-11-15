@@ -53,6 +53,8 @@ fi
 sudo tee /etc/systemd/system/cerebroil-stream.service >/dev/null <<EOF
 [Unit]
 Description=Cerebroil camera service
+# Never give up restarting it, however often it fails.
+StartLimitIntervalSec=0
 After=network-online.target
 Wants=network-online.target
 

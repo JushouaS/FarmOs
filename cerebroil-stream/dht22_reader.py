@@ -23,6 +23,11 @@ Settings (environment variables, all optional):
     DHT22_GPIOCHIP   the GPIO device                               default /dev/gpiochip0  (Pi 4; a Pi 5 uses gpiochip4)
     DHT22_INTERVAL   seconds between readings                      default 10
     DHT22_FILE       where the reading is written                  default dht22.json beside this file
+    DHT22_RESTART_AFTER  seconds without one good reading before the reader stops itself so the
+                     service starts it fresh (Restart=always in dht22.service)   default 120; 0 = never
+
+Why it restarts itself: a DHT22 that has got stuck (or a GPIO request the kernel did not let go of) can fail every
+read for hours, and only a fresh start of the program brings it back. Retrying inside the same program does not.
 """
 from __future__ import annotations
 
@@ -40,6 +45,8 @@ GPIO_LINE = int(os.getenv("DHT22_GPIO", "4"))
 GPIO_CHIP = os.getenv("DHT22_GPIOCHIP", "/dev/gpiochip0")
 INTERVAL_SECONDS = max(4.0, float(os.getenv("DHT22_INTERVAL", "10")))
 OUT_FILE = Path(os.getenv("DHT22_FILE", str(Path(__file__).with_name("dht22.json"))))
+RESTART_AFTER_SECONDS = float(os.getenv("DHT22_RESTART_AFTER", "120"))
+EXIT_RESTART = 3             # the exit code that means "start me again" (systemd restarts on any exit)
 
 TRIES_PER_ROUND = 6          # a single read fails now and then; that is normal for this sensor
 PAUSE_BETWEEN_TRIES = 2.2    # the DHT22 needs about 2 seconds of rest between reads
@@ -168,6 +175,7 @@ def main() -> int:
     logs = MinuteLogs()
     log_every = float(os.getenv("LOG_SECONDS", "60"))
     logged_at = 0.0
+    last_success = time.monotonic()   # counted from the start: a sensor that never answers is restarted too
     while True:
         started = time.monotonic()
         error: str | None = None
@@ -175,6 +183,7 @@ def main() -> int:
             try:
                 temperature, humidity = read_once(gpiod)
                 last_good = {"temperature": temperature, "humidity": humidity, "at": time.time()}
+                last_success = time.monotonic()
                 error = None
                 if once:
                     print(f"try {attempt}: {temperature} °C, {humidity} %")
@@ -192,6 +201,13 @@ def main() -> int:
             logs.write(last_good, error, logged_at)
         if once:
             return 0 if error is None else 1
+        silent = time.monotonic() - last_success
+        if error is not None and RESTART_AFTER_SECONDS > 0 and silent >= RESTART_AFTER_SECONDS:
+            reason = f"no good reading for {silent:.0f} s ({error}); restarting the sensor reader"
+            print(f"[dht22] {reason}", flush=True)
+            write_state({**last_good, "checkedAt": time.time(), "error": reason})
+            logs.write(last_good, reason, time.time())
+            return EXIT_RESTART
         time.sleep(max(1.0, INTERVAL_SECONDS - (time.monotonic() - started)))
 
 
