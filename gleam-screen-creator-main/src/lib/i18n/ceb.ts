@@ -26,6 +26,7 @@ import { part25 } from "./messages/part25";
 import { part26 } from "./messages/part26";
 import { part27 } from "./messages/part27";
 import { part28 } from "./messages/part28";
+import { part29 } from "./messages/part29";
 
 /** Cebuano. English sentence -> Cebuano. Anything missing shows in English. */
 export const ceb: Record<string, string> = Object.fromEntries(
@@ -58,5 +59,6 @@ export const ceb: Record<string, string> = Object.fromEntries(
     ...part26,
     ...part27,
     ...part28,
+    ...part29,
   }).map(([english, pair]) => [english, pair[1]]),
 );

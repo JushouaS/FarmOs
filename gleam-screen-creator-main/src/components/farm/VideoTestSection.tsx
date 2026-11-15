@@ -47,10 +47,10 @@ const CONCLUSION_TEXT: Record<VideoConclusion, string> = {
     "The detector has no model loaded, so nothing was counted. Add the model, then try again.",
   ),
   nothing_usable: T("None of the sampled moments could be measured."),
-  both_sustained: T("Both inactivity and huddling last through the clip."),
-  inactivity_sustained: T("Inactivity lasts through the clip."),
+  both_sustained: T("Low movement and huddling last through the clip."),
+  inactivity_sustained: T("Low movement lasts through the clip."),
   huddling_sustained: T("Huddling lasts through the clip."),
-  inactivity_seen: T("Inactivity appears, but not for long enough to raise an alarm."),
+  inactivity_seen: T("Low movement appears, but not for long enough to raise an alarm."),
   huddling_seen: T("Huddling appears, but not for long enough to raise an alarm."),
   nothing_alarming: T("Nothing alarming in the sampled moments."),
 };
@@ -134,7 +134,7 @@ function Readings({ behavior, warnings }: { behavior: VisionBehavior; warnings: 
         <Stat label={tr("Birds")} value={behavior.bird_count ?? 0} />
         <Stat label={tr("At feeder")} value={behavior.zone_count ?? 0} />
         <Stat label={tr("Counted")} value={behavior.evaluable_count ?? 0} />
-        <Stat label={tr("Inactive")} value={behavior.inactive_count ?? 0} />
+        <Stat label={tr("Still this moment")} value={behavior.inactive_count ?? 0} />
         <Stat label={tr("Huddled")} value={behavior.huddled_count ?? 0} />
         <Stat label={tr("Movement")} value={motionPct(behavior.movement_index)} />
       </dl>
@@ -398,6 +398,11 @@ export function VideoTestSection() {
                 {busy === "sweep" ? tr("Checking the whole clip…") : tr("Check the whole clip")}
               </button>
             </div>
+            <Hint>
+              {tr(
+                "These two checks look at moments a second or so long. The thesis rules (a bird still for 30 minutes, a huddle that lasts) are judged by Follow every bird, below.",
+              )}
+            </Hint>
 
             {analysis && (
               <div className="rounded-md p-3" style={{ border: "1px solid var(--border-subtle)" }}>

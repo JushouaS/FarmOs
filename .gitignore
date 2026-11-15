@@ -28,3 +28,6 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 .opencode
+
+# Defence demo videos and scan outputs (large; made by packages/vision/tools/make_demo_video.py)
+defense-demo/
