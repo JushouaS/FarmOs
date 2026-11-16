@@ -136,6 +136,19 @@ def test_huddled_birds_are_not_on_the_watch_list(monkeypatch):
     assert len(status["watch"]) == len(APART)                         # the trio is huddling, not on watch
 
 
+def test_number_jumps_are_counted():
+    engine = live_rules.LiveRules(inactive_seconds=600, huddle_seconds=600, interval=1.0)
+    t = run(engine, lambda t: APART, 10)
+    q = engine.status(False)["identity"]
+    assert q["jumps"] == 0 and q["sightings"] == 50 and q["jumps_per_1000"] == 0.0
+    # Bird 1 is missed for two pictures, then a bird turns up 2.5 body lengths away: the refind pass gives it the
+    # missing bird's number, and that step is counted.
+    t = run(engine, lambda t: APART[1:], 2, start=t)
+    run(engine, lambda t: [(APART[0][0], APART[0][1] + 100)] + APART[1:], 3, start=t)
+    q = engine.status(False)["identity"]
+    assert q["jumps"] == 1 and q["jumps_per_1000"] > 0
+
+
 def test_too_early_to_judge():
     engine = live_rules.LiveRules(inactive_seconds=60, huddle_seconds=600, interval=1.0)
     run(engine, lambda t: APART, 20)

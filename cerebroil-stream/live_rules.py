@@ -61,6 +61,8 @@ def _watch_minutes(value: str) -> tuple[float, float]:
 
 
 WATCH_MINUTES = _watch_minutes(os.getenv("BEHAVIOR_WATCH_MINUTES", "5,15"))
+JUMP_BL = 1.5                  # a step longer than this many body lengths is a possible number jump (klydel Option B)
+JUMP_WINDOW_SECONDS = 3600.0   # the identity figures cover the last hour
 
 
 def still_since(points: Sequence[tuple[float, float, float]], t: float, limit_px: float) -> tuple[float, int] | None:
@@ -137,6 +139,10 @@ class LiveRules:
         self._repeats = 0
         self._frozen = False
         self._steps: deque[float] = deque(maxlen=50)
+        # Identity quality, live: sightings and possible number jumps of the last JUMP_WINDOW_SECONDS.
+        self._last_seen: dict[int, tuple[float, float, float]] = {}
+        self._sightings: deque[tuple[float, int]] = deque()
+        self._jumps: deque[float] = deque()
         self._seq = 0
         self._reset_state()
 
@@ -166,6 +172,7 @@ class LiveRules:
             self.rules.reset()
         self._id_base = self._highest
         self._reset_state()
+        self._last_seen = {}
         self.last = None
         self.restarts += 1
         self.gap = {"reason": reason, "at": t}
@@ -213,6 +220,7 @@ class LiveRules:
         if birds:
             self._bodies.append(statistics.median(max(b.box[2], b.box[3]) for b in birds))
         body_len = statistics.median(self._bodies) if self._bodies else None
+        self._count_jumps(t, by_id, body_len)
 
         judge = self._warmup == 0
         if self._warmup:
@@ -228,6 +236,30 @@ class LiveRules:
                 self._settle(*item, fb)
         for key in [k for k in self._pending if k < seq - 5]:
             del self._pending[key]
+
+    def _count_jumps(self, t: float, by_id: dict[int, tuple], body_len: float | None) -> None:
+        """A possible number jump: a bird's centre moved more than JUMP_BL body lengths since its previous sighting
+        (klydel's Option B audit, 1.5 BL). Some are real walks, most are a number passing to another bird. The
+        30-minute rule needs no protection from them (a jump breaks the half-body-length range by itself); the count
+        is a live measure of how well the numbers hold, which IDF1 cannot give without hand annotation."""
+        for tid, box in by_id.items():
+            prev = self._last_seen.get(tid)
+            if prev is not None and body_len and math.hypot(box[0] - prev[1], box[1] - prev[2]) > JUMP_BL * body_len:
+                self._jumps.append(t)
+            self._last_seen[tid] = (t, box[0], box[1])
+        self._sightings.append((t, len(by_id)))
+        while self._sightings and t - self._sightings[0][0] > JUMP_WINDOW_SECONDS:
+            self._sightings.popleft()
+        while self._jumps and t - self._jumps[0] > JUMP_WINDOW_SECONDS:
+            self._jumps.popleft()
+        for tid in [k for k, v in self._last_seen.items() if t - v[0] > REFIND_SECONDS]:
+            del self._last_seen[tid]
+
+    def identity_quality(self) -> dict[str, Any]:
+        """Possible number jumps over the last JUMP_WINDOW_SECONDS, also per 1,000 sightings of a bird."""
+        seen = sum(n for _, n in self._sightings)
+        return {"window_seconds": JUMP_WINDOW_SECONDS, "jumps": len(self._jumps), "sightings": seen,
+                "jumps_per_1000": round(1000 * len(self._jumps) / seen, 1) if seen else None}
 
     def _judged(self, ids: list[int], t: float) -> list[bool]:
         """Per bird: followed for the whole window with enough pictures, so "still" can be said yes or no."""
@@ -351,7 +383,7 @@ class LiveRules:
         last = self.last
         extra = {"rules": f"klydel {KLYDEL_COMMIT}", "refind_seconds": REFIND_SECONDS,"zones": len(self.zones_norm), "restarts": self.restarts,
                  "gap": self.gap, "interval_seconds": round(self.measured_interval(), 2),
-                 "watch_minutes": list(WATCH_MINUTES)}
+                 "watch_minutes": list(WATCH_MINUTES), "identity": self.identity_quality()}
         if last is None:
             return {"birds": 0, "night": night, "inactive": [], "flock_inactive": None, "huddle": None, "watch": [],
                     **extra}
