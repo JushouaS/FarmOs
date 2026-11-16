@@ -9,6 +9,7 @@ import { getOperationsOverview } from "@/lib/farm/repository";
 import { freshReading, silentFor } from "@/lib/farm/pen-sensors";
 import { fetchLiveBehavior, visionStreamUrl, type KinectChickens, type LiveBehavior } from "@/lib/api-client";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, standardForToday, weightCategoryFor } from "@/lib/farm/weights";
+import { pictureArea, watchMinutes, watchSummary } from "@/lib/farm/stillness";
 import { localeTag, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/visuals")({
@@ -178,6 +179,9 @@ export function VisualsDashboardPage() {
   const monitorStill = monitor?.flock_inactive ? monitorBirds : (monitor?.inactive?.length ?? 0);
   const monitorHuddled = monitor?.huddle?.birds ?? 0;
   const monitorActive = Math.max(0, monitorBirds - monitorStill - monitorHuddled);
+  // Early warnings before the inactivity alert: birds still for 5 and 15 minutes (none at night: they rest).
+  const watch = watchSummary(monitor);
+  const [watchFirst, watchSecond] = watchMinutes(monitor);
 
   const handleFullscreenToggle = () => {
     if (!document.fullscreenElement) {
@@ -428,6 +432,38 @@ export function VisualsDashboardPage() {
                       </div>
                     </div>
                   ))}
+                  {watch && (
+                    <section aria-label={tr("Still for a while")} className="border-t border-[var(--border-subtle)] pt-3">
+                      <p className="mb-2 font-semibold text-[var(--text-primary)]">{tr("Still for a while")}</p>
+                      {monitor?.night || nightModeActive ? (
+                        <p className="text-[var(--text-tertiary)]">{tr("Night: still birds are resting, so none is on this list.")}</p>
+                      ) : (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-[var(--text-secondary)]">{tr("Still {n}+ min", { n: watchSecond })}</span>
+                            <span className="font-mono font-semibold tabular-nums text-[var(--status-amber-text)]">{watch.orange.length}</span>
+                          </div>
+                          {watch.orange.length > 0 && (
+                            <ul className="mt-1 space-y-0.5 text-[var(--text-secondary)]">
+                              {watch.orange.slice(0, 4).map((w) => (
+                                <li key={w.id}>
+                                  {tr("{place} of the picture, {m} min", { place: tr(pictureArea(w.at)), m: Math.floor(w.still_seconds / 60) })}
+                                </li>
+                              ))}
+                              {watch.orange.length > 4 && <li>{tr("and {n} more", { n: watch.orange.length - 4 })}</li>}
+                            </ul>
+                          )}
+                          <div className="mt-2 flex justify-between">
+                            <span className="text-[var(--text-secondary)]">{tr("Still {n}+ min", { n: watchFirst })}</span>
+                            <span className="font-mono font-semibold tabular-nums text-[var(--text-primary)]">{watch.all.length}</span>
+                          </div>
+                          <p className="mt-2 leading-relaxed text-[var(--text-tertiary)]">
+                            {tr("Not an alert yet. A bird still for 30 minutes raises an Inactivity Alert.")}
+                          </p>
+                        </>
+                      )}
+                    </section>
+                  )}
                   <p className="text-xs text-[var(--text-tertiary)]">{tr("{n} birds followed by the live monitor.", { n: monitorBirds })}</p>
                 </div>
               ) : (

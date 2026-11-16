@@ -20,6 +20,12 @@ What this adds for a camera that never stops:
   The interval. Inactivity needs a bird seen in half the pictures of its 30-minute window; "half" is counted from the
   time between pictures as measured, so a slow detector does not make every bird unjudgeable.
 
+  Early warnings. Before the 30-minute alert, a bird that has stayed within half a body length for WATCH_MINUTES
+  (5 and 15 by default) is put on a watch list as "yellow" or "orange", the levels of klydel's Option B
+  (inactivity-experiment, 1455dd3). The stillness is measured the way the 30-minute rule measures it (the range of the
+  bird's centre in x and in y), so a bird that reaches 30 minutes on the watch list is exactly the bird the rule
+  flags. The watch list is for the dashboard; no alert is sent for it.
+
 The status and the minute rows keep the fields the old engine (behavior.Engine) gave, so the API's alerts
 (packages/api/src/behavior-monitor.ts) and behavior_log.py work unchanged.
 """
@@ -43,6 +49,42 @@ FREEZE_DIFF = 0.25         # mean grey difference of a 64x48 thumbnail at or bel
 WARMUP_FRAMES = 3          # pictures after a gap that only settle the tracker
 HUDDLE_BREAK_SECONDS = float(os.getenv("LIVE_HUDDLE_BREAK_SECONDS", "20"))
 MAX_GAP_SECONDS = float(os.getenv("LIVE_MAX_GAP_SECONDS", "0"))   # 0 = max(20 s, 5 pictures)
+
+
+def _watch_minutes(value: str) -> tuple[float, float]:
+    """"5,15" -> (5.0, 15.0): the yellow and orange levels in minutes. Anything else falls back to (5, 15)."""
+    try:
+        yellow, orange = (float(v) for v in value.split(","))
+    except ValueError:
+        return 5.0, 15.0
+    return (yellow, orange) if 0 < yellow < orange else (5.0, 15.0)
+
+
+WATCH_MINUTES = _watch_minutes(os.getenv("BEHAVIOR_WATCH_MINUTES", "5,15"))
+
+
+def still_since(points: Sequence[tuple[float, float, float]], t: float, limit_px: float) -> tuple[float, int] | None:
+    """How long a bird has been still at time t, by the 30-minute rule's own test: walking back from t over its
+    (time, x, y) centres, the earliest time from which every centre up to t stays less than limit_px apart in x and
+    in y. Returns (that time, how many centres it covers), or None when the bird has no centre at exactly t."""
+    start: float | None = None
+    seen = 0
+    lo_x = hi_x = lo_y = hi_y = 0.0
+    for pt, x, y in reversed(points):
+        if pt > t:
+            continue
+        if start is None:
+            if pt != t:
+                return None
+            lo_x = hi_x = x
+            lo_y = hi_y = y
+        else:
+            lo_x, hi_x, lo_y, hi_y = min(lo_x, x), max(hi_x, x), min(lo_y, y), max(hi_y, y)
+            if hi_x - lo_x >= limit_px or hi_y - lo_y >= limit_px:
+                break
+        start = pt
+        seen += 1
+    return None if start is None else (start, seen)
 
 
 def signature(frame: np.ndarray | None) -> np.ndarray | None:
@@ -217,6 +259,32 @@ class LiveRules:
         in_huddle = [tid in huddled for tid in all_ids]
         self.last = self._picture(t, all_ids, still + [None] * len(raw_ids), in_huddle, longest, len(fb.huddles))
         self.last["feeding"] = len(fb.feeding)
+        self.last["watch"] = self._watch(t, ids, still, in_huddle, by_id)
+
+    def _watch(self, t: float, ids: list[int], still: list[bool | None], in_huddle: list[bool],
+               by_id: dict[int, tuple]) -> dict[int, tuple[float, tuple[float, float]]]:
+        """Tracked birds still for at least the yellow level but not (yet) inactive, and not in a huddle (a huddle
+        has its own rule): {number: (seconds still, centre as a share of the picture's width and height)}. Like the
+        30-minute rule, the stretch counts only if the bird was seen in at least min_fill of its pictures."""
+        if not self._bodies or self._size is None:
+            return {}
+        limit = self.settings.move_frac * statistics.median(self._bodies)
+        interval = max(1e-6, self.rules.interval)
+        width, height = self._size
+        out: dict[int, tuple[float, tuple[float, float]]] = {}
+        for tid, s, huddled in zip(ids, still, in_huddle):
+            if s is True or huddled:
+                continue
+            found = still_since(self.rules.history.get(tid, ()), t, limit)
+            if found is None:
+                continue
+            since, seen = found
+            seconds = t - since
+            if seconds < WATCH_MINUTES[0] * 60 or seen < self.settings.min_fill * seconds / interval:
+                continue
+            box = by_id[tid]
+            out[tid] = (seconds, (min(1.0, max(0.0, box[0] / width)), min(1.0, max(0.0, box[1] / height))))
+        return out
 
     def _follow_huddles(self, t: float, groups: list[list[int]], boxes: dict[int, tuple]) -> tuple[set[int], float | None]:
         """Joins this picture's huddle groups to the ones already running. Returns the birds in a huddle that has
@@ -274,6 +342,7 @@ class LiveRules:
                 if huddle_seconds is not None else None
             ),
             "huddle_groups_now": groups,
+            "watch": {},
         }
 
     # -- what the API asks for --------------------------------------------------------------------------------------
@@ -281,9 +350,17 @@ class LiveRules:
         """behavior.Engine.status, from the newest judged picture, plus which rules made it."""
         last = self.last
         extra = {"rules": f"klydel {KLYDEL_COMMIT}", "refind_seconds": REFIND_SECONDS,"zones": len(self.zones_norm), "restarts": self.restarts,
-                 "gap": self.gap, "interval_seconds": round(self.measured_interval(), 2)}
+                 "gap": self.gap, "interval_seconds": round(self.measured_interval(), 2),
+                 "watch_minutes": list(WATCH_MINUTES)}
         if last is None:
-            return {"birds": 0, "night": night, "inactive": [], "flock_inactive": None, "huddle": None, **extra}
+            return {"birds": 0, "night": night, "inactive": [], "flock_inactive": None, "huddle": None, "watch": [],
+                    **extra}
+        # At night still birds are resting, so nobody is put on the watch list (as nobody is called inactive).
+        watch = [] if night else [
+            {"id": tid, "still_seconds": round(seconds), "at": [round(at[0], 3), round(at[1], 3)],
+             "level": "orange" if seconds >= WATCH_MINUTES[1] * 60 else "yellow"}
+            for tid, (seconds, at) in sorted(last.get("watch", {}).items(), key=lambda kv: -kv[1][0])
+        ]
         states = [behavior._state(s, h, last["flock_moving"], night) for s, h in zip(last["still"], last["in_huddle"])]
         inactive = [{"id": tid, "still_seconds": round(last["still_seconds"].get(tid, 0.0))}
                     for tid, st in zip(last["ids"], states) if st == behavior.INACTIVE]
@@ -294,7 +371,7 @@ class LiveRules:
             if secs:
                 flock = {"still_seconds": round(statistics.median(secs))}
         return {"birds": last["n"], "night": night, "inactive": inactive, "flock_inactive": flock,
-                "huddle": last["huddle"], **extra}
+                "huddle": last["huddle"], "watch": watch, **extra}
 
 
 def valid_zones(value: Any) -> list | None:

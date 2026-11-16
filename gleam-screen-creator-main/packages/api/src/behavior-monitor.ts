@@ -49,6 +49,13 @@ export interface BehaviorStatus {
   /** Most of the flock still for longer than the inactive time (by day). */
   flock_inactive: { still_seconds: number } | null;
   huddle: { birds: number; fdi: number; seconds: number; warning: boolean } | null;
+  /**
+   * Early warnings before the inactivity alert (by day): birds still for watch_minutes[0] ("yellow") or
+   * watch_minutes[1] ("orange"), with their centre as a share of the picture. Shown on the dashboard only; no alert
+   * is raised for them. Absent on a camera service older than this field.
+   */
+  watch?: { id: number; still_seconds: number; level: "yellow" | "orange"; at: [number, number] }[];
+  watch_minutes?: [number, number];
   /** Which copy of the feeder zones the camera service holds (absent on a camera service that takes none). */
   zones_version?: string | null;
 }

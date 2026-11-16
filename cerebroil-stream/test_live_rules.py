@@ -72,6 +72,70 @@ def test_one_still_bird_among_moving_ones_is_inactive():
     assert engine.status(night=True)["inactive"] == []   # at night a still bird is resting
 
 
+def test_still_since_uses_the_ranges_of_x_and_y():
+    pts = [(0.0, 50.0, 50.0), (1.0, 10.0, 10.0), (2.0, 12.0, 11.0), (3.0, 11.0, 13.0), (4.0, 99.0, 99.0)]
+    # At t=3: back to t=1 the centres stay within 5 px; t=0 is 40 px away.
+    assert live_rules.still_since(pts, 3.0, 5.0) == (1.0, 3)
+    assert live_rules.still_since(pts, 3.0, 2.0) == (3.0, 1)       # 2 px: only the newest centre qualifies
+    assert live_rules.still_since(pts, 2.5, 5.0) is None           # not seen at that moment
+    assert live_rules.still_since([], 3.0, 5.0) is None
+
+
+def test_watch_minutes_setting():
+    assert live_rules._watch_minutes("5,15") == (5.0, 15.0)
+    assert live_rules._watch_minutes("2,10") == (2.0, 10.0)
+    assert live_rules._watch_minutes("15,5") == (5.0, 15.0)        # orange must come after yellow
+    assert live_rules._watch_minutes("nonsense") == (5.0, 15.0)
+
+
+def test_a_still_bird_turns_yellow_then_orange_then_inactive(monkeypatch):
+    monkeypatch.setattr(live_rules, "WATCH_MINUTES", (5 / 60, 15 / 60))   # yellow at 5 s, orange at 15 s
+    engine = live_rules.LiveRules(inactive_seconds=30, huddle_seconds=600, interval=1.0)
+
+    def centres(t):
+        wobble = 60 * np.sin(t / 3)
+        return [APART[0]] + [(x + wobble, y) for x, y in APART[1:]]
+
+    t = run(engine, centres, 10)
+    watch = engine.status(night=False)["watch"]
+    assert [w["level"] for w in watch] == ["yellow"]               # only the bird that stays put
+    assert watch[0]["at"] == [round(APART[0][0] / 640, 3), round(APART[0][1] / 480, 3)]
+    assert engine.status(night=True)["watch"] == []                # at night it is resting
+
+    t = run(engine, centres, 10, start=t)
+    watch = engine.status(night=False)["watch"]
+    assert [w["level"] for w in watch] == ["orange"] and watch[0]["still_seconds"] >= 15
+
+    run(engine, centres, 20, start=t)
+    status = engine.status(night=False)
+    assert len(status["inactive"]) == 1 and status["watch"] == []   # past 30 min it is an alert, not a warning
+    assert status["watch_minutes"] == [5 / 60, 15 / 60]
+
+
+def test_a_bird_that_moves_starts_its_watch_over(monkeypatch):
+    monkeypatch.setattr(live_rules, "WATCH_MINUTES", (5 / 60, 15 / 60))
+    engine = live_rules.LiveRules(inactive_seconds=30, huddle_seconds=600, interval=1.0)
+    moved = (APART[0][0] + 120, APART[0][1])
+    t = run(engine, lambda t: APART, 12)
+    assert len(engine.status(night=False)["watch"]) == 5
+    t = run(engine, lambda t: [moved] + APART[1:], 4, start=t)       # one bird walks away and settles
+    by_id = {w["id"]: w for w in engine.status(night=False)["watch"]}
+    assert len(by_id) == 4                                            # it has been still only a few seconds
+    run(engine, lambda t: [moved] + APART[1:], 10, start=t)
+    watch = engine.status(night=False)["watch"]
+    assert len(watch) == 5                                            # still again for a while: back on the list
+    assert min(w["still_seconds"] for w in watch) < 15                # with its clock started over, not 26 s
+
+
+def test_huddled_birds_are_not_on_the_watch_list(monkeypatch):
+    monkeypatch.setattr(live_rules, "WATCH_MINUTES", (5 / 60, 15 / 60))
+    engine = live_rules.LiveRules(inactive_seconds=600, huddle_seconds=5, interval=1.0)
+    run(engine, lambda t: TRIO + APART, 12)
+    status = engine.status(night=False)
+    assert status["huddle"] is not None
+    assert len(status["watch"]) == len(APART)                         # the trio is huddling, not on watch
+
+
 def test_too_early_to_judge():
     engine = live_rules.LiveRules(inactive_seconds=60, huddle_seconds=600, interval=1.0)
     run(engine, lambda t: APART, 20)

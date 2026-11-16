@@ -4,6 +4,8 @@ import { AppShell } from "@/components/farm/AppShell";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { fetchSituationBriefing, fetchFeedbackAlerts } from "@/lib/intelligence";
 import { fetchLiveBehavior } from "@/lib/api-client";
+import { DEFAULT_LIGHTING, isNightCycle } from "@/lib/farm/lighting";
+import { watchMinutes, watchSummary } from "@/lib/farm/stillness";
 import { T, getLanguage, tr } from "@/lib/i18n";
 
 export const Route = createFileRoute("/intelligence")({
@@ -27,14 +29,18 @@ function InsightsPage() {
   const behind = report?.weight?.status === "warning";
   const lang = getLanguage();
   // What the live behavior monitor sees now; it says "off" until LIVE_BEHAVIOR=1 is set on the camera computer.
+  // It is told whether it is night by the lighting hours in Settings, so resting birds are not called inactive.
+  const night = isNightCycle(new Date(), report?.lighting ?? DEFAULT_LIGHTING);
   const behaviorQ = useQuery({
-    queryKey: ["live-behavior"],
-    queryFn: () => fetchLiveBehavior(false),
+    queryKey: ["live-behavior", night],
+    queryFn: () => fetchLiveBehavior(night),
     refetchInterval: 15_000,
     staleTime: 10_000,
   });
   const monitor = behaviorQ.data?.running ? behaviorQ.data : null;
   const stillBirds = monitor ? (monitor.flock_inactive ? (monitor.birds ?? 0) : (monitor.inactive?.length ?? 0)) : 0;
+  const watchedLong = watchSummary(monitor)?.orange.length ?? 0;
+  const watchLevel = watchMinutes(monitor)[1];
   const observations: { ok: boolean | null; text: string }[] = [];
   if (report?.weight?.actualAvgG != null) {
     observations.push(behind ? { ok: false, text: tr("Average weight is behind the target") } : { ok: true, text: tr("Average weight is on track") });
@@ -45,6 +51,14 @@ function InsightsPage() {
         ? { ok: false, text: tr("{n} birds have stayed still. Check on them.", { n: stillBirds }) }
         : { ok: true, text: tr("Activity level is normal") },
     );
+    if (watchedLong > 0) {
+      observations.push({
+        ok: false,
+        text: watchedLong === 1
+          ? tr("1 bird has been still for {m}+ minutes. Keep an eye on it.", { m: watchLevel })
+          : tr("{n} birds have been still for {m}+ minutes. Keep an eye on them.", { n: watchedLong, m: watchLevel }),
+      });
+    }
     if (monitor.huddle?.warning) observations.push({ ok: false, text: tr("{n} birds are huddled together.", { n: monitor.huddle.birds }) });
   } else {
     observations.push({ ok: null, text: tr("Behavior monitoring is off. Turn it on at the camera computer (LIVE_BEHAVIOR=1) to see this.") });

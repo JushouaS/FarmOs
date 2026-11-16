@@ -624,6 +624,10 @@ export interface LiveBehavior {
   inactive?: { id: number; still_seconds: number }[];
   flock_inactive?: { still_seconds: number } | null;
   huddle?: { birds: number; fdi: number; seconds: number; warning: boolean } | null;
+  /** Birds still for a while but not yet inactive (by day), with their centre as a share of the picture. */
+  watch?: { id: number; still_seconds: number; level: "yellow" | "orange"; at: [number, number] }[];
+  /** The two warning levels in minutes (5 and 15 unless BEHAVIOR_WATCH_MINUTES says otherwise). */
+  watch_minutes?: [number, number];
 }
 
 /** The live monitor's picture. Never throws: a camera computer that is off or has the monitor off comes back as `running: false`. */
