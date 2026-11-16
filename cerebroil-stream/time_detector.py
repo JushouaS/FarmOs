@@ -21,22 +21,41 @@ import demo_detect  # noqa: E402
 
 
 def newest_picture() -> np.ndarray:
-    import requests
+    """One JPEG from the camera service's MJPEG stream (standard library only: the Pi's .venv has no requests)."""
+    from urllib.request import Request, urlopen
 
     token = os.getenv("VISION_SERVICE_TOKEN", "")
     port = os.getenv("FLASK_PORT", "5000")
-    res = requests.get(f"http://127.0.0.1:{port}/stream/dahua", headers={"X-Vision-Token": token}, stream=True, timeout=10)
-    buf = b""
-    for chunk in res.iter_content(65536):
-        buf += chunk
-        start, end = buf.find(b"\xff\xd8"), buf.find(b"\xff\xd9")
-        if start != -1 and end > start:
-            res.close()
-            return cv2.imdecode(np.frombuffer(buf[start:end + 2], np.uint8), cv2.IMREAD_COLOR)
+    req = Request(f"http://127.0.0.1:{port}/stream/dahua", headers={"X-Vision-Token": token})
+    with urlopen(req, timeout=10) as res:
+        buf = b""
+        while len(buf) < 20_000_000:
+            chunk = res.read(65536)
+            if not chunk:
+                break
+            buf += chunk
+            start = buf.find(b"\xff\xd8")
+            end = buf.find(b"\xff\xd9", start + 2) if start != -1 else -1
+            if end != -1:
+                return cv2.imdecode(np.frombuffer(buf[start:end + 2], np.uint8), cv2.IMREAD_COLOR)
     raise RuntimeError("no picture from the camera service")
 
 
+def live_monitor_running() -> bool:
+    """True when the camera service (which runs the live monitor's detector) is up: the two then share the CPU."""
+    import subprocess
+
+    try:
+        return subprocess.run(["systemctl", "is-active", "--quiet", "cerebroil-stream"], timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def main() -> int:
+    if live_monitor_running():
+        print("Note: the camera service is running, so the live monitor's detector shares the CPU with this test and "
+              "the time below is slower than the detector alone. For the detector's own time: "
+              "sudo systemctl stop cerebroil-stream, run this again, then sudo systemctl start cerebroil-stream.")
     try:
         frame = newest_picture()
     except Exception as exc:  # noqa: BLE001
