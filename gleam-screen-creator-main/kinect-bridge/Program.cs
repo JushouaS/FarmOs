@@ -30,17 +30,17 @@ using Microsoft.Kinect;
 // intrinsics, so the page does not hard-code them.
 //
 // A viewer gets depth frames unless it asks for the picture: it sends the text
-// {"want":"color"} (or {"want":"depth"} to go back). A picture frame is one binary
-// message holding a JPEG (it starts with the bytes FF D8, which a depth frame
-// never does), about 960x540, about 10 a second. Pictures are only made while
-// somebody is watching them.
+// {"want":"color"} (or {"want":"depth"} to go back). Weight inference asks for
+// {"want":"rgbd"} and gets one paired frame containing full-resolution depth,
+// Kinect depth-to-color coordinates and a JPEG. Picture and RGB-D frames are
+// only made while somebody is watching them.
 namespace CerebroilKinectBridge
 {
     internal sealed class Client
     {
         public WebSocket Socket;
         public volatile bool Busy;
-        /// <summary>0 = depth frames, 1 = picture frames.</summary>
+        /// <summary>0 = depth frames, 1 = picture frames, 2 = synchronized RGB-D frames.</summary>
         public volatile int Mode;
     }
 
@@ -58,12 +58,15 @@ namespace CerebroilKinectBridge
 
         const int ColorStep = 2;         // keep every 2nd pixel: 1920x1080 becomes 960x540
         const int ColorGapMs = 100;      // about 10 pictures a second
+        const int RgbdGapMs = 100;       // paired color/depth frames for weight inference
         const long JpegQuality = 70L;
 
         static readonly object Lock = new object();
+        static readonly object ColorLock = new object();
         static byte[] _colorRaw;
         static byte[] _colorSmall;
         static long _lastColorTicks;
+        static long _lastRgbdTicks;
         static readonly ImageCodecInfo JpegCodec = ImageCodecInfo.GetImageEncoders().First(c => c.MimeType == "image/jpeg");
         static readonly EncoderParameters JpegParams = MakeJpegParams();
 
@@ -77,6 +80,7 @@ namespace CerebroilKinectBridge
         static ushort[] _raw;
         static ushort[] _small;
         static int _outW, _outH;
+        static int _depthWidth, _depthHeight;
         static long _lastSentTicks;
         static int _framesSent;
 
@@ -89,6 +93,9 @@ namespace CerebroilKinectBridge
         static KinectSensor _sensor;
         static DepthFrameReader _depthReader;
         static ColorFrameReader _colorReader;
+        static MultiSourceFrameReader _rgbdReader;
+        static ushort[] _rgbdDepth;
+        static ColorSpacePoint[] _depthToColor;
 
         static void Main(string[] args)
         {
@@ -107,10 +114,14 @@ namespace CerebroilKinectBridge
             }
 
             FrameDescription fd = sensor.DepthFrameSource.FrameDescription;
+            _depthWidth = fd.Width;
+            _depthHeight = fd.Height;
             _outW = fd.Width / Step;
             _outH = fd.Height / Step;
             _raw = new ushort[fd.Width * fd.Height];
             _small = new ushort[_outW * _outH];
+            _rgbdDepth = new ushort[fd.Width * fd.Height];
+            _depthToColor = new ColorSpacePoint[fd.Width * fd.Height];
 
             OpenKinect();
 
@@ -161,6 +172,8 @@ namespace CerebroilKinectBridge
             _depthReader.FrameArrived += OnFrame;
             _colorReader = _sensor.ColorFrameSource.OpenReader();
             _colorReader.FrameArrived += OnColorFrame;
+            _rgbdReader = _sensor.OpenMultiSourceFrameReader(FrameSourceTypes.Depth | FrameSourceTypes.Color);
+            _rgbdReader.MultiSourceFrameArrived += OnRgbdFrame;
             Interlocked.Exchange(ref _lastSensorTicks, DateTime.UtcNow.Ticks);
             _sensor.Open();
         }
@@ -170,10 +183,12 @@ namespace CerebroilKinectBridge
             // Stop listening first, so a frame that arrives while the readers are closed finds nobody.
             try { _depthReader.FrameArrived -= OnFrame; } catch (Exception) { }
             try { _colorReader.FrameArrived -= OnColorFrame; } catch (Exception) { }
+            try { _rgbdReader.MultiSourceFrameArrived -= OnRgbdFrame; } catch (Exception) { }
             try { _sensor.IsAvailableChanged -= OnAvailableChanged; } catch (Exception) { }
             Thread.Sleep(200);
             try { _depthReader.Dispose(); } catch (Exception) { }
             try { _colorReader.Dispose(); } catch (Exception) { }
+            try { _rgbdReader.Dispose(); } catch (Exception) { }
             try { _sensor.Close(); } catch (Exception) { }
         }
 
@@ -269,7 +284,8 @@ namespace CerebroilKinectBridge
                     if (r.MessageType == WebSocketMessageType.Text)
                     {
                         string said = Encoding.UTF8.GetString(buf, 0, r.Count);
-                        client.Mode = said.IndexOf("color", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0;
+                        if (said.IndexOf("rgbd", StringComparison.OrdinalIgnoreCase) >= 0) client.Mode = 2;
+                        else client.Mode = said.IndexOf("color", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0;
                     }
                 }
                 Remove(client);
@@ -348,32 +364,17 @@ namespace CerebroilKinectBridge
             if (_framesSent % 150 == 0) Console.WriteLine("Sent " + _framesSent + " frames.");
         }
 
-        /// <summary>One colour picture, shrunk and compressed, to the viewers that asked for pictures.</summary>
-        static void OnColorFrame(object sender, ColorFrameArrivedEventArgs e)
+        static byte[] EncodeColorFrame(ColorFrame frame)
         {
-            Interlocked.Exchange(ref _lastSensorTicks, DateTime.UtcNow.Ticks);
-            _reopenAttempts = 0;
-            Client[] targets;
-            lock (Lock) { targets = Clients.Where(c => c.Mode == 1).ToArray(); }
-            if (targets.Length == 0) return;
-
-            long now = DateTime.UtcNow.Ticks;
-            if ((now - _lastColorTicks) / TimeSpan.TicksPerMillisecond < ColorGapMs) return;
-
-            int outW, outH;
-            ColorFrame colorFrame;
-            try { colorFrame = e.FrameReference.AcquireFrame(); }
-            catch (Exception) { return; } // the sensor is being opened again
-            using (ColorFrame frame = colorFrame)
+            lock (ColorLock)
             {
-                if (frame == null) return;
                 FrameDescription d = frame.FrameDescription;
                 int srcW = d.Width;
                 int srcH = d.Height;
                 if (_colorRaw == null || _colorRaw.Length != srcW * srcH * 4) _colorRaw = new byte[srcW * srcH * 4];
                 frame.CopyConvertedFrameDataToArray(_colorRaw, ColorImageFormat.Bgra);
-                outW = srcW / ColorStep;
-                outH = srcH / ColorStep;
+                int outW = srcW / ColorStep;
+                int outH = srcH / ColorStep;
                 if (_colorSmall == null || _colorSmall.Length != outW * outH * 4) _colorSmall = new byte[outW * outH * 4];
                 for (int y = 0; y < outH; y++)
                 {
@@ -389,21 +390,43 @@ namespace CerebroilKinectBridge
                         _colorSmall[d4 + 3] = 255;
                     }
                 }
-            }
-            _lastColorTicks = now;
 
-            byte[] jpeg;
-            using (Bitmap bmp = new Bitmap(outW, outH, PixelFormat.Format32bppRgb))
-            {
-                BitmapData bits = bmp.LockBits(new Rectangle(0, 0, outW, outH), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
-                Marshal.Copy(_colorSmall, 0, bits.Scan0, _colorSmall.Length);
-                bmp.UnlockBits(bits);
-                using (MemoryStream ms = new MemoryStream())
+                using (Bitmap bmp = new Bitmap(outW, outH, PixelFormat.Format32bppRgb))
                 {
-                    bmp.Save(ms, JpegCodec, JpegParams);
-                    jpeg = ms.ToArray();
+                    BitmapData bits = bmp.LockBits(new Rectangle(0, 0, outW, outH), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
+                    Marshal.Copy(_colorSmall, 0, bits.Scan0, _colorSmall.Length);
+                    bmp.UnlockBits(bits);
+                    using (MemoryStream ms = new MemoryStream())
+                    {
+                        bmp.Save(ms, JpegCodec, JpegParams);
+                        return ms.ToArray();
+                    }
                 }
             }
+        }
+
+        /// <summary>One colour picture, shrunk and compressed, to the viewers that asked for pictures.</summary>
+        static void OnColorFrame(object sender, ColorFrameArrivedEventArgs e)
+        {
+            Interlocked.Exchange(ref _lastSensorTicks, DateTime.UtcNow.Ticks);
+            _reopenAttempts = 0;
+            Client[] targets;
+            lock (Lock) { targets = Clients.Where(c => c.Mode == 1).ToArray(); }
+            if (targets.Length == 0) return;
+
+            long now = DateTime.UtcNow.Ticks;
+            if ((now - _lastColorTicks) / TimeSpan.TicksPerMillisecond < ColorGapMs) return;
+
+            byte[] jpeg;
+            ColorFrame colorFrame;
+            try { colorFrame = e.FrameReference.AcquireFrame(); }
+            catch (Exception) { return; } // the sensor is being opened again
+            using (ColorFrame frame = colorFrame)
+            {
+                if (frame == null) return;
+                jpeg = EncodeColorFrame(frame);
+            }
+            _lastColorTicks = now;
 
             foreach (Client c in targets)
             {
@@ -411,6 +434,91 @@ namespace CerebroilKinectBridge
                 c.Busy = true;
                 Client captured = c;
                 c.Socket.SendAsync(new ArraySegment<byte>(jpeg), WebSocketMessageType.Binary, true, CancellationToken.None)
+                    .ContinueWith(delegate(Task t)
+                    {
+                        captured.Busy = false;
+                        if (t.IsFaulted) Remove(captured);
+                    });
+            }
+        }
+
+        static void OnRgbdFrame(object sender, MultiSourceFrameArrivedEventArgs e)
+        {
+            Client[] targets;
+            lock (Lock) { targets = Clients.Where(c => c.Mode == 2).ToArray(); }
+            if (targets.Length == 0) return;
+
+            long now = DateTime.UtcNow.Ticks;
+            if ((now - _lastRgbdTicks) / TimeSpan.TicksPerMillisecond < RgbdGapMs) return;
+
+            MultiSourceFrame multiFrame;
+            try { multiFrame = e.FrameReference.AcquireFrame(); }
+            catch (Exception) { return; }
+            if (multiFrame == null) return;
+
+            byte[] jpeg;
+            uint stamp;
+            if (multiFrame.DepthFrameReference == null || multiFrame.ColorFrameReference == null) return;
+            DepthFrame depthFrame = multiFrame.DepthFrameReference.AcquireFrame();
+            ColorFrame colorFrame = multiFrame.ColorFrameReference.AcquireFrame();
+            if (depthFrame == null || colorFrame == null)
+            {
+                if (depthFrame != null) depthFrame.Dispose();
+                if (colorFrame != null) colorFrame.Dispose();
+                return;
+            }
+            using (depthFrame)
+            using (colorFrame)
+            {
+                depthFrame.CopyFrameDataToArray(_rgbdDepth);
+                stamp = (uint)depthFrame.RelativeTime.TotalMilliseconds;
+                _sensor.CoordinateMapper.MapDepthFrameToColorSpace(_rgbdDepth, _depthToColor);
+                jpeg = EncodeColorFrame(colorFrame);
+            }
+            _lastRgbdTicks = now;
+            Interlocked.Exchange(ref _lastSensorTicks, now);
+            _reopenAttempts = 0;
+
+            int pixels = _rgbdDepth.Length;
+            int depthOffset = 12;
+            int mapOffset = depthOffset + pixels * 2;
+            int jpegOffset = mapOffset + pixels * 4;
+            byte[] msg = new byte[jpegOffset + jpeg.Length];
+            Buffer.BlockCopy(BitConverter.GetBytes((ushort)_depthWidth), 0, msg, 0, 2);
+            Buffer.BlockCopy(BitConverter.GetBytes((ushort)_depthHeight), 0, msg, 2, 2);
+            Buffer.BlockCopy(BitConverter.GetBytes(stamp), 0, msg, 4, 4);
+            Buffer.BlockCopy(BitConverter.GetBytes((uint)jpeg.Length), 0, msg, 8, 4);
+            Buffer.BlockCopy(_rgbdDepth, 0, msg, depthOffset, pixels * 2);
+            for (int i = 0; i < pixels; i++)
+            {
+                ColorSpacePoint point = _depthToColor[i];
+                ushort x = ushort.MaxValue;
+                ushort y = ushort.MaxValue;
+                if (!float.IsNaN(point.X) && !float.IsInfinity(point.X)
+                    && !float.IsNaN(point.Y) && !float.IsInfinity(point.Y))
+                {
+                    double mappedX = Math.Round(point.X);
+                    double mappedY = Math.Round(point.Y);
+                    if (mappedX >= 0 && mappedX < 1920 && mappedY >= 0 && mappedY < 1080)
+                    {
+                        x = (ushort)mappedX;
+                        y = (ushort)mappedY;
+                    }
+                }
+                int offset = mapOffset + i * 4;
+                msg[offset] = (byte)(x & 0xff);
+                msg[offset + 1] = (byte)(x >> 8);
+                msg[offset + 2] = (byte)(y & 0xff);
+                msg[offset + 3] = (byte)(y >> 8);
+            }
+            Buffer.BlockCopy(jpeg, 0, msg, jpegOffset, jpeg.Length);
+
+            foreach (Client c in targets)
+            {
+                if (c.Busy || c.Socket.State != WebSocketState.Open) continue;
+                c.Busy = true;
+                Client captured = c;
+                c.Socket.SendAsync(new ArraySegment<byte>(msg), WebSocketMessageType.Binary, true, CancellationToken.None)
                     .ContinueWith(delegate(Task t)
                     {
                         captured.Busy = false;

@@ -465,6 +465,24 @@ export interface AnalysisResult {
   cluster_count: number;
 }
 
+export interface LiveDetectionSnapshot {
+  camera_id: string;
+  detections: VisionDetection[];
+  detection_count: number;
+  metrics: VisionMetrics;
+  model_loaded: boolean;
+}
+
+export async function fetchLiveDetections(
+  cameraId: string,
+  signal?: AbortSignal,
+): Promise<LiveDetectionSnapshot> {
+  return apiFetch<LiveDetectionSnapshot>(
+    `/visual/detections/${encodeURIComponent(cameraId)}`,
+    { signal },
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Feeder / drinker zones                                                    */
 /* -------------------------------------------------------------------------- */
@@ -567,14 +585,6 @@ export async function analyzeFrame(cameraId: string): Promise<AnalysisResult> {
   });
 }
 
-/**
- * Where a page that is not on the Kinect's own PC opens the depth stream: the API relays it, because the bridge
- * itself only listens on that PC. The API checks the signed-in session, so no ticket is needed here.
- */
-export function kinectRelayUrl(): string {
-  return `${API_BASE.replace(/^http/, "ws")}/visual/kinect-ws`;
-}
-
 /** A short-lived ticket for the Kinect depth stream, or null when the bridge asks for none. */
 export async function fetchKinectTicket(): Promise<string | null> {
   const res = await apiFetch<{ ticket: string | null }>("/visual/kinect-ticket");
@@ -586,13 +596,13 @@ export interface KinectChicken {
   confidence: number;
   box: [number, number, number, number];
   polygon: [number, number][];
-  /** Grams, estimated from the bird's size on the depth picture (about 18 % off for one bird), or null when it cannot be estimated. */
+  /** Grams, estimated by the configured Kinect RGB or RGB-D model, or null when unavailable. */
   weightG: number | null;
 }
 
 export interface KinectChickens {
   ok: boolean;
-  /** Why there is no answer: "starting", "waiting_for_picture", "bridge_unreachable", "model_not_installed", "not_running", "error". */
+  /** Why there is no answer: "starting", "waiting_for_picture", "waiting_for_rgbd", "bridge_unreachable", "model_not_installed", "not_running", "error". */
   status?: string;
   message?: string;
   at?: number;
@@ -600,10 +610,10 @@ export interface KinectChickens {
   height?: number;
   count?: number;
   birds?: KinectChicken[];
-  /** "ok", "no_depth" (no depth picture came), "model_not_installed" or "no_birds". */
+  /** Weight inference state, including RGB-D startup calibration and bridge availability. */
   weightStatus?: string;
-  /** The flock's average from the birds that have an estimate. It is much closer than one bird's estimate. */
-  weight?: { n: number; meanG: number; medianG: number; errorPercent: number } | null;
+  /** The flock's average from the birds that have an estimate. Error is present only when validated metadata exists. */
+  weight?: { n: number; meanG: number; medianG: number; errorPercent?: number } | null;
 }
 
 /** The newest chicken outlines on the Kinect picture. Never throws: a program that is not running comes back as `ok: false`. */
@@ -635,6 +645,33 @@ export async function fetchLiveBehavior(night: boolean): Promise<LiveBehavior> {
   }
 }
 
+export interface PiAmmoniaHistoryRow {
+  recordedAt: string;
+  ammoniaPpm: number | null;
+  error: string | null;
+  sourceFile: string;
+}
+
+export interface PiBehaviorHistoryRow {
+  recordedAt: string;
+  birds: number | null;
+  stillBirds: number | null;
+  huddledBirds: number | null;
+  flockMoving: number | null;
+  huddleFdi: number | null;
+  error: string | null;
+  sourceFile: string;
+}
+
+export interface PiCsvHistory {
+  ammonia: PiAmmoniaHistoryRow[];
+  behavior: PiBehaviorHistoryRow[];
+}
+
+export async function fetchPiCsvHistory(): Promise<PiCsvHistory> {
+  return apiFetch<PiCsvHistory>("/visual/pi-csv-history");
+}
+
 export interface SensorDay {
   /** YYYY-MM-DD, the database's day. */
   day: string;
@@ -648,15 +685,12 @@ export interface SensorHistory {
   days: number;
   temperature: SensorDay[];
   humidity: SensorDay[];
+  ammonia: SensorDay[];
 }
 
-/** The DHT22's stored readings, one point per day that has any. Empty lists when there are none or the API is away. */
+/** Daily summaries for the Pi's stored temperature, humidity, and ammonia readings. */
 export async function fetchSensorHistory(days = 7): Promise<SensorHistory> {
-  try {
-    return await apiFetch<SensorHistory>(`/operations/sensor-history?days=${days}`);
-  } catch {
-    return { days, temperature: [], humidity: [] };
-  }
+  return apiFetch<SensorHistory>(`/operations/sensor-history?days=${days}`);
 }
 
 /** Build the MJPEG stream URL for a given camera (served via Fastify proxy). */
@@ -788,58 +822,6 @@ export async function clipFrame(
 export async function analyzeClipAt(clipId: string, t: number): Promise<VideoAnalysisResult> {
   return apiFetch<VideoAnalysisResult>(
     `/visual/video/${encodeURIComponent(clipId)}/analyze?t=${t}`,
-    { method: "POST" },
-  );
-}
-
-/** One bird in a size-based weight estimate. `weight_g` is null for a bird that was seen but not weighed (`reason` says why). */
-export interface BirdWeightEstimate {
-  box: { x: number; y: number; w: number; h: number };
-  weight_g: number | null;
-  reliable: boolean;
-  reason: "too_small" | "cut_by_edge" | "overlaps_another_bird" | null;
-}
-
-export interface BirdWeightsResult {
-  t: number;
-  /** The average the weights were calibrated to when the caller gave one; null when the scale came from the camera position. */
-  mean_g: number | null;
-  calibration:
-    | { mode: "typed_average" }
-    | {
-        mode: "camera_position";
-        position: string;
-        /** The grow-out days the scale was learned from. */
-        learned_from_days: [number, number];
-        scale_spread_percent: number | null;
-        match: number;
-        other_match: number;
-        /** The camera position matched, but not by much. */
-        close_call: boolean;
-      };
-  birds: BirdWeightEstimate[];
-  summary: {
-    birds: number;
-    weighed: number;
-    mean_g: number | null;
-    median_g: number | null;
-    min_g: number | null;
-    max_g: number | null;
-    spread_percent: number | null;
-  };
-  content_type: string;
-  /** base64 JPEG of the picture with each weight drawn on it. */
-  image: string;
-  method: "size";
-}
-
-/**
- * A rough per-bird weight from the size of each bird in an ordinary colour picture. The scale comes from the camera position
- * (recognised from the video); only when that is unknown, `meanG` (the flock's average weight) calibrates it instead.
- */
-export async function birdWeightsAt(clipId: string, t: number, meanG?: number): Promise<BirdWeightsResult> {
-  return apiFetch<BirdWeightsResult>(
-    `/visual/video/${encodeURIComponent(clipId)}/bird-weights?t=${t}${meanG === undefined ? "" : `&mean_g=${meanG}`}`,
     { method: "POST" },
   );
 }

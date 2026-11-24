@@ -7,6 +7,7 @@ env/
 
 # Data collection & respondent CSVs
 sus_responses/*.csv
+analysis_queue.csv
 
 # Trained detector for the "Test video" button (not committed; see demo_detect.py)
 models/
@@ -14,6 +15,3 @@ models/
 # The DHT22 reader's newest reading (dht22_reader.py writes it; it is a live value, not source)
 dht22.json
 dht22.tmp
-
-# The daily CSV files this Pi keeps (daily_log.py)
-logs/

@@ -33,11 +33,11 @@ import { visionHeaders } from "../vision-pipeline.js";
  * service, which writes it to disk under its own size cap.
  */
 
-const VISION_BASE = env.VIDEO_SERVICE_URL ?? env.VISION_SERVICE_URL;
+const VISION_BASE = env.VISION_SERVICE_URL;
 const MAX_BYTES = env.VIDEO_MAX_MB * 1024 * 1024;
 
 /** A 200 MB clip over farm wifi is not quick, but it does not get forever. */
-const UPLOAD_TIMEOUT_MS = 60 * 60_000; // a 2.5 GB clip over an ordinary connection takes a long time to arrive
+const UPLOAD_TIMEOUT_MS = 10 * 60_000;
 const READ_TIMEOUT_MS = 30_000;
 /** A sweep analyses up to 30 samples, each an open + detect + measure. */
 const SWEEP_TIMEOUT_MS = 3 * 60_000;
@@ -158,8 +158,7 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
     {
       preHandler: [requireAuth],
       bodyLimit: MAX_BYTES,
-      // Both Test clip boxes share this, and a refused or abandoned upload counts too: 6 an hour ran out after a few tries.
-      config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
+      config: { rateLimit: { max: 6, timeWindow: "1 hour" } },
     },
     async (request, reply) => {
       const body = request.body as Readable | undefined;
@@ -333,6 +332,7 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
         const body = (await res.json()) as {
           clip: VisionClip;
           zone_camera: string;
+          model_loaded?: boolean;
           sampling: { requested: number; taken: number; truncated: boolean; delta_ms: number };
           samples: VisionSample[];
         };
@@ -357,7 +357,7 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
         }));
         const sustained = sustainedFlags(windowRows);
         const usable = samples.filter((s) => s.behavior.reliable && !s.behavior.suppressed);
-        const modelLoaded = body.samples.some((s) => s.metrics?.model_loaded === true);
+        const modelLoaded = body.model_loaded ?? body.samples.some((s) => s.metrics?.model_loaded === true);
 
         let conclusion: VideoConclusion;
         if (samples.length === 0) {
@@ -399,39 +399,6 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
             conclusion,
           },
         });
-      } catch {
-        return reply.code(503).send({ error: "vision_service_unavailable" });
-      }
-    },
-  );
-
-  // POST /visual/video/:clipId/bird-weights — per-bird weights from an ordinary colour picture at one moment: the size
-  // of each bird's box, calibrated to the flock's average weight given as `mean_g`. A rough guide, not a measurement;
-  // like every other clip test it writes nothing.
-  app.post(
-    "/video/:clipId/bird-weights",
-    { preHandler: [requireAuth], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
-    async (request, reply) => {
-      const { clipId } = request.params as { clipId: string };
-      const query = request.query as { t?: string; mean_g?: string };
-      const t = Number(query.t ?? 0);
-      if (!Number.isFinite(t) || t < 0) return reply.code(400).send({ error: "invalid_time" });
-      // The scale normally comes from the camera position (the vision service works it out); `mean_g` is only given when it
-      // could not, and then calibrates the weights to the flock's average instead.
-      let meanQuery = "";
-      if (query.mean_g !== undefined && query.mean_g !== "") {
-        const meanG = Number(query.mean_g);
-        if (!Number.isFinite(meanG)) return reply.code(400).send({ error: "invalid_mean_weight", detail: "Give the flock's average weight in grams." });
-        meanQuery = `&mean_g=${meanG}`;
-      }
-
-      try {
-        const res = await fetch(
-          `${VISION_BASE}/video/${encodeURIComponent(clipId)}/bird-weights?t=${t}${meanQuery}`,
-          { method: "POST", headers: visionHeaders(), signal: AbortSignal.timeout(READ_TIMEOUT_MS) },
-        );
-        if (!res.ok) return forwardError(reply, res);
-        return reply.send(await res.json());
       } catch {
         return reply.code(503).send({ error: "vision_service_unavailable" });
       }

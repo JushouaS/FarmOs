@@ -7,5 +7,8 @@ Set-Location $stream
 # Two threads keep it from taking the whole computer when memory is short.
 $env:OMP_NUM_THREADS = "2"
 $env:OPENBLAS_NUM_THREADS = "2"
-python kinect_seg.py
+$env:KINECT_SEG_HOST = "0.0.0.0"
+$python = Join-Path $stream ".venv\Scripts\python.exe"
+if (-not (Test-Path $python)) { $python = "python" }
+& $python kinect_seg.py
 exit $LASTEXITCODE

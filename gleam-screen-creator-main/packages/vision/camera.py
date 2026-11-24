@@ -31,6 +31,39 @@ _READ_TIMEOUT_MS = int(os.getenv("RTSP_READ_TIMEOUT_MS", "5000"))
 #: a device path) would be asking the service to read something it was never
 #: meant to touch, so it is refused before OpenCV sees it.
 _SOURCE_SCHEMES = ("rtsp://", "rtsps://", "http://", "https://")
+_CAPTURE_TOKEN = os.getenv("VISION_CAPTURE_TOKEN", "")
+_FFMPEG_OPTIONS_LOCK = threading.Lock()
+
+
+def _open_capture(url: str) -> cv2.VideoCapture:
+    """Open a source, adding the internal token to authenticated HTTP streams."""
+    cap = cv2.VideoCapture()
+    params = [
+        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+        _OPEN_TIMEOUT_MS,
+        cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+        _READ_TIMEOUT_MS,
+    ] if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC") else None
+    uses_internal_http = _CAPTURE_TOKEN and url.lower().startswith(("http://", "https://"))
+
+    if uses_internal_http:
+        with _FFMPEG_OPTIONS_LOCK:
+            previous = os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS")
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+                f"headers;X-Vision-Token: {_CAPTURE_TOKEN}\r\n"
+            )
+            try:
+                cap.open(url, cv2.CAP_FFMPEG, params) if params else cap.open(url, cv2.CAP_FFMPEG)
+            finally:
+                if previous is None:
+                    os.environ.pop("OPENCV_FFMPEG_CAPTURE_OPTIONS", None)
+                else:
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = previous
+    elif params:
+        cap.open(url, cv2.CAP_FFMPEG, params)
+    else:
+        cap.open(url, cv2.CAP_FFMPEG)
+    return cap
 
 
 def probe_source(url: str) -> dict:
@@ -48,21 +81,8 @@ def probe_source(url: str) -> dict:
         return {"ok": False, "error": "not an rtsp:// or http:// link"}
 
     started = time.monotonic()
-    cap = cv2.VideoCapture()
     try:
-        if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC"):
-            cap.open(
-                target,
-                cv2.CAP_FFMPEG,
-                [
-                    cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
-                    _OPEN_TIMEOUT_MS,
-                    cv2.CAP_PROP_READ_TIMEOUT_MSEC,
-                    _READ_TIMEOUT_MS,
-                ],
-            )
-        else:
-            cap.open(target, cv2.CAP_FFMPEG)
+        cap = _open_capture(target)
 
         if not cap.isOpened():
             return {"ok": False, "error": "the camera did not answer on that link"}
@@ -118,22 +138,7 @@ class CameraManager:
             if existing is not None:
                 existing.release()
 
-            cap = cv2.VideoCapture()
-            # The timeouts are only accepted by the overload that takes the
-            # backend explicitly, and only by OpenCV 4.5.1 and later.
-            if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC"):
-                cap.open(
-                    url,
-                    cv2.CAP_FFMPEG,
-                    [
-                        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
-                        _OPEN_TIMEOUT_MS,
-                        cv2.CAP_PROP_READ_TIMEOUT_MSEC,
-                        _READ_TIMEOUT_MS,
-                    ],
-                )
-            else:
-                cap.open(url, cv2.CAP_FFMPEG)
+            cap = _open_capture(url)
             if not cap.isOpened():
                 # The login stays out of the log: it is the camera's password,
                 # and a log is copied into bug reports.

@@ -31,20 +31,18 @@ import { tr } from "@/lib/i18n";
  */
 
 /** Mirrors the API's own default, so an oversized file is refused before it travels. */
-const MAX_UPLOAD_MB = 2560;
+const MAX_UPLOAD_MB = 200;
 
 /** What to tell the operator when a call is refused. */
 function reason(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401) return tr("Your session ended. Sign in again, then try the clip.");
-    if (err.status === 429) return tr("Too many uploads or checks in a short time. Wait a few minutes, then try again.");
+    if (err.status === 429) return tr("Too many uploads or checks just now. Please wait a minute.");
     switch (err.message) {
       case "too_large":
         return tr("The clip is larger than the {n} MB limit.", { n: MAX_UPLOAD_MB });
       case "too_long":
         return tr("The clip is longer than the limit. Cut it down and try again.");
-      case "not_depth_recording":
-        return tr("This looks like an ordinary colour video, not a Kinect depth recording, so it cannot be weighed.");
       case "unsupported_type":
       case "unreadable_clip":
         return tr("That file could not be read as a video. Export it as H.264 MP4 and try again.");
@@ -183,7 +181,7 @@ export function WeightTestSection() {
           <Hint>
             {uploading
               ? tr("Uploading and reading the clip… a long clip takes a while.")
-              : tr("A recording of the depth view, not the colour camera. Up to {n} MB and 1 hour.", {
+              : tr("A recording of the depth view, not the colour camera. Up to {n} MB and 10 minutes.", {
                   n: MAX_UPLOAD_MB,
                 })}
           </Hint>

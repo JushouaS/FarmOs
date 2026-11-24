@@ -108,12 +108,18 @@ services:
       # The dashboard is reached on the host, so allow host origins.
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
       # The behaviour analysis needs a detector, and only packages/vision runs
-      # one, so the camera routes now point there. cerebroil-stream keeps
-      # serving the Kinect depth view on host port 5050.
-      VISION_SERVICE_URL: http://vision:5000
+      # one, so analysis routes point there. Live video uses cerebroil-stream,
+      # which owns the camera connection and keeps its feed separate.
+      VISION_SERVICE_URL: ${VISION_SERVICE_URL:-http://vision:5000}
+      CAMERA_STREAM_SERVICE_URL: ${CAMERA_STREAM_SERVICE_URL:-http://stream:5000}
+      # Kinect segmentation and weight models run on the Windows host beside
+      # the USB sensor; the signed-in API proxies their latest result.
+      KINECT_SEG_URL: ${KINECT_SEG_URL:-http://host.docker.internal:8182}
+      KINECT_SEG_TOKEN: ${KINECT_SEG_TOKEN:-}
+      KINECT_BRIDGE_KEY: ${KINECT_BRIDGE_KEY:-}
       # The DHT22 pen sensor is read by the Pi's camera service (/sensors), not by
       # the vision container, so the sensor monitor is pointed there.
-      SENSOR_SOURCE_URL: http://stream:5000
+      SENSOR_SOURCE_URL: ${SENSOR_SOURCE_URL:-${CAMERA_STREAM_SERVICE_URL:-http://stream:5000}}
       VISION_SERVICE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
       # Only used to answer "where does the link come from" when Settings holds
       # none: the pages get it masked (Settings > Camera).
@@ -124,6 +130,8 @@ services:
       FARM_TZ: ${FARM_TZ:-Asia/Manila}
       # Minutes between automatic readings. 0 disables the sampler.
       BEHAVIOR_INTERVAL_MINUTES: ${BEHAVIOR_INTERVAL_MINUTES:-5}
+      BEHAVIOR_MONITOR: ${BEHAVIOR_MONITOR:-on}
+      BEHAVIOR_POLL_SECONDS: ${BEHAVIOR_POLL_SECONDS:-30}
       # Test clips (Settings -> Test Clips). The caps are enforced here as well
       # as in the vision service so an oversized upload is refused before it
       # has travelled anywhere.
@@ -179,7 +187,14 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-cerebroil}:${POSTGRES_PASSWORD}@db:5432/farmos
       # "camera_id=rtsp_url,..." — the same Dahua feed cerebroil-stream uses.
       RTSP_SOURCES: CAM-01=${DAHUA_RTSP_URL:-}
+      # Optional authenticated upstream stream, e.g. the Pi's MJPEG feed when
+      # the Dahua camera is reachable from the Pi but not from this host.
+      VISION_CAPTURE_URL: ${VISION_CAPTURE_URL:-}
+      VISION_CAPTURE_TOKEN: ${VISION_SERVICE_TOKEN:?VISION_SERVICE_TOKEN must be set in .env}
       CHICKEN_MODEL_PATH: ${CHICKEN_MODEL_PATH:-/app/models/chicken.onnx}
+      # Optional detector used only by uploaded video tests; live camera analysis
+      # continues to use CHICKEN_MODEL_PATH.
+      VIDEO_TEST_MODEL_PATH: ${VIDEO_TEST_MODEL_PATH:-}
       CHICKEN_INPUT_SIZE: ${CHICKEN_INPUT_SIZE:-640}
       CHICKEN_CLASSES: ${CHICKEN_CLASSES:-chicken}
       CHICKEN_CONF_MIN: ${CHICKEN_CONF_MIN:-0.35}
@@ -215,8 +230,11 @@ services:
       context: ./gleam-screen-creator-main
       dockerfile: Dockerfile.web
       args:
-        # Consumed by the browser, so it must be the host-published API port.
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+        # Leave blank to have the browser derive the API host from the page URL,
+        # so LAN access follows this computer's current Wi-Fi address.
+        VITE_API_URL: ${VITE_API_URL:-}
+        # Shown in the camera-unavailable message; the stream itself remains proxied by the API.
+        VITE_VISION_ORIGIN: ${VITE_VISION_ORIGIN:-http://192.168.68.118:5000}
         # The host port cerebroil-stream is published on. The camera page builds
         # the feed URL from the host it was opened on plus this port, so a phone
         # on the LAN reaches this machine rather than its own localhost.
@@ -316,6 +334,14 @@ services:
       # Fallback for an installation that has never saved a link in Settings.
       DAHUA_RTSP_URL: ${DAHUA_RTSP_URL:-}
       KINECT_SOURCE: ${KINECT_SOURCE:-simulated}
+      # The same exported detector used by the vision service is mounted below.
+      DETECTOR_MODEL_PATH: /app/models/detector.onnx
+      LIVE_BEHAVIOR: ${LIVE_BEHAVIOR:-1}
+      LIVE_SAMPLE_SECONDS: ${LIVE_SAMPLE_SECONDS:-3}
+      LIVE_INACTIVE_SECONDS: ${LIVE_INACTIVE_SECONDS:-1800}
+      LIVE_HUDDLE_SECONDS: ${LIVE_HUDDLE_SECONDS:-600}
+    volumes:
+      - ./gleam-screen-creator-main/packages/vision/models/chicken.onnx:/app/models/detector.onnx:ro
     depends_on:
       db:
         condition: service_healthy

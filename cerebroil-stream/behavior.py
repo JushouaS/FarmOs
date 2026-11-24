@@ -4,18 +4,9 @@ behavior.py: tells which broilers are inactive or huddling, from detection boxes
 Input is what the detector found in a series of frames. Each bird is followed
 from frame to frame, then two checks run on the followed birds:
 
-Following the birds
-  Each bird is followed from picture to picture with ByteTrack (bytetrack.py): a Kalman filter predicts where it
-  should be, confident detections are matched first, then weak ones, and a bird that is missed for a while keeps its
-  number when it comes back.
-
 Inactivity
-  A bird is "still" over the last INACTIVE_SECONDS when it did not move in nearly every
-  picture. With pictures supplied (update(..., kept=...), what pixels.py measures), a bird
-  has not moved in a picture when at least STILL_PIXELS (95 %) of the pixels inside its box
-  are the same as in the previous picture (Kim 2022); it is still when that holds in at
-  least STILL_FRAME_SHARE of the pictures of the window. Without pictures (boxes only) it
-  falls back to position: the bird stayed within a fraction of its own body size.
+  A bird is "still" when, over the last INACTIVE_SECONDS, it stayed within a
+  fraction of its own body size (jitter in the box does not count as movement).
   What stillness means depends on the time of day:
     - at night (lights off) still birds are RESTING: normal sleep, never flagged;
     - by day a still bird is INACTIVE while the rest of the flock is moving (the
@@ -42,12 +33,9 @@ import os
 from statistics import median
 from typing import Any
 
-import bytetrack
-
 INACTIVE_SECONDS = float(os.getenv("BEHAVIOR_INACTIVE_SECONDS", "10"))
 HUDDLE_SECONDS = float(os.getenv("BEHAVIOR_HUDDLE_SECONDS", "6"))
-# Three or more birds packed together is a huddle (the thesis definition).
-HUDDLE_MIN_BIRDS = int(os.getenv("BEHAVIOR_HUDDLE_MIN_BIRDS", "3"))
+HUDDLE_MIN_BIRDS = int(os.getenv("BEHAVIOR_HUDDLE_MIN_BIRDS", "5"))
 
 MOVE_FRACTION = 0.35        # straying less than this share of its body size = still
 FLOCK_MOVING_MIN = 0.2      # an inactive bird needs at least this share of the flock to be moving
@@ -57,9 +45,6 @@ HUDDLE_DENSITY_RATIO = 1.5  # ... and is this much denser than the flock as a wh
 FDI_WARN = 0.35             # share of the flock in huddles that is worth a warning
 MATCH_GATE = 1.0            # a bird moves less than this many body sizes between two frames
 MAX_MISSED_SECONDS = 2.0    # a bird the detector misses for longer than this gets a new number
-MISSED_PICTURES = 2.5       # ... but never less than this many gaps between pictures (live monitoring looks every few seconds)
-STILL_PIXELS = float(os.getenv("BEHAVIOR_STILL_PIXELS", "0.95"))  # share of a bird's pixels unchanged since the previous picture = it did not move (Kim 2022)
-STILL_FRAME_SHARE = 0.9     # share of the pictures in the inactive window in which the bird must not have moved (one jumpy picture is ignored)
 
 MOVING, RESTING, INACTIVE, HUDDLING, FLOCK_INACTIVE = 0, 1, 2, 3, 4
 
@@ -79,21 +64,17 @@ class _Track:
         self.id = tid
         self.box = box                       # centre x, centre y, w, h
         self.first_t = self.last_t = t
-        self.kf = bytetrack.BoxKalman(*box)  # where the bird should be in the next picture (ByteTrack)
-        self.kf_t = t
         self.hist: list[tuple[float, float, float]] = [(t, box[0], box[1])]
         self.sizes: list[float] = [math.sqrt(box[2] * box[3])]
         self.inactive_from: float | None = None
         self.inactive_to: float | None = None
         self.still_from: float | None = None   # since when the bird has been still (live use)
-        self.kept: list[tuple[float, float]] = []   # (time, share of the box's pixels unchanged since the previous picture)
 
     @property
     def size(self) -> float:
         return median(self.sizes[-20:])
 
     def update(self, box: tuple[float, float, float, float], t: float) -> None:
-        self.kf.update(*box)
         self.box = box
         self.last_t = t
         self.hist.append((t, box[0], box[1]))
@@ -124,11 +105,6 @@ def _is_still(trk: _Track, t: float, fps: float, inactive_seconds: float) -> boo
     """True/False once the bird has been followed for the whole window, else None (too early to say)."""
     if t - trk.first_t < inactive_seconds * 0.95:
         return None
-    if trk.kept:   # pictures were supplied: the pixel rule
-        shares = [k for (kt, k) in trk.kept if kt >= t - inactive_seconds]
-        if len(shares) < max(3, 0.5 * inactive_seconds * fps):
-            return None
-        return sum(1 for k in shares if k >= STILL_PIXELS) >= STILL_FRAME_SHARE * len(shares)
     window = [p for p in trk.hist if p[0] >= t - inactive_seconds]
     if len(window) < max(3, 0.5 * inactive_seconds * fps):
         return None
@@ -240,19 +216,8 @@ class Engine:
     def _fps(self) -> float:
         return 1.0 / median(self._gaps[-20:]) if self._gaps else 1.0
 
-    def update(
-        self,
-        t: float,
-        boxes: list[list[float]],
-        frame_area: float,
-        night: bool = False,
-        kept: list[float | None] | None = None,
-    ) -> list[tuple[int, int]]:
-        """boxes: [[x, y, w, h, ...], ...] with x, y the top left corner. Returns [(bird number, state)] per box.
-
-        kept: per box, the share (0 to 1) of its pixels that are the same as in the previous picture (pixels.py), or
-        None for a box that could not be compared (the first picture). Leave it out to judge stillness by position."""
-        previous_t = self._prev_t
+    def update(self, t: float, boxes: list[list[float]], frame_area: float, night: bool = False) -> list[tuple[int, int]]:
+        """boxes: [[x, y, w, h, ...], ...] with x, y the top left corner. Returns [(bird number, state)] per box."""
         if self._prev_t is not None and t > self._prev_t:
             self._gaps.append(t - self._prev_t)
             self._gaps = self._gaps[-50:]
@@ -260,10 +225,8 @@ class Engine:
         fps = self._fps()
 
         dets = [(b[0] + b[2] / 2, b[1] + b[3] / 2, b[2], b[3]) for b in boxes]
-        # With pictures every few seconds, a bird the detector misses once must keep its number: allow a couple of gaps.
-        alive = [trk for trk in self.tracks if t - trk.last_t <= max(MAX_MISSED_SECONDS, MISSED_PICTURES / fps)]
-        scores = [b[4] if len(b) > 4 else 1.0 for b in boxes]
-        matched, fresh = bytetrack.match(alive, dets, scores, t, 1.0 / fps, previous_t, MATCH_GATE)
+        alive = [trk for trk in self.tracks if t - trk.last_t <= MAX_MISSED_SECONDS]
+        matched, fresh = _match(alive, dets)
         ids: dict[int, _Track] = {}
         for di, ti in matched.items():
             alive[ti].update(dets[di], t)
@@ -275,16 +238,11 @@ class Engine:
             if self.keep_all:
                 self.every_track.append(trk)
             ids[di] = trk
-        if kept is not None:
-            for di, trk in ids.items():
-                if di < len(kept) and kept[di] is not None:
-                    trk.kept.append((t, float(kept[di])))
         self.tracks = alive
         if not self.keep_all:
             cut = t - self.inactive_seconds * 1.25
             for trk in self.tracks:
                 trk.hist = [p for p in trk.hist if p[0] >= cut]
-                trk.kept = [p for p in trk.kept if p[0] >= cut]
             self.huddles = [h for h in self.huddles if t - h["last"] <= 3600]
 
         # Who is still, and how much of the flock is moving.
@@ -409,15 +367,14 @@ class Engine:
 def analyze(frames: list[dict[str, Any]], width: int, height: int, night: bool = False) -> dict[str, Any]:
     """Adds [track id, state] to every box of every frame (in place) and returns the summary.
 
-    frames: [{"t": seconds, "boxes": [[x, y, w, h, conf, cls], ...], "kept": [share per box, optional]}, ...] with x, y the top left corner.
+    frames: [{"t": seconds, "boxes": [[x, y, w, h, conf, cls], ...]}, ...] with x, y the top left corner.
     night: the clip was filmed with the lights off, so still birds are resting."""
     if not frames:
         return {}
     engine = Engine()
     area = float(width * height)
     for frame in frames:
-        states = engine.update(frame["t"], frame["boxes"], area, night, frame.pop("kept", None))
-        for box, (tid, state) in zip(frame["boxes"], states):
+        for box, (tid, state) in zip(frame["boxes"], engine.update(frame["t"], frame["boxes"], area, night)):
             box.extend([tid, state])
         frame["fdi"] = round(engine.last["fdi"], 3) if engine.last else 0.0
     return engine.summary(night)

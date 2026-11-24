@@ -36,6 +36,7 @@ load_dotenv()
 
 # After load_dotenv on purpose: camera_config reads DATABASE_URL at import.
 import camera_config  # noqa: E402
+import offline_queue
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 # The link carries the camera's login, so where it comes from is decided in one
@@ -295,7 +296,12 @@ def kinect_capture_loop() -> None:
                 cap.release()
                 _kinect_ok = False
             else:
-                print(f"[kinect] Cannot open {_redact_url(str(source))}, falling back to real-time depth synthesis.")
+                print(f"[kinect] Cannot open {_redact_url(str(source))}; retrying without simulated measurements.")
+            _kinect_ok = False
+            with _kinect_lock:
+                _latest_kinect_frame = None
+            time.sleep(RETRY_DELAY)
+            continue
 
         # Real-time depth generator mode
         _kinect_ok = True
@@ -640,12 +646,21 @@ def vision_analyze(camera_id: str) -> Response:
     err = _require_vision_token()
     if err:
         return err
+    if _resolve_camera(camera_id) is None:
+        return jsonify({"error": "unknown_camera"}), 404
+    result = _build_analysis(camera_id)
+    if result is None:
+        return jsonify({"error": "no_frame_available"}), 503
+    return jsonify(result)
+
+
+def _build_analysis(camera_id: str) -> dict | None:
     source = _resolve_camera(camera_id)
     if source is None:
-        return jsonify({"error": "unknown_camera"}), 404
+        return None
     frame_bytes = _latest_frame_bytes(source)
     if frame_bytes is None:
-        return jsonify({"error": "no_frame_available"}), 503
+        return None
 
     result = {
         "camera_id": camera_id,
@@ -730,7 +745,7 @@ def vision_analyze(camera_id: str) -> Response:
     else:
         result["weight"] = _analyze_kinect(frame_bytes)
 
-    return jsonify(result)
+    return result
 
 
 MAX_DEMO_VIDEO_BYTES = 60 * 1024 * 1024
@@ -817,22 +832,23 @@ def sensors_route() -> tuple[Response, int] | Response:
 
 @app.get("/logs")
 def logs_list_route() -> tuple[Response, int] | Response:
-    """The daily CSV files this Pi has kept (daily_log.py): sensors-YYYY-MM-DD.csv and behavior-YYYY-MM-DD.csv."""
+    """List the daily sensor and behavior CSV logs saved on this Pi."""
     err = _require_vision_token()
     if err:
         return err
     return jsonify({"files": daily_log.list_files()})
 
 
-@app.get("/logs/<name>")
+@app.get("/logs/<path:name>")
 def logs_file_route(name: str) -> tuple[Response, int] | Response:
-    """One of those files, as CSV. Only names of the form sensors-YYYY-MM-DD.csv / behavior-YYYY-MM-DD.csv are served."""
+    """Download a supported daily CSV log, including logs in reading-specific folders."""
     err = _require_vision_token()
     if err:
         return err
-    if not daily_log.FILE_NAME.match(name):
+    target = daily_log.resolve(name)
+    if target is None:
         return jsonify({"error": "not_found"}), 404
-    return send_from_directory(daily_log.default_dir(), name, mimetype="text/csv", as_attachment=True)
+    return send_from_directory(target.parent, target.name, mimetype="text/csv", as_attachment=True)
 
 
 @app.post("/demo/convert")
@@ -891,4 +907,5 @@ if __name__ == "__main__":
         LIVE = live_behavior.LiveBehavior(lambda: _latest_frame_bytes("dahua"))
         LIVE.start()
 
+    offline_queue.start_worker(_build_analysis)
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

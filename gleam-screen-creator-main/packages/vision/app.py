@@ -98,6 +98,8 @@ _sources: dict[str, str] = camera_config.read_sources()
 # Global instances
 cameras = CameraManager(sources=_sources)
 detector = Detector()
+VIDEO_TEST_MODEL_PATH = os.getenv("VIDEO_TEST_MODEL_PATH", "").strip()
+video_detector = Detector(VIDEO_TEST_MODEL_PATH) if VIDEO_TEST_MODEL_PATH else detector
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +140,8 @@ def health():
         "model_loaded": detector.available,
         "model_error": detector.load_error,
         "analysis_mode": "onnx" if detector.available else "unavailable",
+        "video_test_model_loaded": video_detector.available,
+        "video_test_model_error": video_detector.load_error,
         "video_clips": clip_store.count(),
     })
 
@@ -403,7 +407,7 @@ def video_frame(clip_id: str):
         return jsonify({"error": "video_frame_unavailable", "t": t}), 422
 
     if request.args.get("annotate") in ("1", "true", "yes"):
-        frame = clip_store.annotate(frame, detector.detect(frame))
+        frame = clip_store.annotate(frame, video_detector.detect(frame))
 
     jpeg = clip_store.encode_jpeg(frame)
     if jpeg is None:
@@ -413,92 +417,6 @@ def video_frame(clip_id: str):
         mimetype="image/jpeg",
         headers={"Cache-Control": "no-store"},
     )
-
-
-@app.route("/video/<clip_id>/bird-weights", methods=["POST"])
-def video_bird_weights(clip_id: str):
-    """
-    Per-bird weights from an ordinary colour picture at one moment, from the size of each bird's box.
-
-    The scale (grams per unit of size) depends on how high the camera is, so it comes from the camera position: the clip's
-    background is compared with the references stored in size_calibration.json, and the matching position's scale is used. The
-    weights are then absolute and their average is a result. When the position is not one of the stored ones the answer is
-    camera_position_unknown, and the caller can give `mean_g` (the flock's average weight, grams) to calibrate by instead; then
-    the average is an input. A rough guide, see weight.size_weights. Nothing is stored.
-    """
-    clip, missing = _clip_or_404(clip_id)
-    if missing:
-        return missing
-
-    t = _time_param()
-    if t is None:
-        return jsonify({"error": "invalid_time"}), 400
-    mean_g = None
-    if request.args.get("mean_g", "") != "":
-        try:
-            mean_g = float(request.args.get("mean_g", ""))
-        except (TypeError, ValueError):
-            mean_g = float("nan")
-        if not (weight.MEAN_G_RANGE[0] <= mean_g <= weight.MEAN_G_RANGE[1]):
-            return jsonify({
-                "error": "invalid_mean_weight",
-                "detail": "Give the flock's average weight in grams, between %d and %d." % weight.MEAN_G_RANGE,
-            }), 400
-    if not detector.available:
-        return jsonify({"error": "model_unavailable", "detail": detector.load_error}), 503
-
-    frame = clip_store.frame_at(clip, t)
-    if frame is None:
-        return jsonify({"error": "video_frame_unavailable", "t": t}), 422
-
-    calibration_info = {"mode": "typed_average"}
-    grams_per_unit = None
-    if mean_g is None:
-        calibration = weight.load_calibration()
-        if calibration is None:
-            return jsonify({"error": "camera_position_unknown", "detail": "No size calibration is installed (size_calibration.json)."}), 422
-        times = clip_store.sample_times(clip, 9, 0, max_samples=9)
-        shots = [f for f in (clip_store.frame_at(clip, x) for x in times) if f is not None]
-        position, best, runner = weight.identify_setup(weight.background_signature(shots or [frame]), calibration)
-        if position is None:
-            return jsonify({
-                "error": "camera_position_unknown",
-                "detail": "This video's camera position is not one the scale was learned for.",
-                "match": round(best, 2),
-            }), 422
-        setup = calibration["setups"][position]
-        grams_per_unit = float(setup["grams_per_size_unit"])
-        calibration_info = {
-            "mode": "camera_position",
-            "position": position,
-            "learned_from_days": setup["days"],
-            "scale_spread_percent": setup.get("scale_spread_percent"),
-            "match": round(best, 2),
-            "other_match": round(runner, 2),
-            "close_call": bool(best - runner < weight.CLEAR_MARGIN),
-        }
-
-    boxes = [(d.box_x, d.box_y, d.box_w, d.box_h) for d in detector.detect(frame)]
-    height, width = frame.shape[:2]
-    result = weight.size_weights(boxes, (width, height), mean_g=mean_g, grams_per_unit=grams_per_unit)
-    jpeg = clip_store.encode_jpeg(weight.draw_weights(frame, boxes, result))
-    if jpeg is None:
-        return jsonify({"error": "encode_failed"}), 500
-
-    return jsonify({
-        "clip": clip.as_dict(),
-        "t": t,
-        "mean_g": mean_g,
-        "calibration": calibration_info,
-        "birds": [
-            {"box": {"x": round(b[0], 1), "y": round(b[1], 1), "w": round(b[2], 1), "h": round(b[3], 1)}, **r}
-            for b, r in zip(boxes, result["birds"])
-        ],
-        "summary": result["summary"],
-        "content_type": "image/jpeg",
-        "image": base64.b64encode(jpeg).decode("ascii"),
-        "method": "size",
-    })
 
 
 @app.route("/video/<clip_id>/analyze", methods=["POST"])
@@ -521,12 +439,14 @@ def video_analyze(clip_id: str):
     if frame is None:
         return jsonify({"error": "video_frame_unavailable", "t": t}), 422
 
-    result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, detector, zones=zones)
+    result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, video_detector, zones=zones)
 
     return jsonify({
         "clip": clip.as_dict(),
         "t": t,
         "zone_camera": VIDEO_ZONE_CAMERA,
+        "model_loaded": video_detector.available,
+        "model_error": video_detector.load_error,
         "db_written": False,
         "detections": [d.as_dict() for d in result.detections],
         "detection_count": len(result.detections),
@@ -570,7 +490,7 @@ def video_sweep(clip_id: str):
         if frame is None:
             samples.append({"t": t, "metrics": None, "warnings": ["video_frame_unavailable"]})
             continue
-        result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, detector)
+        result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, video_detector)
         samples.append({"t": t, "metrics": result.metrics, "warnings": result.warnings})
 
     logger.info(
@@ -581,6 +501,8 @@ def video_sweep(clip_id: str):
     return jsonify({
         "clip": clip.as_dict(),
         "zone_camera": VIDEO_ZONE_CAMERA,
+        "model_loaded": video_detector.available,
+        "model_error": video_detector.load_error,
         "sampling": {
             "requested": count,
             "taken": len(samples),
@@ -619,27 +541,15 @@ def video_weights(clip_id: str):
 
     per_frame = []
     truncated = False
-    decoded = depth_like = 0
     for t in times:
         if time.monotonic() > deadline:
             truncated = True
             break
-        frame = clip_store.frame_at(clip, t)
-        estimate = weight.estimate_weight_from_depth(frame)
+        estimate = weight.estimate_weight_from_depth(clip_store.frame_at(clip, t))
         if estimate is None:
             per_frame.append({"t": t, "mass_g": None, "confidence": None, "warnings": ["video_frame_unavailable"]})
             continue
-        decoded += 1
-        depth_like += 1 if weight.looks_like_depth(frame) else 0
         per_frame.append({"t": t, **estimate})
-
-    # The weight line prices any picture as grams, so a colour video of the pen would come back as a confident-looking number.
-    # Refuse a clip whose frames are not a depth recording rather than answer it.
-    if decoded and depth_like < decoded / 2:
-        return jsonify({
-            "error": "not_depth_recording",
-            "detail": "This looks like an ordinary colour video, not a Kinect depth recording, so it cannot be weighed.",
-        }), 422
 
     logger.info(
         "Weighed clip %s: %d of %d samples%s",

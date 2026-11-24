@@ -36,6 +36,7 @@ GPIO_LINE = int(os.getenv("DHT22_GPIO", "4"))
 GPIO_CHIP = os.getenv("DHT22_GPIOCHIP", "/dev/gpiochip0")
 INTERVAL_SECONDS = max(4.0, float(os.getenv("DHT22_INTERVAL", "10")))
 OUT_FILE = Path(os.getenv("DHT22_FILE", str(Path(__file__).with_name("dht22.json"))))
+LOG_SECONDS = float(os.getenv("LOG_SECONDS", "60"))
 
 TRIES_PER_ROUND = 6          # a single read fails now and then; that is normal for this sensor
 PAUSE_BETWEEN_TRIES = 2.2    # the DHT22 needs about 2 seconds of rest between reads
@@ -130,9 +131,12 @@ def main() -> int:
             time.sleep(60)
 
     last_good: dict = {"temperature": None, "humidity": None, "at": None}
-    # A copy of every minute on this Pi's own disk, for when the laptop that stores the readings is off (daily_log.py).
-    log = daily_log.DailyCsv("sensors", ["temperature_c", "humidity_pct", "reading_age_s", "error"])
-    log_every = float(os.getenv("LOG_SECONDS", "60"))
+    temperature_log = daily_log.DailyCsv(
+        "temperature", ["temperature_c", "reading_age_s", "error"], folder=True
+    )
+    humidity_log = daily_log.DailyCsv(
+        "humidity", ["humidity_pct", "reading_age_s", "error"], folder=True
+    )
     logged_at = 0.0
     while True:
         started = time.monotonic()
@@ -153,12 +157,16 @@ def main() -> int:
                 print(f"try {attempt}: {error}")
             time.sleep(PAUSE_BETWEEN_TRIES)
         write_state({**last_good, "checkedAt": time.time(), "error": error})
-        if not once and time.time() - logged_at >= log_every:
+        if not once and time.time() - logged_at >= LOG_SECONDS:
             logged_at = time.time()
             age = logged_at - last_good["at"] if last_good["at"] else None
-            fresh = age is not None and age <= 120  # an old value is not repeated as if it were new: the row is left blank
-            log.append({
+            fresh = age is not None and age <= 120
+            temperature_log.append({
                 "temperature_c": last_good["temperature"] if fresh else None,
+                "reading_age_s": round(age) if age is not None else None,
+                "error": error,
+            })
+            humidity_log.append({
                 "humidity_pct": last_good["humidity"] if fresh else None,
                 "reading_age_s": round(age) if age is not None else None,
                 "error": error,

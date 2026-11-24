@@ -1,23 +1,4 @@
-"""
-daily_log.py: one CSV file per day on the Pi, so the readings are kept even when the laptop or the
-network is down.
-
-The laptop's database is the main record: the API polls the Pi and stores what it hears. If the laptop is
-off, that polling stops and nothing is stored. The sensor reader and the live behaviour monitor therefore
-also write their own rows here, one every LOG_SECONDS, and the laptop (or you, over the network) fetches the
-files afterwards to fill the gap. The files are plain CSV, so Excel opens them as they are.
-
-    logs/sensors-2026-11-05.csv
-    logs/behavior-2026-11-05.csv
-
-Written for a computer whose power can be cut at any moment: a row is one short line, flushed and synced as
-soon as it is written, and a file whose last line was cut short is closed off before the next row is added.
-Never raises: a full or failing disk costs rows, it must not stop the camera service or the sensor reader.
-
-Settings (environment):
-    LOG_DIR         where the files go                          default: logs/ beside this file
-    LOG_KEEP_DAYS   days of files kept; older ones are deleted   default 90
-"""
+"""Durable per-day CSV logs kept locally on the Raspberry Pi."""
 from __future__ import annotations
 
 import csv
@@ -30,10 +11,15 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-#: Files the camera service is willing to hand out: "<name>-YYYY-MM-DD.csv" and nothing else.
-FILE_NAME = re.compile(r"^(sensors|behavior)-(\d{4})-(\d{2})-(\d{2})\.csv$")
-
-#: Stop writing when less than this is free, so a full card cannot stop the Pi from booting.
+FILE_NAME = re.compile(
+    r"^(temperature|humidity|ammonia|behavior|sensors|kinect-weights|kinect-birds)-"
+    r"(\d{4})-(\d{2})-(\d{2})\.csv$"
+)
+SET_ASIDE = re.compile(
+    r"^(temperature|humidity|ammonia|behavior|sensors|kinect-weights|kinect-birds)-"
+    r"(\d{4})-(\d{2})-(\d{2})\.before-\d{6}\.csv$"
+)
+FOLDERS = ("temperature", "humidity", "ammonia", "behavior")
 MIN_FREE_BYTES = 200 * 1024 * 1024
 
 
@@ -57,20 +43,23 @@ class DailyCsv:
         keep: int | None = None,
         now: Callable[[], float] = time.time,
         free_bytes: Callable[[Path], int] | None = None,
+        folder: bool = False,
     ) -> None:
         self.name = name
         self.columns = ["time", *columns]
-        self.directory = directory if directory is not None else default_dir()
+        base = directory if directory is not None else default_dir()
+        self.directory = base / name if folder else base
         self.keep = keep if keep is not None else keep_days()
         self._now = now
         self._free_bytes = free_bytes or (lambda path: shutil.disk_usage(path).free)
         self._pruned_on: date | None = None
+        self._checked: set[Path] = set()
 
     def path_for(self, ts: float) -> Path:
         return self.directory / f"{self.name}-{datetime.fromtimestamp(ts).date().isoformat()}.csv"
 
     def append(self, values: dict[str, Any]) -> bool:
-        """Adds one row (a blank for any column not given). False when it could not be written."""
+        """Append one row; return False if storage is unavailable or nearly full."""
         ts = self._now()
         try:
             self.directory.mkdir(parents=True, exist_ok=True)
@@ -81,12 +70,15 @@ class DailyCsv:
             line = io.StringIO()
             writer = csv.writer(line, lineterminator="\n")
             exists = path.exists() and path.stat().st_size > 0
+            if exists and path not in self._checked:
+                exists = self._set_aside_if_columns_changed(path, ts)
+            self._checked.add(path)
             if not exists:
                 writer.writerow(self.columns)
-            writer.writerow(["" if row.get(c) is None else row.get(c) for c in self.columns])
+            writer.writerow(["" if row.get(column) is None else row.get(column) for column in self.columns])
             with open(path, "ab") as handle:
                 if exists and not _ends_with_newline(path):
-                    handle.write(b"\n")  # a power cut left half a row: close it off, it is skipped when reading
+                    handle.write(b"\n")
                 handle.write(line.getvalue().encode("utf-8"))
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -95,17 +87,26 @@ class DailyCsv:
         except OSError:
             return False
 
+    def _set_aside_if_columns_changed(self, path: Path, ts: float) -> bool:
+        with open(path, "r", encoding="utf-8", errors="replace", newline="") as handle:
+            first = handle.readline().rstrip("\r\n")
+        if first == ",".join(self.columns):
+            return True
+        stamp = datetime.fromtimestamp(ts).strftime("%H%M%S")
+        path.rename(path.with_name(f"{path.stem}.before-{stamp}.csv"))
+        return False
+
     def _prune(self, today: date) -> None:
         if self._pruned_on == today:
             return
         self._pruned_on = today
         cutoff = today - timedelta(days=self.keep)
         for path in self.directory.glob(f"{self.name}-*.csv"):
-            found = FILE_NAME.match(path.name)
+            found = FILE_NAME.match(path.name) or SET_ASIDE.match(path.name)
             if not found:
                 continue
             try:
-                if date(int(found[2]), int(found[3]), int(found[4])) < cutoff:
+                if found[1] == self.name and date(int(found[2]), int(found[3]), int(found[4])) < cutoff:
                     path.unlink()
             except (ValueError, OSError):
                 continue
@@ -118,14 +119,48 @@ def _ends_with_newline(path: Path) -> bool:
 
 
 def list_files(directory: Path | None = None) -> list[dict[str, Any]]:
-    """The files that can be fetched, newest first: name, size in bytes, and when each was last written."""
-    folder = directory if directory is not None else default_dir()
+    """Return the daily logs that can be downloaded, newest first."""
+    base = directory if directory is not None else default_dir()
     out = []
-    try:
-        for path in folder.iterdir():
-            if FILE_NAME.match(path.name) and path.is_file():
-                info = path.stat()
-                out.append({"name": path.name, "bytes": info.st_size, "modified": info.st_mtime})
-    except OSError:
-        return []
-    return sorted(out, key=lambda f: f["name"], reverse=True)
+    places = [(base, None)] + [(base / name, name) for name in FOLDERS]
+    for folder, kind in places:
+        try:
+            entries = list(folder.iterdir())
+        except OSError:
+            continue
+        for path in entries:
+            found = FILE_NAME.fullmatch(path.name)
+            if not found or not path.is_file():
+                continue
+            if kind is not None and found[1] != kind:
+                continue
+            info = path.stat()
+            relative = f"{kind}/{path.name}" if kind else path.name
+            out.append(
+                {
+                    "name": path.name,
+                    "path": relative,
+                    "folder": kind,
+                    "bytes": info.st_size,
+                    "modified": info.st_mtime,
+                }
+            )
+    return sorted(out, key=lambda item: (item["name"][-14:-4], item["path"]), reverse=True)
+
+
+def resolve(path: str, directory: Path | None = None) -> Path | None:
+    """Resolve only a supported flat log name or one supported log subfolder."""
+    base = directory if directory is not None else default_dir()
+    parts = path.split("/")
+    if len(parts) == 1 and FILE_NAME.fullmatch(parts[0]):
+        target = base / parts[0]
+    elif (
+        len(parts) == 2
+        and parts[0] in FOLDERS
+        and FILE_NAME.fullmatch(parts[1])
+        and parts[1].startswith(f"{parts[0]}-")
+    ):
+        target = base / parts[0] / parts[1]
+    else:
+        return None
+    return target if target.is_file() else None

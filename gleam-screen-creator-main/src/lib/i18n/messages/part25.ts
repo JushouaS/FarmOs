@@ -53,4 +53,59 @@ export const part25: Messages = {
   "{n} h": ["{n} oras", "{n} ka oras"],
   "{n} days": ["{n} araw", "{n} ka adlaw"],
   "Sensor offline · last reading {ago} ago": ["Offline ang sensor · huling basa {ago} ang nakalipas", "Offline ang sensor · katapusang basa {ago} ang milabay"],
+  "Pi CSV History": ["Kasaysayan ng Pi CSV", "Kasaysayan sa Pi CSV"],
+  "Raw historical readings from Pi CSVs; these are not welfare classifications.": [
+    "Mga raw na dating sukat mula sa Pi CSV; hindi ito mga klasipikasyon ng kalagayan ng mga manok.",
+    "Mga raw nga kanhing sukod gikan sa Pi CSV; dili kini klasipikasyon sa kahimtang sa mga manok.",
+  ],
+  "Daily sensor records": [
+    "Pang-araw-araw na tala ng sensor",
+    "Adlaw-adlaw nga mga rekord sa sensor",
+  ],
+  "Daily average, range, and number of readings. Days without readings are omitted.": [
+    "Pang-araw-araw na average, saklaw, at bilang ng mga sukat. Hindi ipinapakita ang mga araw na walang sukat.",
+    "Adlaw-adlaw nga average, sakup, ug gidaghanon sa mga sukod. Dili ipakita ang mga adlaw nga walay sukod.",
+  ],
+  Period: ["Panahon", "Panahon"],
+  "History period": ["Panahon ng kasaysayan", "Panahon sa kasaysayan"],
+  "Could not load daily sensor records: {reason}": [
+    "Hindi ma-load ang pang-araw-araw na tala ng sensor: {reason}",
+    "Dili ma-load ang adlaw-adlaw nga mga rekord sa sensor: {reason}",
+  ],
+  "Loading daily records…": [
+    "Nilo-load ang pang-araw-araw na tala…",
+    "Nag-load sa adlaw-adlaw nga mga rekord…",
+  ],
+  "No daily readings in this period.": [
+    "Walang pang-araw-araw na sukat sa panahong ito.",
+    "Walay adlaw-adlaw nga mga sukod niining panahona.",
+  ],
+  Date: ["Petsa", "Petsa"],
+  Temperature: ["Temperatura", "Temperatura"],
+  Humidity: ["Halumigmig", "Humidity"],
+  "Average: {avg}{unit}": ["Average: {avg}{unit}", "Average: {avg}{unit}"],
+  "Range: {min}–{max}{unit} · {count} readings": [
+    "Saklaw: {min}–{max}{unit} · {count} sukat",
+    "Sakup: {min}–{max}{unit} · {count} ka sukod",
+  ],
+  "Could not load Pi CSV history": ["Hindi ma-load ang kasaysayan ng Pi CSV", "Dili ma-load ang kasaysayan sa Pi CSV"],
+  "Loading history…": ["Naglo-load ng kasaysayan…", "Nag-load sa kasaysayan…"],
+  "Ammonia (ppm)": ["Ammonia (ppm)", "Ammonia (ppm)"],
+  "No ammonia CSV rows in the last 30 days.": [
+    "Walang ammonia CSV record sa nakaraang 30 araw.",
+    "Walay ammonia CSV record sa milabay nga 30 ka adlaw.",
+  ],
+  "Behavior tracker": ["Tagasubaybay ng kilos", "Tig-subay sa lihok"],
+  "No behavior CSV rows in the last 30 days.": [
+    "Walang behavior CSV record sa nakaraang 30 araw.",
+    "Walay behavior CSV record sa milabay nga 30 ka adlaw.",
+  ],
+  "{birds} birds · {still} still · {huddled} huddled": [
+    "{birds} manok · {still} hindi gumagalaw · {huddled} magkakadikit",
+    "{birds} ka manok · {still} wala molihok · {huddled} nagdinaganan",
+  ],
+  "Moving {moving} · huddle share {huddle}": [
+    "Gumagalaw {moving} · bahagi ng huddle {huddle}",
+    "Naglihok {moving} · bahin sa huddle {huddle}",
+  ],
 };

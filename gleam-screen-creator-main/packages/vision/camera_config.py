@@ -8,10 +8,12 @@ the dashboard is all an operator does.
 
 Order of precedence:
 
-  1. the link saved in Settings, when it holds one;
-  2. `RTSP_SOURCES` from the environment ("CAM-01=rtsp://…"), which is what a
+  1. `VISION_CAPTURE_URL`, an optional authenticated upstream feed for the
+     local detector when the camera is reachable only through another computer;
+  2. the link saved in Settings, when it holds one;
+  3. `RTSP_SOURCES` from the environment ("CAM-01=rtsp://…"), which is what a
      deployment that has never opened Settings runs on;
-  3. no camera at all.
+  4. no camera at all.
 
 Clearing the setting deletes the row, so the service drops back to the
 environment link instead of going blind.
@@ -136,6 +138,10 @@ def stored_url() -> str | None:
 
 def read_sources() -> dict[str, str]:
     """The camera map the service should be using right now."""
+    capture_url = os.getenv("VISION_CAPTURE_URL", "").strip()
+    if capture_url:
+        return {CAMERA_ID: capture_url}
+
     url = stored_url()
     if url:
         return {CAMERA_ID: url}

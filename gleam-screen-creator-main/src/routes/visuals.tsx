@@ -3,7 +3,11 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
+import { CameraDetectionsOverlay } from "@/components/farm/CameraDetectionsOverlay";
+import { PiCsvHistoryPanel } from "@/components/farm/PiCsvHistoryPanel";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
+import { MjpegCameraFeed } from "@/components/farm/MjpegCameraFeed";
+import { VideoDetectDialog } from "@/components/farm/VideoDetectDialog";
 import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { freshReading, silentFor } from "@/lib/farm/pen-sensors";
@@ -92,7 +96,6 @@ export function VisualsDashboardPage() {
   // When the day starts and the night starts comes from Settings.
   const lighting: LightingHours = overview?.lighting ?? DEFAULT_LIGHTING;
   const [layout, setLayout] = useState<ViewLayout>("dual");
-  const [dahuaError, setDahuaError] = useState(false);
   // A camera picture is one long connection. When the API restarts, the camera computer restarts or the network drops
   // for a moment, the browser leaves the picture frozen and never asks again. So every 10 seconds the page asks whether
   // the camera path works and, when it works again after being away, opens the pictures anew.
@@ -107,7 +110,6 @@ export function VisualsDashboardPage() {
         if (!res.ok) throw new Error("camera path is down");
         if (away) {
           away = false;
-          setDahuaError(false);
           setStreamKey((k) => k + 1);
         }
       } catch {
@@ -145,23 +147,11 @@ export function VisualsDashboardPage() {
     };
   }, [nightModeActive]);
 
-  // The feeds come through the API (it signs in the viewer and holds the camera service's token), so the
-  // camera service itself is not opened to the page. Only its address is kept, for the "not answering"
-  // message below. Set after mount: the server render can't know the host.
+  // Set after mount so the server render never tries to open a camera connection.
   const [feedOrigin, setFeedOrigin] = useState<string | null>(null);
   useEffect(() => {
-    // VITE_VISION_ORIGIN points the page at a camera service on another machine
-    // (the Raspberry Pi), for example http://192.168.1.20:5000.
-    // On a public https address the visitor is not on the farm's network, so the message names the address
-    // they are using, never the camera computer's private one.
-    if (window.location.protocol === "https:") {
-      setFeedOrigin(window.location.origin);
-      return;
-    }
-    const configured = import.meta.env.VITE_VISION_ORIGIN as string | undefined;
-    setFeedOrigin(configured?.trim().replace(/\/+$/, "") || `${window.location.protocol}//${window.location.hostname}:5000`);
+    setFeedOrigin(window.location.origin);
   }, []);
-  const feedHost = feedOrigin?.replace(/^https?:\/\//, "") ?? "port 5000";
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -267,6 +257,9 @@ export function VisualsDashboardPage() {
               </button>
             </div>
 
+            {/* Try the trained detector on an uploaded video */}
+            <VideoDetectDialog lighting={lighting} standardG={standardG || undefined} />
+
             {/* Fullscreen Trigger Button */}
             <button
               type="button"
@@ -308,43 +301,15 @@ export function VisualsDashboardPage() {
                   {/* Video Viewport Container — 16:9 box when the page scrolls,
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
-                    {!dahuaError ? (
-                      feedOrigin && (
-                        <img
-                          key={`dahua-${streamKey}`}
-                          src={`${visionStreamUrl("CAM-01")}?k=${streamKey}`}
-                          alt={tr("Live camera feed of the broilers' behavior")}
-                          className="h-full w-full object-contain"
-                          onError={() => setDahuaError(true)}
-                        />
-                      )
-                    ) : (
-                      <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
-                        <div className="mb-2 rounded-full bg-[var(--status-amber-bg)] p-3 text-[var(--status-amber-text)]">
-                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                          </svg>
-                        </div>
-                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-                          {tr("Vision service not reachable")}
-                        </h2>
-                        {/* Only shown when the service itself is down; with the
-                            service up but the camera off it streams a placeholder. */}
-                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("Nothing is answering at {feedHost}. Start cerebroil-stream, then retry.", { feedHost })}</p>
-                        <button
-                          type="button"
-                          onClick={() => setDahuaError(false)}
-                          className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
-                        >
-                          {tr("Retry Connection")}
-                        </button>
-                      </div>
+                    {feedOrigin && (
+                      <MjpegCameraFeed
+                        key={`dahua-${streamKey}`}
+                        src={`${visionStreamUrl("CAM-01")}?k=${streamKey}`}
+                        alt={tr("Live camera feed of the broilers' behavior")}
+                        className="h-full w-full object-contain"
+                      />
                     )}
-
-                    {/* No overlays on this feed: the boxes, temperature/humidity chip and
-                        bird count that used to sit here were demo data, not camera output. */}
+                    <CameraDetectionsOverlay cameraId="CAM-01" />
                   </div>
                 </div>
               )}
@@ -466,7 +431,9 @@ export function VisualsDashboardPage() {
                     {tr("{n} birds weighed from the Kinect picture. Average {avg} g.", { n: weighed.length, avg: weighedAverage })}
                   </p>
                   <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-                    {tr("Rough estimate: one bird can be off by about {pct}%", { pct: flock?.weight?.errorPercent ?? 18 })}
+                    {flock?.weight?.errorPercent != null
+                      ? tr("Rough estimate: one bird can be off by about {pct}%", { pct: flock.weight.errorPercent })
+                      : tr("Experimental estimate; verify against a scale.")}
                   </p>
                 </>
               ) : (
@@ -501,6 +468,8 @@ export function VisualsDashboardPage() {
                 </div>
               </div>
             </div>
+
+            <PiCsvHistoryPanel />
           </aside>
         </div>
       </div>

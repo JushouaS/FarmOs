@@ -33,9 +33,8 @@ import { startHousekeeping } from "./housekeeping.js";
 import { registerVisionZoneRoutes } from "./routes/vision-zones.js";
 import { registerVisionVideoRoutes } from "./routes/vision-video.js";
 import { startBehaviorSampler } from "./sampler.js";
-import { attachKinectRelay } from "./kinect-relay.js";
-import { startPiBackfill } from "./pi-backfill.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { startPiBackfill } from "./pi-backfill.js";
 
 /** localhost and the private IPv4 ranges (10.x, 172.16-31.x, 192.168.x), with any port. */
 const PRIVATE_NETWORK_ORIGIN =
@@ -44,7 +43,7 @@ const PRIVATE_NETWORK_ORIGIN =
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: env.LOG_LEVEL },
-    trustProxy: env.trustProxy,
+    trustProxy: true,
   });
 
   await app.register(cors, {
@@ -76,11 +75,6 @@ export async function buildApp(): Promise<FastifyInstance> {
       },
     },
     crossOriginEmbedderPolicy: false,
-    // The page and the API run on different ports (8080 and 4000), so the browser treats the camera
-    // pictures as cross-origin. helmet's default, same-origin, made it refuse them and the Live
-    // Camera page showed "not reachable". same-site lets this site's own pages show them and still
-    // refuses any other site.
-    crossOriginResourcePolicy: { policy: "same-site" },
     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   });
   await app.register(rateLimit, {
@@ -137,11 +131,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   // the thresholds, the night rule and the write all live on this side, so the
   // timer calls the same path a manual scan does instead of duplicating it.
   startBehaviorSampler(app);
-
-  // The Kinect depth stream for devices that cannot reach the bridge on this PC directly.
-  attachKinectRelay(app, (origin) =>
-    !origin || env.API_CORS_ORIGINS.includes(origin) || (env.NODE_ENV === "development" && PRIVATE_NETWORK_ORIGIN.test(origin)),
-  );
 
   return app;
 }

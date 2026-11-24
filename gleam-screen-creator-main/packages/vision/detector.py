@@ -162,7 +162,8 @@ def _as_abox(output: np.ndarray) -> np.ndarray:
 class Detector:
     """Loads the ONNX graph once and reuses it for every frame."""
 
-    def __init__(self) -> None:
+    def __init__(self, model_path: str | None = None) -> None:
+        self.model_path = model_path or MODEL_PATH
         self.session = None
         self.input_name = ""
         self.input_size = INPUT_SIZE
@@ -174,8 +175,8 @@ class Detector:
         return self.session is not None
 
     def _load(self) -> None:
-        if not os.path.exists(MODEL_PATH):
-            self.load_error = f"no model at {MODEL_PATH}"
+        if not os.path.exists(self.model_path):
+            self.load_error = f"no model at {self.model_path}"
             logger.warning(
                 "Detection disabled: %s. Drop the .onnx export there or set "
                 "CHICKEN_MODEL_PATH. The live feed and zone editor still work.",
@@ -191,7 +192,7 @@ class Detector:
             options = ort.SessionOptions()
             options.intra_op_num_threads = 2
             self.session = ort.InferenceSession(
-                MODEL_PATH, sess_options=options, providers=["CPUExecutionProvider"]
+                self.model_path, sess_options=options, providers=["CPUExecutionProvider"]
             )
             model_input = self.session.get_inputs()[0]
             self.input_name = model_input.name
@@ -201,7 +202,7 @@ class Detector:
                 self.input_size = int(shape[2])
             logger.info(
                 "Loaded %s (input %dx%d, classes=%s)",
-                MODEL_PATH, self.input_size, self.input_size, CLASSES,
+                self.model_path, self.input_size, self.input_size, CLASSES,
             )
         except ImportError:
             self.load_error = "onnxruntime is not installed"

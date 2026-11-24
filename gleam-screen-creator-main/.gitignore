@@ -1,8 +1,5 @@
 # Logs
 logs
-
-# Daily CSV exports (packages/api/scripts/export-daily.ts): farm data, not source
-exports/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -23,9 +20,6 @@ dist-ssr
 .env
 .env.*
 !.env.example
-
-# The trained detector (an .onnx export) is not source: copy it into place, do not commit it
-packages/vision/models/*.onnx
 
 # Local dev artifacts (verification screenshots, stray npm lockfile — repo uses bun)
 /screenshot-*.png

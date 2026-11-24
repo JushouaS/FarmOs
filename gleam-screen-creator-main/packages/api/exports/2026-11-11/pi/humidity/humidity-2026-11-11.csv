@@ -1,0 +1,1272 @@
+time,humidity_pct,reading_age_s,error
+2026-11-11T00:00:28+08:00,70.4,0,
+2026-11-11T00:01:31+08:00,70.5,0,
+2026-11-11T00:02:32+08:00,71.3,0,
+2026-11-11T00:03:40+08:00,70.7,0,
+2026-11-11T00:04:40+08:00,71.0,0,
+2026-11-11T00:05:52+08:00,71.1,0,
+2026-11-11T00:07:02+08:00,70.3,0,
+2026-11-11T00:08:17+08:00,69.9,0,
+2026-11-11T00:09:26+08:00,70.6,23,only 18 of 40 bits arrived
+2026-11-11T00:10:27+08:00,69.9,0,
+2026-11-11T00:11:27+08:00,69.7,0,
+2026-11-11T00:12:29+08:00,70.1,0,
+2026-11-11T00:13:29+08:00,69.5,0,
+2026-11-11T00:14:33+08:00,70.5,19,only 38 of 40 bits arrived
+2026-11-11T00:15:36+08:00,70.3,0,
+2026-11-11T00:16:36+08:00,70.0,0,
+2026-11-11T00:17:38+08:00,70.0,0,
+2026-11-11T00:18:48+08:00,70.1,0,
+2026-11-11T00:20:00+08:00,70.1,0,
+2026-11-11T00:21:06+08:00,69.7,0,
+2026-11-11T00:22:17+08:00,69.2,23,only 37 of 40 bits arrived
+2026-11-11T00:23:18+08:00,69.8,0,
+2026-11-11T00:24:27+08:00,70.0,0,
+2026-11-11T00:25:27+08:00,70.4,0,
+2026-11-11T00:26:29+08:00,70.3,0,
+2026-11-11T00:27:36+08:00,70.9,0,
+2026-11-11T00:28:39+08:00,71.2,0,
+2026-11-11T00:29:51+08:00,70.7,0,
+2026-11-11T00:30:56+08:00,71.1,0,
+2026-11-11T00:32:01+08:00,70.5,0,
+2026-11-11T00:33:01+08:00,70.4,0,
+2026-11-11T00:34:03+08:00,70.4,0,
+2026-11-11T00:35:15+08:00,71.0,0,
+2026-11-11T00:36:21+08:00,70.0,0,
+2026-11-11T00:37:27+08:00,70.3,0,
+2026-11-11T00:38:30+08:00,69.6,0,
+2026-11-11T00:39:33+08:00,70.0,0,
+2026-11-11T00:40:37+08:00,69.6,0,
+2026-11-11T00:41:40+08:00,69.1,0,
+2026-11-11T00:42:43+08:00,69.0,0,
+2026-11-11T00:43:43+08:00,69.2,0,
+2026-11-11T00:44:43+08:00,68.7,0,
+2026-11-11T00:46:01+08:00,68.3,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T00:47:15+08:00,68.8,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T00:48:19+08:00,68.7,0,
+2026-11-11T00:49:25+08:00,69.0,0,
+2026-11-11T00:50:31+08:00,69.8,0,
+2026-11-11T00:51:40+08:00,67.8,0,
+2026-11-11T00:52:45+08:00,68.4,0,
+2026-11-11T00:53:46+08:00,67.7,0,
+2026-11-11T00:55:01+08:00,69.1,21,only 39 of 40 bits arrived
+2026-11-11T00:56:03+08:00,68.8,0,
+2026-11-11T00:57:15+08:00,67.5,0,
+2026-11-11T00:58:21+08:00,67.7,17,only 34 of 40 bits arrived
+2026-11-11T00:59:24+08:00,68.1,0,
+2026-11-11T01:00:31+08:00,68.5,0,
+2026-11-11T01:01:34+08:00,68.1,0,
+2026-11-11T01:02:42+08:00,67.6,0,
+2026-11-11T01:03:47+08:00,68.4,0,
+2026-11-11T01:04:58+08:00,67.9,0,
+2026-11-11T01:06:12+08:00,68.1,0,
+2026-11-11T01:07:13+08:00,68.6,0,
+2026-11-11T01:08:16+08:00,69.5,0,
+2026-11-11T01:09:16+08:00,68.5,0,
+2026-11-11T01:10:18+08:00,68.2,0,
+2026-11-11T01:11:18+08:00,69.0,0,
+2026-11-11T01:12:34+08:00,67.7,23,only 37 of 40 bits arrived
+2026-11-11T01:13:35+08:00,68.8,0,
+2026-11-11T01:14:39+08:00,68.2,0,
+2026-11-11T01:15:40+08:00,68.4,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T01:16:44+08:00,67.6,0,
+2026-11-11T01:18:05+08:00,68.7,21,only 36 of 40 bits arrived
+2026-11-11T01:19:19+08:00,67.6,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T01:20:23+08:00,67.3,0,
+2026-11-11T01:21:23+08:00,67.8,0,
+2026-11-11T01:22:23+08:00,67.7,0,
+2026-11-11T01:23:33+08:00,69.9,0,
+2026-11-11T01:24:36+08:00,68.4,0,
+2026-11-11T01:25:37+08:00,68.4,0,
+2026-11-11T01:26:42+08:00,68.6,0,
+2026-11-11T01:27:47+08:00,68.2,0,
+2026-11-11T01:28:49+08:00,67.7,0,
+2026-11-11T01:29:56+08:00,68.1,0,
+2026-11-11T01:31:02+08:00,68.2,0,
+2026-11-11T01:32:05+08:00,67.4,0,
+2026-11-11T01:33:14+08:00,67.3,19,only 21 of 40 bits arrived
+2026-11-11T01:34:17+08:00,68.7,0,
+2026-11-11T01:35:29+08:00,69.2,23,only 24 of 40 bits arrived
+2026-11-11T01:36:33+08:00,69.8,23,only 33 of 40 bits arrived
+2026-11-11T01:37:34+08:00,70.5,0,
+2026-11-11T01:38:36+08:00,70.4,0,
+2026-11-11T01:39:38+08:00,70.7,21,only 36 of 40 bits arrived
+2026-11-11T01:40:43+08:00,71.3,0,
+2026-11-11T01:41:55+08:00,71.7,0,
+2026-11-11T01:43:10+08:00,72.0,0,
+2026-11-11T01:44:13+08:00,71.8,0,
+2026-11-11T01:45:15+08:00,72.1,0,
+2026-11-11T01:46:29+08:00,71.9,15,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T01:47:34+08:00,72.1,0,
+2026-11-11T01:48:44+08:00,72.2,0,
+2026-11-11T01:49:46+08:00,71.9,0,
+2026-11-11T01:50:46+08:00,71.9,0,
+2026-11-11T01:51:46+08:00,71.9,0,
+2026-11-11T01:52:49+08:00,72.0,0,
+2026-11-11T01:53:53+08:00,71.6,0,
+2026-11-11T01:54:55+08:00,71.6,0,
+2026-11-11T01:56:16+08:00,71.8,23,only 39 of 40 bits arrived
+2026-11-11T01:57:33+08:00,71.6,17,only 37 of 40 bits arrived
+2026-11-11T01:58:39+08:00,71.4,0,
+2026-11-11T01:59:44+08:00,71.0,0,
+2026-11-11T02:00:44+08:00,71.4,0,
+2026-11-11T02:01:51+08:00,71.6,0,
+2026-11-11T02:02:58+08:00,71.5,0,
+2026-11-11T02:04:00+08:00,71.9,0,
+2026-11-11T02:05:00+08:00,71.5,0,
+2026-11-11T02:06:08+08:00,71.7,0,
+2026-11-11T02:07:08+08:00,71.5,0,
+2026-11-11T02:08:10+08:00,71.3,0,
+2026-11-11T02:09:17+08:00,71.0,0,
+2026-11-11T02:10:18+08:00,71.3,0,
+2026-11-11T02:11:21+08:00,71.2,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T02:12:32+08:00,71.4,15,only 31 of 40 bits arrived
+2026-11-11T02:13:37+08:00,71.4,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T02:14:49+08:00,71.3,0,
+2026-11-11T02:15:59+08:00,71.3,0,
+2026-11-11T02:17:02+08:00,71.7,0,
+2026-11-11T02:18:05+08:00,71.1,0,
+2026-11-11T02:19:15+08:00,71.1,0,
+2026-11-11T02:20:17+08:00,71.4,0,
+2026-11-11T02:21:27+08:00,71.2,0,
+2026-11-11T02:22:31+08:00,72.0,0,
+2026-11-11T02:23:39+08:00,71.6,0,
+2026-11-11T02:24:39+08:00,71.1,0,
+2026-11-11T02:25:40+08:00,71.2,0,
+2026-11-11T02:26:48+08:00,71.0,0,
+2026-11-11T02:28:02+08:00,70.6,0,
+2026-11-11T02:29:15+08:00,71.0,0,
+2026-11-11T02:30:20+08:00,71.5,0,
+2026-11-11T02:31:27+08:00,71.1,0,
+2026-11-11T02:32:27+08:00,71.6,0,
+2026-11-11T02:33:39+08:00,71.3,0,
+2026-11-11T02:34:39+08:00,71.1,0,
+2026-11-11T02:35:44+08:00,71.0,0,
+2026-11-11T02:36:50+08:00,71.6,0,
+2026-11-11T02:38:00+08:00,70.6,0,
+2026-11-11T02:39:08+08:00,70.6,0,
+2026-11-11T02:40:09+08:00,70.3,0,
+2026-11-11T02:41:12+08:00,70.3,0,
+2026-11-11T02:42:13+08:00,70.5,0,
+2026-11-11T02:43:20+08:00,70.5,0,
+2026-11-11T02:44:34+08:00,70.2,0,
+2026-11-11T02:45:34+08:00,70.0,0,
+2026-11-11T02:46:48+08:00,70.0,0,
+2026-11-11T02:47:57+08:00,70.8,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T02:49:04+08:00,69.6,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T02:50:09+08:00,69.3,0,
+2026-11-11T02:51:11+08:00,70.1,23,only 38 of 40 bits arrived
+2026-11-11T02:52:21+08:00,69.5,0,
+2026-11-11T02:53:33+08:00,69.6,0,
+2026-11-11T02:54:33+08:00,69.3,0,
+2026-11-11T02:55:43+08:00,69.8,0,
+2026-11-11T02:56:51+08:00,69.4,0,
+2026-11-11T02:58:04+08:00,69.4,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T02:59:05+08:00,68.6,0,
+2026-11-11T03:00:09+08:00,68.8,23,only 13 of 40 bits arrived
+2026-11-11T03:01:28+08:00,69.5,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T03:02:31+08:00,69.1,0,
+2026-11-11T03:03:40+08:00,69.3,0,
+2026-11-11T03:04:48+08:00,69.0,0,
+2026-11-11T03:05:52+08:00,68.3,0,
+2026-11-11T03:06:54+08:00,68.3,0,
+2026-11-11T03:07:54+08:00,68.8,0,
+2026-11-11T03:08:57+08:00,68.6,0,
+2026-11-11T03:10:04+08:00,68.5,0,
+2026-11-11T03:11:15+08:00,67.7,0,
+2026-11-11T03:12:25+08:00,68.7,0,
+2026-11-11T03:13:27+08:00,68.7,0,
+2026-11-11T03:14:42+08:00,68.5,0,
+2026-11-11T03:15:54+08:00,67.9,0,
+2026-11-11T03:17:01+08:00,68.3,23,only 0 of 40 bits arrived
+2026-11-11T03:18:01+08:00,68.6,0,
+2026-11-11T03:19:04+08:00,68.1,0,
+2026-11-11T03:20:05+08:00,68.2,19,only 39 of 40 bits arrived
+2026-11-11T03:21:06+08:00,67.9,0,
+2026-11-11T03:22:13+08:00,66.9,0,
+2026-11-11T03:23:16+08:00,67.0,0,
+2026-11-11T03:24:24+08:00,67.4,0,
+2026-11-11T03:25:34+08:00,67.8,0,
+2026-11-11T03:26:44+08:00,67.9,0,
+2026-11-11T03:27:46+08:00,67.8,0,
+2026-11-11T03:28:49+08:00,66.9,0,
+2026-11-11T03:29:55+08:00,67.4,0,
+2026-11-11T03:31:03+08:00,67.0,0,
+2026-11-11T03:32:17+08:00,67.2,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T03:33:22+08:00,66.9,0,
+2026-11-11T03:34:22+08:00,66.1,0,
+2026-11-11T03:35:26+08:00,66.8,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T03:36:27+08:00,67.4,0,
+2026-11-11T03:37:27+08:00,66.7,0,
+2026-11-11T03:38:31+08:00,65.2,0,
+2026-11-11T03:39:32+08:00,66.0,0,
+2026-11-11T03:40:32+08:00,66.5,0,
+2026-11-11T03:41:34+08:00,66.5,0,
+2026-11-11T03:42:36+08:00,67.0,0,
+2026-11-11T03:43:39+08:00,66.5,0,
+2026-11-11T03:44:46+08:00,65.9,0,
+2026-11-11T03:45:48+08:00,66.7,0,
+2026-11-11T03:46:58+08:00,66.9,0,
+2026-11-11T03:48:00+08:00,67.6,0,
+2026-11-11T03:49:09+08:00,66.3,0,
+2026-11-11T03:50:09+08:00,66.3,0,
+2026-11-11T03:51:13+08:00,67.1,0,
+2026-11-11T03:52:13+08:00,66.8,0,
+2026-11-11T03:53:13+08:00,67.3,0,
+2026-11-11T03:54:16+08:00,67.0,21,only 38 of 40 bits arrived
+2026-11-11T03:55:26+08:00,67.1,0,
+2026-11-11T03:56:26+08:00,67.3,0,
+2026-11-11T03:57:40+08:00,67.5,23,only 39 of 40 bits arrived
+2026-11-11T03:58:41+08:00,67.4,0,
+2026-11-11T03:59:44+08:00,67.8,0,
+2026-11-11T04:00:49+08:00,67.1,0,
+2026-11-11T04:02:00+08:00,67.7,0,
+2026-11-11T04:03:00+08:00,67.5,0,
+2026-11-11T04:04:14+08:00,68.0,0,
+2026-11-11T04:05:17+08:00,69.6,0,
+2026-11-11T04:06:22+08:00,67.8,0,
+2026-11-11T04:07:22+08:00,68.0,0,
+2026-11-11T04:08:26+08:00,68.0,0,
+2026-11-11T04:09:26+08:00,68.5,0,
+2026-11-11T04:10:35+08:00,67.7,0,
+2026-11-11T04:11:50+08:00,68.2,0,
+2026-11-11T04:12:56+08:00,68.7,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T04:14:08+08:00,68.9,0,
+2026-11-11T04:15:21+08:00,68.7,0,
+2026-11-11T04:16:21+08:00,68.4,0,
+2026-11-11T04:17:33+08:00,68.4,0,
+2026-11-11T04:18:35+08:00,68.6,0,
+2026-11-11T04:19:44+08:00,68.8,0,
+2026-11-11T04:20:54+08:00,68.6,0,
+2026-11-11T04:21:54+08:00,68.6,0,
+2026-11-11T04:23:01+08:00,68.0,0,
+2026-11-11T04:24:06+08:00,69.1,0,
+2026-11-11T04:25:08+08:00,69.2,0,
+2026-11-11T04:26:15+08:00,68.5,0,
+2026-11-11T04:27:21+08:00,68.9,0,
+2026-11-11T04:28:21+08:00,69.0,0,
+2026-11-11T04:29:30+08:00,69.0,0,
+2026-11-11T04:30:31+08:00,68.9,0,
+2026-11-11T04:31:42+08:00,68.5,0,
+2026-11-11T04:32:45+08:00,69.4,0,
+2026-11-11T04:33:45+08:00,72.2,0,
+2026-11-11T04:34:45+08:00,67.7,0,
+2026-11-11T04:36:06+08:00,68.1,24,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T04:37:11+08:00,67.0,17,only 39 of 40 bits arrived
+2026-11-11T04:38:19+08:00,67.8,0,
+2026-11-11T04:39:31+08:00,68.0,0,
+2026-11-11T04:40:36+08:00,68.2,0,
+2026-11-11T04:41:39+08:00,68.5,0,
+2026-11-11T04:42:39+08:00,68.2,0,
+2026-11-11T04:43:44+08:00,69.0,0,
+2026-11-11T04:44:49+08:00,68.8,0,
+2026-11-11T04:45:51+08:00,70.2,0,
+2026-11-11T04:47:01+08:00,68.6,0,
+2026-11-11T04:48:09+08:00,68.5,0,
+2026-11-11T04:49:21+08:00,68.9,0,
+2026-11-11T04:50:21+08:00,69.4,0,
+2026-11-11T04:51:21+08:00,69.4,0,
+2026-11-11T04:52:21+08:00,69.6,0,
+2026-11-11T04:53:23+08:00,69.7,0,
+2026-11-11T04:54:34+08:00,70.1,17,only 14 of 40 bits arrived
+2026-11-11T04:55:40+08:00,70.3,0,
+2026-11-11T04:56:42+08:00,70.6,0,
+2026-11-11T04:57:49+08:00,70.7,23,only 36 of 40 bits arrived
+2026-11-11T04:59:03+08:00,71.8,23,only 37 of 40 bits arrived
+2026-11-11T05:00:09+08:00,71.3,0,
+2026-11-11T05:01:17+08:00,71.3,0,
+2026-11-11T05:02:17+08:00,71.1,0,
+2026-11-11T05:03:17+08:00,70.7,0,
+2026-11-11T05:04:22+08:00,70.9,14,only 37 of 40 bits arrived
+2026-11-11T05:05:37+08:00,71.2,0,
+2026-11-11T05:06:38+08:00,71.8,0,
+2026-11-11T05:07:47+08:00,71.7,0,
+2026-11-11T05:09:01+08:00,71.6,0,
+2026-11-11T05:10:04+08:00,70.9,0,
+2026-11-11T05:11:17+08:00,70.5,0,
+2026-11-11T05:12:19+08:00,70.5,0,
+2026-11-11T05:13:31+08:00,71.5,0,
+2026-11-11T05:14:34+08:00,78.3,0,
+2026-11-11T05:15:36+08:00,72.2,0,
+2026-11-11T05:16:43+08:00,72.4,0,
+2026-11-11T05:17:56+08:00,66.5,0,
+2026-11-11T05:19:08+08:00,68.1,0,
+2026-11-11T05:20:29+08:00,69.1,21,only 25 of 40 bits arrived
+2026-11-11T05:21:37+08:00,69.4,0,
+2026-11-11T05:22:45+08:00,69.8,0,
+2026-11-11T05:23:50+08:00,70.7,0,
+2026-11-11T05:24:50+08:00,70.9,0,
+2026-11-11T05:26:01+08:00,70.5,0,
+2026-11-11T05:27:07+08:00,71.3,0,
+2026-11-11T05:28:07+08:00,71.2,0,
+2026-11-11T05:29:17+08:00,71.4,0,
+2026-11-11T05:30:19+08:00,73.0,0,
+2026-11-11T05:31:38+08:00,73.0,23,only 15 of 40 bits arrived
+2026-11-11T05:32:50+08:00,71.5,0,
+2026-11-11T05:33:54+08:00,72.4,0,
+2026-11-11T05:34:55+08:00,72.2,0,
+2026-11-11T05:35:59+08:00,72.4,0,
+2026-11-11T05:37:10+08:00,72.3,21,only 34 of 40 bits arrived
+2026-11-11T05:38:14+08:00,72.9,0,
+2026-11-11T05:39:19+08:00,73.3,17,only 37 of 40 bits arrived
+2026-11-11T05:40:29+08:00,72.8,0,
+2026-11-11T05:41:32+08:00,72.9,0,
+2026-11-11T05:42:41+08:00,72.8,0,
+2026-11-11T05:43:42+08:00,72.4,0,
+2026-11-11T05:44:42+08:00,72.6,0,
+2026-11-11T05:45:51+08:00,73.1,0,
+2026-11-11T05:46:51+08:00,73.2,0,
+2026-11-11T05:47:57+08:00,73.8,0,
+2026-11-11T05:49:03+08:00,73.7,0,
+2026-11-11T05:50:08+08:00,73.9,0,
+2026-11-11T05:51:12+08:00,74.2,0,
+2026-11-11T05:52:23+08:00,73.6,0,
+2026-11-11T05:53:23+08:00,74.2,0,
+2026-11-11T05:54:27+08:00,74.1,0,
+2026-11-11T05:55:27+08:00,74.2,0,
+2026-11-11T05:56:30+08:00,74.4,0,
+2026-11-11T05:57:37+08:00,73.9,0,
+2026-11-11T05:58:45+08:00,74.5,0,
+2026-11-11T05:59:45+08:00,74.0,0,
+2026-11-11T06:00:45+08:00,73.9,0,
+2026-11-11T06:01:45+08:00,74.9,0,
+2026-11-11T06:02:45+08:00,74.3,0,
+2026-11-11T06:03:45+08:00,75.2,0,
+2026-11-11T06:04:53+08:00,74.3,0,
+2026-11-11T06:05:53+08:00,74.5,0,
+2026-11-11T06:06:53+08:00,74.6,0,
+2026-11-11T06:07:54+08:00,73.7,0,
+2026-11-11T06:09:00+08:00,73.7,0,
+2026-11-11T06:10:00+08:00,73.8,0,
+2026-11-11T06:11:19+08:00,74.1,23,only 0 of 40 bits arrived
+2026-11-11T06:12:27+08:00,74.2,0,
+2026-11-11T06:13:30+08:00,74.0,0,
+2026-11-11T06:14:34+08:00,73.1,0,
+2026-11-11T06:15:40+08:00,72.9,21,only 9 of 40 bits arrived
+2026-11-11T06:16:41+08:00,73.4,0,
+2026-11-11T06:17:46+08:00,73.2,0,
+2026-11-11T06:18:48+08:00,74.0,0,
+2026-11-11T06:19:58+08:00,73.7,0,
+2026-11-11T06:20:58+08:00,72.8,0,
+2026-11-11T06:22:12+08:00,72.9,0,
+2026-11-11T06:23:19+08:00,73.0,23,only 35 of 40 bits arrived
+2026-11-11T06:24:22+08:00,73.1,0,
+2026-11-11T06:25:30+08:00,72.8,0,
+2026-11-11T06:26:39+08:00,72.8,0,
+2026-11-11T06:27:42+08:00,72.4,0,
+2026-11-11T06:28:46+08:00,71.9,21,only 10 of 40 bits arrived
+2026-11-11T06:29:51+08:00,72.1,0,
+2026-11-11T06:30:59+08:00,72.1,0,
+2026-11-11T06:32:01+08:00,71.6,0,
+2026-11-11T06:33:01+08:00,71.8,0,
+2026-11-11T06:34:06+08:00,72.8,0,
+2026-11-11T06:35:16+08:00,72.6,0,
+2026-11-11T06:36:21+08:00,73.2,0,
+2026-11-11T06:37:21+08:00,72.1,0,
+2026-11-11T06:38:21+08:00,72.2,0,
+2026-11-11T06:39:22+08:00,73.9,0,
+2026-11-11T06:40:26+08:00,74.3,0,
+2026-11-11T06:41:35+08:00,73.7,0,
+2026-11-11T06:42:37+08:00,72.7,0,
+2026-11-11T06:43:42+08:00,81.0,0,
+2026-11-11T06:44:49+08:00,74.3,0,
+2026-11-11T06:45:53+08:00,73.7,0,
+2026-11-11T06:47:05+08:00,73.0,0,
+2026-11-11T06:48:16+08:00,72.2,21,only 38 of 40 bits arrived
+2026-11-11T06:49:35+08:00,72.2,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T06:50:40+08:00,72.2,0,
+2026-11-11T06:51:45+08:00,72.3,0,
+2026-11-11T06:52:49+08:00,72.1,0,
+2026-11-11T06:54:02+08:00,72.3,0,
+2026-11-11T06:55:07+08:00,72.7,0,
+2026-11-11T06:56:07+08:00,71.0,0,
+2026-11-11T06:57:16+08:00,71.5,0,
+2026-11-11T06:58:26+08:00,70.6,0,
+2026-11-11T06:59:30+08:00,69.5,0,
+2026-11-11T07:00:39+08:00,70.6,0,
+2026-11-11T07:01:47+08:00,71.0,0,
+2026-11-11T07:03:00+08:00,70.2,0,
+2026-11-11T07:04:05+08:00,69.8,0,
+2026-11-11T07:05:07+08:00,69.8,0,
+2026-11-11T07:06:14+08:00,69.4,0,
+2026-11-11T07:07:20+08:00,70.0,0,
+2026-11-11T07:08:26+08:00,70.1,0,
+2026-11-11T07:09:26+08:00,70.2,0,
+2026-11-11T07:10:30+08:00,70.1,0,
+2026-11-11T07:11:39+08:00,70.1,0,
+2026-11-11T07:12:44+08:00,71.1,0,
+2026-11-11T07:14:02+08:00,70.6,21,only 38 of 40 bits arrived
+2026-11-11T07:15:12+08:00,70.0,0,
+2026-11-11T07:16:24+08:00,69.8,0,
+2026-11-11T07:17:39+08:00,70.5,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T07:18:44+08:00,70.3,0,
+2026-11-11T07:19:50+08:00,70.6,0,
+2026-11-11T07:20:56+08:00,70.4,0,
+2026-11-11T07:21:59+08:00,70.5,0,
+2026-11-11T07:23:07+08:00,69.9,0,
+2026-11-11T07:24:11+08:00,70.7,0,
+2026-11-11T07:25:21+08:00,70.2,0,
+2026-11-11T07:26:23+08:00,70.8,0,
+2026-11-11T07:27:27+08:00,70.2,23,only 37 of 40 bits arrived
+2026-11-11T07:28:28+08:00,70.1,0,
+2026-11-11T07:29:37+08:00,70.0,0,
+2026-11-11T07:30:42+08:00,68.6,0,
+2026-11-11T07:31:44+08:00,68.1,0,
+2026-11-11T07:32:45+08:00,69.6,0,
+2026-11-11T07:33:51+08:00,69.9,0,
+2026-11-11T07:35:00+08:00,69.3,0,
+2026-11-11T07:36:01+08:00,70.7,0,
+2026-11-11T07:37:08+08:00,69.7,0,
+2026-11-11T07:38:13+08:00,70.2,0,
+2026-11-11T07:39:20+08:00,68.8,0,
+2026-11-11T07:40:25+08:00,69.7,0,
+2026-11-11T07:41:28+08:00,70.2,0,
+2026-11-11T07:42:41+08:00,70.6,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T07:43:56+08:00,70.1,0,
+2026-11-11T07:45:01+08:00,70.5,0,
+2026-11-11T07:46:07+08:00,70.4,0,
+2026-11-11T07:47:22+08:00,69.8,0,
+2026-11-11T07:48:28+08:00,69.7,0,
+2026-11-11T07:49:35+08:00,70.2,0,
+2026-11-11T07:50:38+08:00,70.4,0,
+2026-11-11T07:51:40+08:00,70.1,0,
+2026-11-11T07:52:47+08:00,70.1,0,
+2026-11-11T07:53:55+08:00,70.0,0,
+2026-11-11T07:54:56+08:00,75.3,0,
+2026-11-11T07:56:10+08:00,70.1,23,only 37 of 40 bits arrived
+2026-11-11T07:57:29+08:00,70.5,21,only 38 of 40 bits arrived
+2026-11-11T07:58:44+08:00,71.0,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T07:59:57+08:00,71.0,92,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:01:10+08:00,,165,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:02:24+08:00,,239,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:03:37+08:00,,312,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:04:50+08:00,,385,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:06:03+08:00,,458,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:07:16+08:00,,531,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:08:29+08:00,,605,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:09:43+08:00,,678,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:10:56+08:00,,751,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:12:09+08:00,,824,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:13:22+08:00,,897,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:14:35+08:00,,970,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:15:48+08:00,,1044,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:17:02+08:00,,1117,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:18:15+08:00,,1190,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:19:28+08:00,,1263,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:20:41+08:00,,1336,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:21:54+08:00,,1409,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:23:07+08:00,,1483,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:24:21+08:00,,1556,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:25:34+08:00,,1629,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:26:47+08:00,,1702,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:28:00+08:00,,1775,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:29:13+08:00,,1848,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:30:26+08:00,,1922,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:31:40+08:00,,1995,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:32:53+08:00,,2068,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:34:06+08:00,,2141,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:35:19+08:00,,2214,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:36:32+08:00,,2288,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:37:46+08:00,,2361,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:38:59+08:00,,2434,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:40:12+08:00,,2507,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:41:25+08:00,,2580,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:42:38+08:00,,2653,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:43:52+08:00,,2727,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:45:05+08:00,,2800,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:46:18+08:00,,2873,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:47:31+08:00,,2946,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:48:44+08:00,,3019,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:49:57+08:00,,3093,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:51:11+08:00,,3166,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:52:24+08:00,,3239,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:53:37+08:00,,3312,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:54:50+08:00,,3385,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:56:03+08:00,,3459,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:57:17+08:00,,3532,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:58:30+08:00,,3605,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T08:59:43+08:00,,3678,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:00:56+08:00,,3751,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:02:09+08:00,,3824,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:03:22+08:00,,3898,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:04:36+08:00,,3971,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:05:49+08:00,,4044,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:07:02+08:00,,4117,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:08:15+08:00,,4190,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:09:28+08:00,,4264,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:10:42+08:00,,4337,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:11:55+08:00,,4410,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:13:08+08:00,,4483,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:14:21+08:00,,4556,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:15:34+08:00,,4629,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:16:47+08:00,,4703,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:18:01+08:00,,4776,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:19:14+08:00,,4849,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:20:27+08:00,,4922,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:21:40+08:00,,4995,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:22:53+08:00,,5069,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:24:07+08:00,,5142,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:25:20+08:00,,5215,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:26:33+08:00,,5288,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:27:46+08:00,,5361,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:28:59+08:00,,5434,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:30:12+08:00,,5508,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:31:26+08:00,,5581,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:32:39+08:00,,5654,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:33:52+08:00,,5727,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:35:05+08:00,,5800,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:36:18+08:00,,5873,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:37:31+08:00,,5947,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:38:45+08:00,,6020,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:39:58+08:00,,6093,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:41:11+08:00,,6166,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:42:24+08:00,,6239,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:43:37+08:00,,6313,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:44:51+08:00,,6386,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:46:04+08:00,,6459,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:47:17+08:00,,6532,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:48:30+08:00,,6605,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:49:43+08:00,,6678,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:50:56+08:00,,6752,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:52:10+08:00,,6825,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:53:23+08:00,,6898,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:54:36+08:00,,6971,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:55:49+08:00,,7044,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:57:02+08:00,,7118,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:58:16+08:00,,7191,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T09:59:29+08:00,,7264,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:00:42+08:00,,7337,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:01:55+08:00,,7410,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:03:08+08:00,,7484,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:04:22+08:00,,7557,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:05:35+08:00,,7630,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:06:48+08:00,,7703,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:08:02+08:00,,7777,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:09:15+08:00,,7850,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:10:28+08:00,,7923,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:11:41+08:00,,7997,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:12:55+08:00,,8070,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:14:08+08:00,,8143,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:15:21+08:00,,8216,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:16:34+08:00,,8289,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:17:47+08:00,,8363,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:19:01+08:00,,8436,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:20:14+08:00,,8509,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:21:27+08:00,,8582,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:22:40+08:00,,8655,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:23:53+08:00,,8728,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:25:06+08:00,,8802,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:26:20+08:00,,8875,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:27:33+08:00,,8948,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:28:46+08:00,,9021,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:29:59+08:00,,9094,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:31:12+08:00,,9168,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:32:26+08:00,,9241,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:33:39+08:00,,9314,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:34:52+08:00,,9387,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:36:05+08:00,,9460,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:37:18+08:00,,9533,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:38:31+08:00,,9607,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:39:45+08:00,,9680,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:40:58+08:00,,9753,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:42:11+08:00,,9826,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:43:24+08:00,,9899,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:44:37+08:00,,9972,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:45:50+08:00,,10046,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:47:04+08:00,,10119,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:48:17+08:00,,10192,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:49:30+08:00,,10265,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:50:43+08:00,,10338,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:51:56+08:00,,10412,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:53:09+08:00,,10485,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:54:23+08:00,,10558,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:55:36+08:00,,10631,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:56:49+08:00,,10704,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:58:02+08:00,,10777,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T10:59:15+08:00,,10851,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:00:29+08:00,,10924,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:01:42+08:00,,10997,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:02:55+08:00,,11070,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:04:08+08:00,,11143,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:05:21+08:00,,11217,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:06:35+08:00,,11290,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:07:48+08:00,,11363,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:09:01+08:00,,11436,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:10:14+08:00,,11509,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:11:27+08:00,,11582,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:12:40+08:00,,11656,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:13:54+08:00,,11729,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:15:07+08:00,,11802,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:16:20+08:00,,11875,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:17:33+08:00,,11948,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:18:46+08:00,,12022,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:20:00+08:00,,12095,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:21:13+08:00,,12168,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:22:26+08:00,,12241,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:23:39+08:00,,12314,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:24:52+08:00,,12387,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:26:05+08:00,,12461,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:27:19+08:00,,12534,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:28:32+08:00,,12607,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:29:45+08:00,,12680,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:30:58+08:00,,12753,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:32:11+08:00,,12827,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:33:25+08:00,,12900,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:34:38+08:00,,12973,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:35:51+08:00,,13046,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:37:04+08:00,,13119,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:38:17+08:00,,13192,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:39:30+08:00,,13266,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:40:44+08:00,,13339,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:41:57+08:00,,13412,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:43:10+08:00,,13485,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:44:23+08:00,,13558,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:45:36+08:00,,13631,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:46:50+08:00,,13705,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:48:03+08:00,,13778,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:49:16+08:00,,13851,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:50:29+08:00,,13924,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:51:42+08:00,,13997,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:52:55+08:00,,14071,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:54:09+08:00,,14144,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:55:22+08:00,,14217,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:56:35+08:00,,14290,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:57:48+08:00,,14363,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T11:59:01+08:00,,14436,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:00:14+08:00,,14510,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:01:28+08:00,,14583,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:02:41+08:00,,14656,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:03:54+08:00,,14729,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:05:07+08:00,,14802,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:06:20+08:00,,14875,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:07:33+08:00,,14949,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:08:47+08:00,,15022,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:10:00+08:00,,15095,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:11:13+08:00,,15168,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:12:26+08:00,,15241,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:13:39+08:00,,15315,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:14:53+08:00,,15388,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:16:06+08:00,,15461,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:17:19+08:00,,15534,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:18:32+08:00,,15607,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:19:45+08:00,,15680,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:20:58+08:00,,15754,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:22:12+08:00,,15827,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:23:25+08:00,,15900,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:24:38+08:00,,15973,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:25:51+08:00,,16046,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:27:04+08:00,,16120,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:28:18+08:00,,16193,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:29:31+08:00,,16266,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:30:44+08:00,,16339,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:31:57+08:00,,16412,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:33:10+08:00,,16485,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:34:23+08:00,,16559,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:35:37+08:00,,16632,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:36:50+08:00,,16705,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:38:03+08:00,,16778,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:39:16+08:00,,16851,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:40:29+08:00,,16924,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:41:42+08:00,,16998,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:42:56+08:00,,17071,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:44:09+08:00,,17144,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:45:22+08:00,,17217,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:46:35+08:00,,17290,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:47:48+08:00,,17363,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:49:01+08:00,,17437,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:50:15+08:00,,17510,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:51:28+08:00,,17583,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:52:41+08:00,,17656,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:53:54+08:00,,17729,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:55:07+08:00,,17802,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:56:20+08:00,,17876,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:57:34+08:00,,17949,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T12:58:47+08:00,,18022,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:00:00+08:00,,18095,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:01:13+08:00,,18168,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:02:26+08:00,,18241,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:03:39+08:00,,18315,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:04:53+08:00,,18388,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:06:06+08:00,,18461,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:07:19+08:00,,18534,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:08:32+08:00,,18607,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:09:45+08:00,,18680,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:10:58+08:00,,18754,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:12:12+08:00,,18827,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:13:25+08:00,,18900,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:14:38+08:00,,18973,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:15:51+08:00,,19046,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:17:04+08:00,,19119,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:18:17+08:00,,19193,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:19:31+08:00,,19266,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:20:44+08:00,,19339,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:21:57+08:00,,19412,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:23:10+08:00,,19485,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:24:23+08:00,,19558,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:25:37+08:00,,19632,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:26:50+08:00,,19705,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:28:03+08:00,,19778,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:29:16+08:00,,19851,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:30:29+08:00,,19924,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:31:42+08:00,,19998,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:32:56+08:00,,20071,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:34:09+08:00,,20144,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:35:22+08:00,,20217,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:36:35+08:00,,20290,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:37:48+08:00,,20364,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:39:02+08:00,,20437,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:40:15+08:00,,20510,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:41:28+08:00,,20583,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:42:41+08:00,,20656,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:43:54+08:00,,20729,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:45:07+08:00,,20803,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:46:21+08:00,,20876,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:47:34+08:00,,20949,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:48:47+08:00,,21022,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:50:00+08:00,,21095,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:51:13+08:00,,21168,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:52:26+08:00,,21242,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:53:40+08:00,,21315,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:54:53+08:00,,21388,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:56:06+08:00,,21461,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:57:19+08:00,,21534,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:58:32+08:00,,21608,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T13:59:46+08:00,,21681,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:00:59+08:00,,21754,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:02:12+08:00,,21827,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:03:25+08:00,,21900,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:04:38+08:00,,21973,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:05:41+08:00,66.3,0,
+2026-11-11T14:06:41+08:00,67.0,0,
+2026-11-11T14:07:41+08:00,66.7,0,
+2026-11-11T14:08:50+08:00,66.3,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:09:59+08:00,67.7,23,only 38 of 40 bits arrived
+2026-11-11T14:11:02+08:00,66.2,0,
+2026-11-11T14:12:14+08:00,67.1,0,
+2026-11-11T14:13:28+08:00,67.0,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:14:42+08:00,66.8,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:15:43+08:00,64.6,0,
+2026-11-11T14:16:43+08:00,64.9,0,
+2026-11-11T14:17:44+08:00,64.8,0,
+2026-11-11T14:18:44+08:00,64.8,0,
+2026-11-11T14:19:49+08:00,65.7,0,
+2026-11-11T14:20:49+08:00,65.2,0,
+2026-11-11T14:21:49+08:00,67.0,0,
+2026-11-11T14:22:50+08:00,65.1,0,
+2026-11-11T14:23:50+08:00,65.2,0,
+2026-11-11T14:24:58+08:00,66.0,0,
+2026-11-11T14:26:08+08:00,67.1,0,
+2026-11-11T14:27:15+08:00,66.3,0,
+2026-11-11T14:28:20+08:00,65.7,0,
+2026-11-11T14:29:35+08:00,68.2,0,
+2026-11-11T14:30:36+08:00,66.0,0,
+2026-11-11T14:31:36+08:00,66.5,0,
+2026-11-11T14:32:38+08:00,67.1,0,
+2026-11-11T14:33:41+08:00,66.5,0,
+2026-11-11T14:34:45+08:00,67.2,0,
+2026-11-11T14:35:52+08:00,67.8,0,
+2026-11-11T14:37:02+08:00,67.6,0,
+2026-11-11T14:38:11+08:00,68.8,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:39:20+08:00,67.2,19,only 6 of 40 bits arrived
+2026-11-11T14:40:22+08:00,67.6,0,
+2026-11-11T14:41:28+08:00,67.2,0,
+2026-11-11T14:42:38+08:00,68.7,0,
+2026-11-11T14:43:38+08:00,67.2,0,
+2026-11-11T14:44:40+08:00,67.8,0,
+2026-11-11T14:45:41+08:00,67.8,0,
+2026-11-11T14:46:56+08:00,72.5,0,
+2026-11-11T14:48:00+08:00,68.2,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T14:49:01+08:00,67.8,0,
+2026-11-11T14:50:08+08:00,67.5,0,
+2026-11-11T14:51:14+08:00,68.6,0,
+2026-11-11T14:52:19+08:00,67.7,0,
+2026-11-11T14:53:27+08:00,68.2,0,
+2026-11-11T14:54:30+08:00,68.8,19,only 38 of 40 bits arrived
+2026-11-11T14:55:31+08:00,68.1,0,
+2026-11-11T14:56:31+08:00,67.4,0,
+2026-11-11T14:57:36+08:00,68.5,0,
+2026-11-11T14:58:38+08:00,68.1,0,
+2026-11-11T14:59:46+08:00,69.4,0,
+2026-11-11T15:00:54+08:00,66.8,0,
+2026-11-11T15:01:54+08:00,68.1,0,
+2026-11-11T15:02:56+08:00,70.0,0,
+2026-11-11T15:03:58+08:00,69.1,0,
+2026-11-11T15:05:06+08:00,67.4,0,
+2026-11-11T15:06:16+08:00,68.1,0,
+2026-11-11T15:07:18+08:00,67.9,0,
+2026-11-11T15:08:31+08:00,67.5,0,
+2026-11-11T15:09:31+08:00,67.3,0,
+2026-11-11T15:10:38+08:00,68.1,0,
+2026-11-11T15:11:38+08:00,66.6,0,
+2026-11-11T15:12:38+08:00,66.9,0,
+2026-11-11T15:13:43+08:00,67.3,0,
+2026-11-11T15:14:48+08:00,67.5,0,
+2026-11-11T15:15:51+08:00,66.6,0,
+2026-11-11T15:17:00+08:00,68.0,0,
+2026-11-11T15:18:01+08:00,68.0,0,
+2026-11-11T15:19:05+08:00,68.5,0,
+2026-11-11T15:20:13+08:00,69.2,0,
+2026-11-11T15:21:23+08:00,69.3,0,
+2026-11-11T15:22:30+08:00,69.8,0,
+2026-11-11T15:23:35+08:00,70.2,0,
+2026-11-11T15:24:36+08:00,69.6,0,
+2026-11-11T15:25:39+08:00,69.9,0,
+2026-11-11T15:26:40+08:00,69.7,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T15:27:55+08:00,69.9,0,
+2026-11-11T15:28:58+08:00,69.8,0,
+2026-11-11T15:30:07+08:00,70.3,0,
+2026-11-11T15:31:09+08:00,70.6,0,
+2026-11-11T15:32:09+08:00,71.1,0,
+2026-11-11T15:33:19+08:00,72.6,0,
+2026-11-11T15:34:25+08:00,70.2,19,only 15 of 40 bits arrived
+2026-11-11T15:35:25+08:00,70.9,0,
+2026-11-11T15:36:34+08:00,71.1,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T15:37:37+08:00,71.1,0,
+2026-11-11T15:38:37+08:00,70.9,0,
+2026-11-11T15:39:37+08:00,70.2,0,
+2026-11-11T15:40:39+08:00,70.2,0,
+2026-11-11T15:41:39+08:00,70.6,0,
+2026-11-11T15:42:42+08:00,70.5,0,
+2026-11-11T15:43:49+08:00,71.5,0,
+2026-11-11T15:44:56+08:00,71.6,0,
+2026-11-11T15:46:13+08:00,71.0,23,only 38 of 40 bits arrived
+2026-11-11T15:47:27+08:00,71.2,0,
+2026-11-11T15:48:33+08:00,72.0,0,
+2026-11-11T15:49:45+08:00,70.7,0,
+2026-11-11T15:50:59+08:00,70.8,0,
+2026-11-11T15:52:05+08:00,70.9,0,
+2026-11-11T15:53:07+08:00,70.8,0,
+2026-11-11T15:54:18+08:00,70.7,0,
+2026-11-11T15:55:22+08:00,70.8,0,
+2026-11-11T15:56:24+08:00,71.0,0,
+2026-11-11T15:57:25+08:00,70.9,21,only 22 of 40 bits arrived
+2026-11-11T15:58:33+08:00,70.8,0,
+2026-11-11T15:59:43+08:00,71.2,0,
+2026-11-11T16:00:45+08:00,71.0,0,
+2026-11-11T16:01:45+08:00,70.6,0,
+2026-11-11T16:02:50+08:00,70.9,0,
+2026-11-11T16:03:50+08:00,71.0,0,
+2026-11-11T16:04:59+08:00,71.3,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T16:06:02+08:00,71.1,0,
+2026-11-11T16:07:02+08:00,71.6,0,
+2026-11-11T16:08:04+08:00,71.3,0,
+2026-11-11T16:09:11+08:00,71.9,0,
+2026-11-11T16:10:13+08:00,71.8,0,
+2026-11-11T16:11:13+08:00,71.2,0,
+2026-11-11T16:12:15+08:00,71.0,0,
+2026-11-11T16:13:15+08:00,71.0,0,
+2026-11-11T16:14:15+08:00,71.2,0,
+2026-11-11T16:15:29+08:00,71.1,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T16:16:41+08:00,70.7,0,
+2026-11-11T16:17:47+08:00,71.2,0,
+2026-11-11T16:19:01+08:00,70.7,0,
+2026-11-11T16:20:01+08:00,71.0,0,
+2026-11-11T16:21:20+08:00,71.0,21,only 0 of 40 bits arrived
+2026-11-11T16:22:22+08:00,71.9,0,
+2026-11-11T16:23:25+08:00,72.3,0,
+2026-11-11T16:24:29+08:00,71.5,0,
+2026-11-11T16:25:31+08:00,72.8,0,
+2026-11-11T16:26:33+08:00,71.8,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T16:27:35+08:00,72.4,0,
+2026-11-11T16:28:38+08:00,72.1,0,
+2026-11-11T16:29:39+08:00,72.5,0,
+2026-11-11T16:30:40+08:00,72.3,0,
+2026-11-11T16:31:54+08:00,72.6,0,
+2026-11-11T16:32:59+08:00,72.6,0,
+2026-11-11T16:34:08+08:00,72.6,0,
+2026-11-11T16:35:11+08:00,72.9,0,
+2026-11-11T16:36:17+08:00,72.8,0,
+2026-11-11T16:37:21+08:00,73.4,0,
+2026-11-11T16:38:21+08:00,73.1,0,
+2026-11-11T16:39:32+08:00,74.1,0,
+2026-11-11T16:40:33+08:00,72.9,0,
+2026-11-11T16:41:35+08:00,72.2,0,
+2026-11-11T16:42:46+08:00,71.2,0,
+2026-11-11T16:43:50+08:00,71.2,0,
+2026-11-11T16:44:54+08:00,72.1,0,
+2026-11-11T16:45:54+08:00,72.0,0,
+2026-11-11T16:46:56+08:00,72.5,0,
+2026-11-11T16:48:03+08:00,72.8,0,
+2026-11-11T16:49:09+08:00,72.0,0,
+2026-11-11T16:50:21+08:00,71.9,0,
+2026-11-11T16:51:23+08:00,72.4,0,
+2026-11-11T16:52:33+08:00,72.0,0,
+2026-11-11T16:53:41+08:00,72.4,0,
+2026-11-11T16:54:41+08:00,72.4,0,
+2026-11-11T16:56:00+08:00,72.2,0,
+2026-11-11T16:57:17+08:00,72.5,0,
+2026-11-11T16:58:31+08:00,72.4,0,
+2026-11-11T16:59:33+08:00,72.3,0,
+2026-11-11T17:00:34+08:00,72.2,0,
+2026-11-11T17:01:39+08:00,71.9,0,
+2026-11-11T17:02:39+08:00,72.4,0,
+2026-11-11T17:03:44+08:00,72.8,0,
+2026-11-11T17:04:44+08:00,72.9,0,
+2026-11-11T17:05:44+08:00,72.9,0,
+2026-11-11T17:06:44+08:00,74.0,0,
+2026-11-11T17:07:48+08:00,73.3,24,only 0 of 40 bits arrived
+2026-11-11T17:09:01+08:00,73.3,97,only 12 of 40 bits arrived
+2026-11-11T17:10:14+08:00,,170,the check number did not match (a noisy read)
+2026-11-11T17:11:23+08:00,0.0,67,only 24 of 40 bits arrived
+2026-11-11T17:12:27+08:00,0.0,15,only 0 of 40 bits arrived
+2026-11-11T17:13:40+08:00,0.0,88,the check number did not match (a noisy read)
+2026-11-11T17:15:03+08:00,0.0,24,only 15 of 40 bits arrived
+2026-11-11T17:16:16+08:00,0.0,97,only 27 of 40 bits arrived
+2026-11-11T17:17:20+08:00,0.0,53,only 15 of 40 bits arrived
+2026-11-11T17:18:34+08:00,,126,only 39 of 40 bits arrived
+2026-11-11T17:19:47+08:00,,199,the check number did not match (a noisy read)
+2026-11-11T17:21:00+08:00,,272,the check number did not match (a noisy read)
+2026-11-11T17:22:08+08:00,0.0,44,only 26 of 40 bits arrived
+2026-11-11T17:23:21+08:00,0.0,117,only 39 of 40 bits arrived
+2026-11-11T17:24:34+08:00,,190,only 36 of 40 bits arrived
+2026-11-11T17:25:48+08:00,,263,the check number did not match (a noisy read)
+2026-11-11T17:26:56+08:00,0.0,58,only 0 of 40 bits arrived
+2026-11-11T17:28:09+08:00,,131,only 25 of 40 bits arrived
+2026-11-11T17:29:18+08:00,0.0,24,the check number did not match (a noisy read)
+2026-11-11T17:30:31+08:00,0.0,97,the check number did not match (a noisy read)
+2026-11-11T17:31:32+08:00,0.0,17,the check number did not match (a noisy read)
+2026-11-11T17:32:45+08:00,0.0,90,only 18 of 40 bits arrived
+2026-11-11T17:33:58+08:00,,163,only 0 of 40 bits arrived
+2026-11-11T17:35:07+08:00,0.0,36,the check number did not match (a noisy read)
+2026-11-11T17:36:11+08:00,0.0,24,the check number did not match (a noisy read)
+2026-11-11T17:37:24+08:00,0.0,97,the check number did not match (a noisy read)
+2026-11-11T17:38:29+08:00,0.0,0,
+2026-11-11T17:39:52+08:00,0.0,24,the check number did not match (a noisy read)
+2026-11-11T17:41:15+08:00,0.0,24,only 20 of 40 bits arrived
+2026-11-11T17:42:26+08:00,0.0,15,only 39 of 40 bits arrived
+2026-11-11T17:43:39+08:00,0.0,88,only 20 of 40 bits arrived
+2026-11-11T17:44:47+08:00,0.0,36,only 35 of 40 bits arrived
+2026-11-11T17:46:00+08:00,0.0,109,only 26 of 40 bits arrived
+2026-11-11T17:47:13+08:00,,182,the check number did not match (a noisy read)
+2026-11-11T17:48:26+08:00,,255,the check number did not match (a noisy read)
+2026-11-11T17:49:39+08:00,,328,only 0 of 40 bits arrived
+2026-11-11T17:50:52+08:00,,401,only 25 of 40 bits arrived
+2026-11-11T17:52:05+08:00,,474,only 32 of 40 bits arrived
+2026-11-11T17:53:19+08:00,,547,only 13 of 40 bits arrived
+2026-11-11T17:54:32+08:00,0.0,29,only 23 of 40 bits arrived
+2026-11-11T17:55:36+08:00,0.0,48,only 39 of 40 bits arrived
+2026-11-11T17:56:38+08:00,0.0,0,
+2026-11-11T17:57:39+08:00,0.0,61,only 22 of 40 bits arrived
+2026-11-11T17:58:52+08:00,,134,the check number did not match (a noisy read)
+2026-11-11T18:00:05+08:00,,207,the check number did not match (a noisy read)
+2026-11-11T18:01:28+08:00,0.0,24,only 14 of 40 bits arrived
+2026-11-11T18:02:36+08:00,25.6,17,only 9 of 40 bits arrived
+2026-11-11T18:03:40+08:00,0.0,0,
+2026-11-11T18:04:41+08:00,0.0,0,
+2026-11-11T18:05:49+08:00,0.0,17,the check number did not match (a noisy read)
+2026-11-11T18:06:58+08:00,0.0,17,only 0 of 40 bits arrived
+2026-11-11T18:08:06+08:00,0.0,0,
+2026-11-11T18:09:15+08:00,0.0,29,only 10 of 40 bits arrived
+2026-11-11T18:10:23+08:00,0.0,67,the check number did not match (a noisy read)
+2026-11-11T18:11:36+08:00,,140,the check number did not match (a noisy read)
+2026-11-11T18:12:37+08:00,0.0,0,
+2026-11-11T18:13:38+08:00,0.0,61,only 1 of 40 bits arrived
+2026-11-11T18:14:47+08:00,0.0,58,only 24 of 40 bits arrived
+2026-11-11T18:16:00+08:00,,131,only 14 of 40 bits arrived
+2026-11-11T18:17:13+08:00,,205,the check number did not match (a noisy read)
+2026-11-11T18:18:24+08:00,0.0,44,the check number did not match (a noisy read)
+2026-11-11T18:19:37+08:00,0.0,117,only 39 of 40 bits arrived
+2026-11-11T18:20:50+08:00,,190,only 0 of 40 bits arrived
+2026-11-11T18:22:03+08:00,,263,only 19 of 40 bits arrived
+2026-11-11T18:23:16+08:00,,336,the check number did not match (a noisy read)
+2026-11-11T18:24:24+08:00,0.0,63,only 21 of 40 bits arrived
+2026-11-11T18:25:38+08:00,,136,the check number did not match (a noisy read)
+2026-11-11T18:26:51+08:00,,209,only 0 of 40 bits arrived
+2026-11-11T18:28:04+08:00,,282,only 33 of 40 bits arrived
+2026-11-11T18:29:17+08:00,,355,only 0 of 40 bits arrived
+2026-11-11T18:30:25+08:00,0.0,53,the check number did not match (a noisy read)
+2026-11-11T18:31:38+08:00,,126,only 28 of 40 bits arrived
+2026-11-11T18:32:51+08:00,,199,only 0 of 40 bits arrived
+2026-11-11T18:34:05+08:00,,272,only 0 of 40 bits arrived
+2026-11-11T18:35:18+08:00,,345,only 22 of 40 bits arrived
+2026-11-11T18:36:31+08:00,,418,only 25 of 40 bits arrived
+2026-11-11T18:37:44+08:00,,491,only 15 of 40 bits arrived
+2026-11-11T18:38:57+08:00,,564,only 20 of 40 bits arrived
+2026-11-11T18:40:10+08:00,,637,only 21 of 40 bits arrived
+2026-11-11T18:41:23+08:00,,710,the check number did not match (a noisy read)
+2026-11-11T18:42:36+08:00,,783,only 18 of 40 bits arrived
+2026-11-11T18:43:49+08:00,,857,the check number did not match (a noisy read)
+2026-11-11T18:45:02+08:00,,930,only 26 of 40 bits arrived
+2026-11-11T18:46:15+08:00,,1003,only 10 of 40 bits arrived
+2026-11-11T18:47:28+08:00,,1076,only 10 of 40 bits arrived
+2026-11-11T18:48:35+08:00,70.7,0,
+2026-11-11T18:49:35+08:00,70.9,0,
+2026-11-11T18:50:38+08:00,70.7,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T18:51:41+08:00,71.3,0,
+2026-11-11T18:52:41+08:00,71.0,0,
+2026-11-11T18:53:46+08:00,71.2,0,
+2026-11-11T18:54:58+08:00,71.4,0,
+2026-11-11T18:55:59+08:00,71.9,0,
+2026-11-11T18:57:01+08:00,71.8,0,
+2026-11-11T18:58:11+08:00,71.8,0,
+2026-11-11T18:59:15+08:00,72.3,19,the check number did not match (a noisy read)
+2026-11-11T19:00:19+08:00,0.0,21,the check number did not match (a noisy read)
+2026-11-11T19:01:23+08:00,0.0,0,
+2026-11-11T19:02:37+08:00,0.0,29,the check number did not match (a noisy read)
+2026-11-11T19:03:51+08:00,0.0,36,only 0 of 40 bits arrived
+2026-11-11T19:05:09+08:00,0.0,24,only 1 of 40 bits arrived
+2026-11-11T19:06:13+08:00,0.0,24,only 0 of 40 bits arrived
+2026-11-11T19:07:17+08:00,0.0,0,
+2026-11-11T19:08:21+08:00,0.0,29,the check number did not match (a noisy read)
+2026-11-11T19:09:35+08:00,0.0,0,
+2026-11-11T19:10:36+08:00,0.0,0,
+2026-11-11T19:11:48+08:00,0.0,0,
+2026-11-11T19:12:59+08:00,74.1,0,
+2026-11-11T19:14:12+08:00,74.6,0,
+2026-11-11T19:15:17+08:00,74.2,0,
+2026-11-11T19:16:31+08:00,74.2,19,only 22 of 40 bits arrived
+2026-11-11T19:17:36+08:00,74.4,0,
+2026-11-11T19:18:43+08:00,74.9,0,
+2026-11-11T19:19:44+08:00,74.2,0,
+2026-11-11T19:20:48+08:00,74.6,0,
+2026-11-11T19:22:03+08:00,74.7,0,
+2026-11-11T19:23:09+08:00,75.1,0,
+2026-11-11T19:24:20+08:00,75.1,0,
+2026-11-11T19:25:24+08:00,75.1,0,
+2026-11-11T19:26:24+08:00,75.3,0,
+2026-11-11T19:27:31+08:00,75.5,0,
+2026-11-11T19:28:33+08:00,75.9,0,
+2026-11-11T19:29:41+08:00,76.4,0,
+2026-11-11T19:30:54+08:00,76.0,0,
+2026-11-11T19:32:06+08:00,75.7,0,
+2026-11-11T19:33:10+08:00,75.5,0,
+2026-11-11T19:34:10+08:00,76.0,0,
+2026-11-11T19:35:12+08:00,75.4,0,
+2026-11-11T19:36:12+08:00,75.6,0,
+2026-11-11T19:37:18+08:00,75.9,0,
+2026-11-11T19:38:19+08:00,75.9,0,
+2026-11-11T19:39:30+08:00,0.0,19,the check number did not match (a noisy read)
+2026-11-11T19:40:47+08:00,0.0,19,the check number did not match (a noisy read)
+2026-11-11T19:41:51+08:00,0.0,48,the check number did not match (a noisy read)
+2026-11-11T19:42:56+08:00,75.8,0,
+2026-11-11T19:43:56+08:00,75.8,0,
+2026-11-11T19:45:00+08:00,75.7,0,
+2026-11-11T19:46:00+08:00,75.7,0,
+2026-11-11T19:47:01+08:00,76.0,0,
+2026-11-11T19:48:07+08:00,75.8,0,
+2026-11-11T19:49:07+08:00,75.7,0,
+2026-11-11T19:50:21+08:00,75.6,0,
+2026-11-11T19:51:28+08:00,75.6,0,
+2026-11-11T19:52:31+08:00,75.8,0,
+2026-11-11T19:53:35+08:00,76.6,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T19:54:45+08:00,75.6,0,
+2026-11-11T19:55:55+08:00,76.3,0,
+2026-11-11T19:57:07+08:00,75.6,0,
+2026-11-11T19:58:13+08:00,75.9,0,
+2026-11-11T19:59:19+08:00,76.6,0,
+2026-11-11T20:00:19+08:00,76.4,0,
+2026-11-11T20:01:26+08:00,76.1,0,
+2026-11-11T20:02:28+08:00,76.6,0,
+2026-11-11T20:03:37+08:00,76.4,0,
+2026-11-11T20:04:46+08:00,76.7,38,only 36 of 40 bits arrived
+2026-11-11T20:06:08+08:00,76.8,23,only 32 of 40 bits arrived
+2026-11-11T20:07:21+08:00,76.8,96,only 37 of 40 bits arrived
+2026-11-11T20:08:34+08:00,,169,only 38 of 40 bits arrived
+2026-11-11T20:09:46+08:00,,242,only 29 of 40 bits arrived
+2026-11-11T20:10:59+08:00,,315,only 24 of 40 bits arrived
+2026-11-11T20:12:12+08:00,,387,only 33 of 40 bits arrived
+2026-11-11T20:13:25+08:00,,460,only 3 of 40 bits arrived
+2026-11-11T20:14:37+08:00,,532,only 29 of 40 bits arrived
+2026-11-11T20:15:45+08:00,76.4,0,
+2026-11-11T20:16:53+08:00,76.8,48,only 38 of 40 bits arrived
+2026-11-11T20:18:02+08:00,76.7,58,only 38 of 40 bits arrived
+2026-11-11T20:19:14+08:00,,131,only 15 of 40 bits arrived
+2026-11-11T20:20:27+08:00,,203,only 36 of 40 bits arrived
+2026-11-11T20:21:39+08:00,,276,only 38 of 40 bits arrived
+2026-11-11T20:22:52+08:00,,348,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T20:24:04+08:00,,421,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T20:25:17+08:00,,493,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T20:26:27+08:00,77.6,44,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T20:27:35+08:00,76.8,60,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T20:28:43+08:00,77.2,36,only 35 of 40 bits arrived
+2026-11-11T20:29:51+08:00,76.9,21,only 4 of 40 bits arrived
+2026-11-11T20:31:05+08:00,78.4,0,
+2026-11-11T20:32:08+08:00,77.8,0,
+2026-11-11T20:33:09+08:00,77.5,21,only 26 of 40 bits arrived
+2026-11-11T20:34:24+08:00,77.3,21,only 11 of 40 bits arrived
+2026-11-11T20:35:27+08:00,77.5,0,
+2026-11-11T20:36:29+08:00,76.7,0,
+2026-11-11T20:37:38+08:00,76.7,0,
+2026-11-11T20:38:53+08:00,78.3,14,only 39 of 40 bits arrived
+2026-11-11T20:40:03+08:00,77.3,0,
+2026-11-11T20:41:03+08:00,77.4,0,
+2026-11-11T20:42:03+08:00,76.8,0,
+2026-11-11T20:43:15+08:00,77.2,0,
+2026-11-11T20:44:18+08:00,77.0,0,
+2026-11-11T20:45:23+08:00,75.9,0,
+2026-11-11T20:46:27+08:00,75.2,0,
+2026-11-11T20:47:27+08:00,75.2,0,
+2026-11-11T20:48:27+08:00,75.1,0,
+2026-11-11T20:49:41+08:00,75.4,23,only 35 of 40 bits arrived
+2026-11-11T20:50:45+08:00,74.6,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T20:51:54+08:00,75.0,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T20:53:01+08:00,81.0,0,
+2026-11-11T20:54:01+08:00,75.1,0,
+2026-11-11T20:55:01+08:00,74.9,0,
+2026-11-11T20:56:01+08:00,74.1,0,
+2026-11-11T20:57:03+08:00,76.0,0,
+2026-11-11T20:58:15+08:00,74.0,0,
+2026-11-11T20:59:28+08:00,74.7,0,
+2026-11-11T21:00:30+08:00,74.8,0,
+2026-11-11T21:01:35+08:00,75.4,0,
+2026-11-11T21:02:35+08:00,76.2,0,
+2026-11-11T21:03:35+08:00,75.7,0,
+2026-11-11T21:04:35+08:00,76.8,0,
+2026-11-11T21:05:35+08:00,76.4,0,
+2026-11-11T21:06:47+08:00,76.6,0,
+2026-11-11T21:07:51+08:00,76.8,0,
+2026-11-11T21:08:52+08:00,76.6,0,
+2026-11-11T21:09:54+08:00,77.2,0,
+2026-11-11T21:11:18+08:00,76.5,23,only 38 of 40 bits arrived
+2026-11-11T21:12:37+08:00,76.8,21,only 39 of 40 bits arrived
+2026-11-11T21:13:40+08:00,76.8,0,
+2026-11-11T21:14:40+08:00,76.9,0,
+2026-11-11T21:15:42+08:00,76.9,0,
+2026-11-11T21:16:52+08:00,78.2,0,
+2026-11-11T21:18:00+08:00,77.8,0,
+2026-11-11T21:19:07+08:00,77.0,0,
+2026-11-11T21:20:17+08:00,76.1,0,
+2026-11-11T21:21:30+08:00,76.3,0,
+2026-11-11T21:22:31+08:00,76.7,0,
+2026-11-11T21:23:33+08:00,76.1,0,
+2026-11-11T21:24:37+08:00,76.8,0,
+2026-11-11T21:25:42+08:00,76.2,0,
+2026-11-11T21:26:46+08:00,75.6,36,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T21:27:49+08:00,75.3,0,
+2026-11-11T21:28:49+08:00,74.4,0,
+2026-11-11T21:29:54+08:00,74.8,0,
+2026-11-11T21:31:08+08:00,76.3,0,
+2026-11-11T21:32:16+08:00,74.8,0,
+2026-11-11T21:33:23+08:00,74.4,0,
+2026-11-11T21:34:32+08:00,75.6,0,
+2026-11-11T21:35:42+08:00,73.9,0,
+2026-11-11T21:36:52+08:00,73.4,0,
+2026-11-11T21:37:52+08:00,74.8,0,
+2026-11-11T21:39:02+08:00,74.8,0,
+2026-11-11T21:40:11+08:00,74.8,0,
+2026-11-11T21:41:11+08:00,75.5,0,
+2026-11-11T21:42:23+08:00,73.6,0,
+2026-11-11T21:43:23+08:00,73.1,0,
+2026-11-11T21:44:35+08:00,73.3,0,
+2026-11-11T21:45:37+08:00,72.9,0,
+2026-11-11T21:46:47+08:00,73.1,0,
+2026-11-11T21:47:47+08:00,73.6,0,
+2026-11-11T21:48:49+08:00,74.2,0,
+2026-11-11T21:49:57+08:00,72.2,0,
+2026-11-11T21:51:02+08:00,72.5,0,
+2026-11-11T21:52:04+08:00,73.0,0,
+2026-11-11T21:53:14+08:00,72.2,0,
+2026-11-11T21:54:17+08:00,71.9,0,
+2026-11-11T21:55:20+08:00,71.8,0,
+2026-11-11T21:56:30+08:00,73.1,0,
+2026-11-11T21:57:40+08:00,73.4,0,
+2026-11-11T21:58:59+08:00,72.1,0,
+2026-11-11T22:00:00+08:00,72.2,0,
+2026-11-11T22:01:13+08:00,72.2,23,only 38 of 40 bits arrived
+2026-11-11T22:02:21+08:00,71.1,0,
+2026-11-11T22:03:21+08:00,71.7,0,
+2026-11-11T22:04:21+08:00,71.2,0,
+2026-11-11T22:05:29+08:00,71.3,0,
+2026-11-11T22:06:35+08:00,71.4,0,
+2026-11-11T22:07:35+08:00,72.1,0,
+2026-11-11T22:08:48+08:00,73.0,0,
+2026-11-11T22:09:51+08:00,72.6,0,
+2026-11-11T22:11:00+08:00,72.2,0,
+2026-11-11T22:12:01+08:00,72.4,0,
+2026-11-11T22:13:01+08:00,72.4,0,
+2026-11-11T22:14:10+08:00,72.7,0,
+2026-11-11T22:15:15+08:00,72.5,0,
+2026-11-11T22:16:33+08:00,73.8,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T22:17:40+08:00,74.5,0,
+2026-11-11T22:18:48+08:00,72.2,0,
+2026-11-11T22:19:53+08:00,71.5,52,the check number did not match (a noisy read)
+2026-11-11T22:20:57+08:00,78.2,0,
+2026-11-11T22:22:00+08:00,71.3,0,
+2026-11-11T22:23:12+08:00,70.1,0,
+2026-11-11T22:24:27+08:00,71.9,0,
+2026-11-11T22:25:27+08:00,71.7,0,
+2026-11-11T22:26:32+08:00,71.6,0,
+2026-11-11T22:27:39+08:00,72.1,0,
+2026-11-11T22:28:40+08:00,71.7,0,
+2026-11-11T22:29:42+08:00,71.8,0,
+2026-11-11T22:30:43+08:00,72.1,17,only 12 of 40 bits arrived
+2026-11-11T22:31:47+08:00,70.4,0,
+2026-11-11T22:32:49+08:00,72.3,0,
+2026-11-11T22:33:49+08:00,71.4,0,
+2026-11-11T22:34:58+08:00,71.4,0,
+2026-11-11T22:36:01+08:00,71.8,0,
+2026-11-11T22:37:13+08:00,72.3,0,
+2026-11-11T22:38:20+08:00,74.3,0,
+2026-11-11T22:39:37+08:00,74.0,0,
+2026-11-11T22:40:40+08:00,71.9,0,
+2026-11-11T22:41:48+08:00,71.5,0,
+2026-11-11T22:42:57+08:00,74.2,0,
+2026-11-11T22:44:12+08:00,72.3,0,
+2026-11-11T22:45:13+08:00,73.3,23,only 37 of 40 bits arrived
+2026-11-11T22:46:18+08:00,71.2,0,
+2026-11-11T22:47:28+08:00,71.9,0,
+2026-11-11T22:48:28+08:00,72.9,0,
+2026-11-11T22:49:33+08:00,71.6,0,
+2026-11-11T22:50:40+08:00,72.2,0,
+2026-11-11T22:51:57+08:00,73.1,0,
+2026-11-11T22:53:09+08:00,72.7,0,
+2026-11-11T22:54:21+08:00,72.1,0,
+2026-11-11T22:55:31+08:00,71.9,0,
+2026-11-11T22:56:34+08:00,71.4,0,
+2026-11-11T22:57:48+08:00,72.3,0,
+2026-11-11T22:58:49+08:00,73.6,0,
+2026-11-11T22:59:51+08:00,72.3,0,
+2026-11-11T23:00:58+08:00,71.9,0,
+2026-11-11T23:01:58+08:00,72.0,0,
+2026-11-11T23:03:06+08:00,71.0,0,
+2026-11-11T23:04:08+08:00,71.0,0,
+2026-11-11T23:05:25+08:00,71.3,0,
+2026-11-11T23:06:28+08:00,70.8,0,
+2026-11-11T23:07:28+08:00,70.8,0,
+2026-11-11T23:08:41+08:00,71.3,0,
+2026-11-11T23:09:45+08:00,71.1,0,
+2026-11-11T23:10:48+08:00,71.1,0,
+2026-11-11T23:11:52+08:00,71.7,23,only 39 of 40 bits arrived
+2026-11-11T23:13:04+08:00,71.8,0,
+2026-11-11T23:14:14+08:00,71.8,0,
+2026-11-11T23:15:20+08:00,71.3,0,
+2026-11-11T23:16:20+08:00,71.5,0,
+2026-11-11T23:17:26+08:00,70.9,0,
+2026-11-11T23:18:35+08:00,71.3,21,only 27 of 40 bits arrived
+2026-11-11T23:19:36+08:00,71.2,0,
+2026-11-11T23:20:41+08:00,71.5,0,
+2026-11-11T23:21:52+08:00,71.6,14,only 34 of 40 bits arrived
+2026-11-11T23:22:52+08:00,71.3,0,
+2026-11-11T23:23:54+08:00,71.4,0,
+2026-11-11T23:24:59+08:00,71.3,0,
+2026-11-11T23:26:08+08:00,71.3,0,
+2026-11-11T23:27:11+08:00,72.1,0,
+2026-11-11T23:28:15+08:00,71.4,0,
+2026-11-11T23:29:15+08:00,71.4,0,
+2026-11-11T23:30:29+08:00,71.7,0,
+2026-11-11T23:31:34+08:00,72.1,0,
+2026-11-11T23:32:40+08:00,71.9,0,
+2026-11-11T23:33:50+08:00,71.2,0,
+2026-11-11T23:34:54+08:00,72.0,0,
+2026-11-11T23:36:06+08:00,72.5,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-11T23:37:16+08:00,71.3,0,
+2026-11-11T23:38:17+08:00,71.0,21,only 0 of 40 bits arrived
+2026-11-11T23:39:22+08:00,72.4,0,
+2026-11-11T23:40:28+08:00,72.1,0,
+2026-11-11T23:41:37+08:00,71.3,0,
+2026-11-11T23:42:42+08:00,72.2,0,
+2026-11-11T23:43:56+08:00,72.6,23,only 35 of 40 bits arrived
+2026-11-11T23:44:56+08:00,73.2,0,
+2026-11-11T23:46:01+08:00,73.3,0,
+2026-11-11T23:47:01+08:00,73.4,0,
+2026-11-11T23:48:08+08:00,73.0,0,
+2026-11-11T23:49:11+08:00,73.8,0,
+2026-11-11T23:50:14+08:00,73.9,0,
+2026-11-11T23:51:14+08:00,77.7,0,
+2026-11-11T23:52:26+08:00,74.3,0,
+2026-11-11T23:53:36+08:00,75.0,0,
+2026-11-11T23:54:44+08:00,75.0,0,
+2026-11-11T23:55:51+08:00,74.9,0,
+2026-11-11T23:57:03+08:00,75.1,0,
+2026-11-11T23:58:05+08:00,75.3,0,
+2026-11-11T23:59:20+08:00,76.3,0,

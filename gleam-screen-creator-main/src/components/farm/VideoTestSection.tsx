@@ -38,7 +38,7 @@ import { T, tr } from "@/lib/i18n";
  */
 
 /** Mirrors the API's own default, so an oversized file is refused before it travels. */
-const MAX_UPLOAD_MB = 2560;
+const MAX_UPLOAD_MB = 200;
 
 const CONCLUSION_TEXT: Record<VideoConclusion, string> = {
   no_samples: T("No frames could be read from this clip."),
@@ -67,7 +67,7 @@ const WARNING_TEXT: Record<string, string> = {
 function reason(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401) return tr("Your session ended. Sign in again, then try the clip.");
-    if (err.status === 429) return tr("Too many uploads or checks in a short time. Wait a few minutes, then try again.");
+    if (err.status === 429) return tr("Too many uploads or checks just now. Please wait a minute.");
     switch (err.message) {
       case "too_large":
         return tr("The clip is larger than the {n} MB limit.", { n: MAX_UPLOAD_MB });
@@ -310,7 +310,7 @@ export function VideoTestSection() {
           <Hint>
             {uploading
               ? tr("Uploading and reading the clip… a long clip takes a while.")
-              : tr("MP4 (H.264) works best. Up to {n} MB and 1 hour.", { n: MAX_UPLOAD_MB })}
+              : tr("MP4 (H.264) works best. Up to {n} MB and 10 minutes.", { n: MAX_UPLOAD_MB })}
           </Hint>
         </div>
 

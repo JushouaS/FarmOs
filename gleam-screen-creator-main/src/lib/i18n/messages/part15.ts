@@ -9,9 +9,9 @@ export const part15: Messages = {
     "Mag-upload ug Kinect depth recording aron susihon ang 3D weight estimation nga wala gigamit ang weighing station. Gisukod ang mga frame gamit ang samang depth-to-mass nga linya sa usa ka live nga pagbasa, ug walay gitipigan sa kasaysayan sa panon.",
   ],
   "Depth recording": ["Depth recording", "Depth recording"],
-  "A recording of the depth view, not the colour camera. Up to {n} MB and 1 hour.": [
-    "Recording ng depth view, hindi ng colour camera. Hanggang {n} MB at 1 oras.",
-    "Recording sa depth view, dili sa colour camera. Hangtod {n} MB ug 1 ka oras.",
+  "A recording of the depth view, not the colour camera. Up to {n} MB and 10 minutes.": [
+    "Recording ng depth view, hindi ng colour camera. Hanggang {n} MB at 10 minuto.",
+    "Recording sa depth view, dili sa colour camera. Hangtod {n} MB ug 10 minuto.",
   ],
   "Check weights": ["Suriin ang timbang", "Susiha ang gibug-aton"],
   "Weighing the clip…": ["Tinatimbang ang clip…", "Gitimbang ang clip…"],
@@ -48,17 +48,13 @@ export const part15: Messages = {
     "Natapos na ang iyong session. Mag-sign in ulit, saka subukan ang clip.",
     "Natapos na ang imong session. Mag-sign in pag-usab, unya sulayi ang clip.",
   ],
-  "Too many uploads or checks in a short time. Wait a few minutes, then try again.": [
-    "Masyadong maraming upload o pagsusuri sa maikling panahon. Maghintay ng ilang minuto, saka subukan ulit.",
-    "Daghan kaayo ang upload o pagsusi sa mubo nga panahon. Palihog hulat og pipila ka minuto, unya sulayi pag-usab.",
+  "Too many uploads or checks just now. Please wait a minute.": [
+    "Masyadong maraming upload o pagsusuri kanina lang. Maghintay muna ng isang minuto.",
+    "Daghan kaayo ang upload o pagsusi nga bag-o lang. Palihog hulat una og usa ka minuto.",
   ],
   "The clip is larger than the {n} MB limit.": [
     "Lampas sa {n} MB na limitasyon ang clip.",
     "Labaw sa {n} MB nga limitasyon ang clip.",
-  ],
-  "This looks like an ordinary colour video, not a Kinect depth recording, so it cannot be weighed.": [
-    "Mukhang karaniwang colour na video ito, hindi recording ng depth ng Kinect, kaya hindi ito matitimbang.",
-    "Murag kasagarang colour nga video kini, dili depth recording sa Kinect, busa dili kini mapabug-atan.",
   ],
   "The clip is longer than the limit. Cut it down and try again.": [
     "Mas mahaba ang clip kaysa limitasyon. Pupulin ito at subukan ulit.",
@@ -105,9 +101,9 @@ export const part15: Messages = {
     "Built-in na sample data ang numero sa pahinang ito. Hindi pa ito konektado sa live camera.",
     "Built-in nga sample data ang numero niini nga panid. Wala pa kini konektado sa live camera.",
   ],
-  "The share of the birds packed into a huddle: a group of 3 or more touching birds that stays together. A bird in a clump that forms and breaks up again does not count.": [
-    "Ang bahagi ng mga manok na nagsisiksikan sa isang pangkat: 3 o higit pang magkakadikit na manok na nananatiling magkasama. Hindi binibilang ang pagkumpol na nabubuo at agad ding naghihiwalay.",
-    "Ang bahin sa mga manok nga nagpundok sa usa ka grupo: 3 o labaw pa nga nagdikit nga manok nga magpabilin nga magkauban. Dili ihapon ang pagpundok nga mabuo ug dayon mabungkag.",
+  "The share of the birds packed into a huddle: a group of 5 or more touching birds that stays together. A bird in a clump that forms and breaks up again does not count.": [
+    "Ang bahagi ng mga manok na nagsisiksikan sa isang pangkat: 5 o higit pang magkakadikit na manok na nananatiling magkasama. Hindi binibilang ang pagkumpol na nabubuo at agad ding naghihiwalay.",
+    "Ang bahin sa mga manok nga nagpundok sa usa ka grupo: 5 o labaw pa nga nagdikit nga manok nga magpabilin nga magkauban. Dili ihapon ang pagpundok nga mabuo ug dayon mabungkag.",
   ],
   "8 of every 100 birds in a huddle means a risk of 8%. From 35% it raises a Huddling alert.": [
     "Kung 8 sa bawat 100 manok ang nagsisiksikan, 8% ang panganib. Mula 35%, magpapataas ito ng alerto sa Pagsisiksikan.",

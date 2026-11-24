@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { createHash } from "node:crypto";
 import { env } from "./config.js";
 import { classify, isNightAt, type BehaviorVerdict } from "./behavior.js";
 import { readLighting } from "./lighting.js";
@@ -59,21 +60,52 @@ export async function fetchAnalysis(cameraId: string): Promise<any> {
 export async function decideVerdict(
   app: FastifyInstance,
   analysis: any,
+  at = new Date(),
 ): Promise<BehaviorVerdict> {
   const lighting = await readLighting(app);
-  return classify(analysis?.metrics, {
-    night: isNightAt(new Date(), lighting),
+  const night = isNightAt(at, lighting);
+  const verdict = classify(analysis?.metrics, {
+    night,
     warnings: analysis?.warnings ?? [],
   });
+  const summary = analysis?.behaviour;
+  if (analysis?.metrics || !summary || typeof summary !== "object") return verdict;
+
+  const number = (value: unknown, fallback: number): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  const text = (value: unknown, fallback: string): string =>
+    typeof value === "string" ? value : fallback;
+  return {
+    ...verdict,
+    movement_index: number(summary.movement_index, verdict.movement_index),
+    movement_label: night ? "Sleeping" : text(summary.movement_label, verdict.movement_label),
+    movement_status: night ? "nominal" : text(summary.movement_status, verdict.movement_status),
+    huddling_risk: number(summary.huddling_risk, verdict.huddling_risk),
+    huddling_label: night ? "none" : text(summary.huddling_label, verdict.huddling_label),
+    huddling_status: night ? "nominal" : text(summary.huddling_status, verdict.huddling_status),
+    aggression_events: number(summary.aggression_events, verdict.aggression_events),
+    suppressed: night,
+    reliable: false,
+    reason: "camera_summary_only",
+  };
+}
+
+function eventUuid(eventId: string, suffix: string): string {
+  const namespace = Buffer.from(eventId.replace(/-/g, ""), "hex");
+  const digest = createHash("sha1").update(namespace).update(suffix).digest().subarray(0, 16);
+  digest[6] = (digest[6]! & 0x0f) | 0x50;
+  digest[8] = (digest[8]! & 0x3f) | 0x80;
+  const hex = digest.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**
  * Writes an /analyze result into Postgres, applying the behaviour policy first.
  *
  * Returns whether any row was written, plus the verdict that was stored.
- * Looks the camera up by id; if it has no matching `cameras` row (or the row
- * has no sensor/cohort to attach a weight sample to) the corresponding piece
- * is skipped rather than thrown.
+ * Looks the camera up by id; if it has no matching `cameras` row, no rows are
+ * written. A queued Kinect weight event is retried rather than acknowledged
+ * when its dedicated sensor has not been installed yet.
  *
  * The verdict is decided here, not by the vision service: `classify` turns the
  * raw counts into Inactive / Huddling / Sleeping and applies the night
@@ -86,9 +118,10 @@ export async function persistAnalysis(
   app: FastifyInstance,
   cameraId: string,
   analysis: any,
-  only: { detections?: boolean; clusters?: boolean } = {},
+  only: { detections?: boolean; clusters?: boolean; eventId?: string; recordedAt?: Date } = {},
 ): Promise<{ wrote: boolean; behaviour: BehaviorVerdict }> {
-  const behaviour = await decideVerdict(app, analysis);
+  const recordedAt = only.recordedAt ?? new Date();
+  const behaviour = await decideVerdict(app, analysis, recordedAt);
 
   const cameraRows = await app.sqlRead`
     SELECT id, house_id AS "houseId" FROM cameras WHERE id = ${cameraId}`;
@@ -99,37 +132,67 @@ export async function persistAnalysis(
 
   const detections: any[] =
     only.detections !== false && Array.isArray(analysis?.detections) ? analysis.detections : [];
-  for (const d of detections) {
-    const id = `D-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  for (const [index, d] of detections.entries()) {
+    const id = only.eventId
+      ? `${only.eventId}:${index}`
+      : `D-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await app.sqlWrite`
       INSERT INTO detections (id, camera_id, frame_at, box_x, box_y, box_w, box_h, behavior, estimated_weight_g, weight_confidence, flag)
-      VALUES (${id}, ${camera.id}, now(), ${d.box_x}, ${d.box_y}, ${d.box_w}, ${d.box_h}, ${d.behavior ?? "UNKNOWN"}, ${d.estimated_weight_g ?? null}, ${d.weight_confidence ?? null}, ${d.flag ?? null})`;
+      VALUES (${id}, ${camera.id}, ${recordedAt}, ${d.box_x}, ${d.box_y}, ${d.box_w}, ${d.box_h}, ${d.behavior ?? "UNKNOWN"}, ${d.estimated_weight_g ?? null}, ${d.weight_confidence ?? null}, ${d.flag ?? null})
+      ON CONFLICT (id) DO NOTHING`;
     wrote = true;
   }
 
-  await app.sqlWrite`
-    INSERT INTO behavior_snapshots (
-      camera_id, at, movement_index, movement_label, movement_status,
-      huddling_risk, huddling_label, huddling_status, aggression_events,
-      bird_count, zone_count, evaluable_count, inactive_count, huddled_count,
-      confidence, night, suppressed, reliable
-    )
-    VALUES (
-      ${camera.id}, now(), ${behaviour.movement_index}, ${behaviour.movement_label},
-      ${behaviour.movement_status}, ${behaviour.huddling_risk}, ${behaviour.huddling_label},
-      ${behaviour.huddling_status}, ${behaviour.aggression_events},
-      ${behaviour.bird_count}, ${behaviour.zone_count}, ${behaviour.evaluable_count},
-      ${behaviour.inactive_count}, ${behaviour.huddled_count}, ${behaviour.confidence},
-      ${behaviour.night}, ${behaviour.suppressed}, ${behaviour.reliable}
-    )`;
+  if (only.eventId) {
+    await app.sqlWrite`
+      INSERT INTO behavior_snapshots (
+        id, camera_id, at, movement_index, movement_label, movement_status,
+        huddling_risk, huddling_label, huddling_status, aggression_events,
+        bird_count, zone_count, evaluable_count, inactive_count, huddled_count,
+        confidence, night, suppressed, reliable
+      )
+      VALUES (
+        ${only.eventId}, ${camera.id}, ${recordedAt}, ${behaviour.movement_index}, ${behaviour.movement_label},
+        ${behaviour.movement_status}, ${behaviour.huddling_risk}, ${behaviour.huddling_label},
+        ${behaviour.huddling_status}, ${behaviour.aggression_events}, ${behaviour.bird_count},
+        ${behaviour.zone_count}, ${behaviour.evaluable_count}, ${behaviour.inactive_count},
+        ${behaviour.huddled_count}, ${behaviour.confidence}, ${behaviour.night},
+        ${behaviour.suppressed}, ${behaviour.reliable}
+      )
+      ON CONFLICT (id) DO NOTHING`;
+  } else {
+    await app.sqlWrite`
+      INSERT INTO behavior_snapshots (
+        camera_id, at, movement_index, movement_label, movement_status,
+        huddling_risk, huddling_label, huddling_status, aggression_events,
+        bird_count, zone_count, evaluable_count, inactive_count, huddled_count,
+        confidence, night, suppressed, reliable
+      )
+      VALUES (
+        ${camera.id}, ${recordedAt}, ${behaviour.movement_index}, ${behaviour.movement_label},
+        ${behaviour.movement_status}, ${behaviour.huddling_risk}, ${behaviour.huddling_label},
+        ${behaviour.huddling_status}, ${behaviour.aggression_events}, ${behaviour.bird_count},
+        ${behaviour.zone_count}, ${behaviour.evaluable_count}, ${behaviour.inactive_count},
+        ${behaviour.huddled_count}, ${behaviour.confidence}, ${behaviour.night},
+        ${behaviour.suppressed}, ${behaviour.reliable}
+      )`;
+  }
   wrote = true;
 
   const clusters: any[] =
     only.clusters !== false && Array.isArray(analysis?.clusters) ? analysis.clusters : [];
-  for (const cl of clusters) {
-    await app.sqlWrite`
-      INSERT INTO cluster_warnings (camera_id, raised_at, label, risk, box)
-      VALUES (${camera.id}, now(), ${cl.label ?? "Cluster warning"}, ${cl.risk ?? 0}, ${JSON.stringify(cl.box ?? {})}::jsonb)`;
+  for (const [index, cl] of clusters.entries()) {
+    if (only.eventId) {
+      const id = eventUuid(only.eventId, `cluster:${index}`);
+      await app.sqlWrite`
+        INSERT INTO cluster_warnings (id, camera_id, raised_at, label, risk, box)
+        VALUES (${id}, ${camera.id}, ${recordedAt}, ${cl.label ?? "Cluster warning"}, ${cl.risk ?? 0}, ${JSON.stringify(cl.box ?? {})}::jsonb)
+        ON CONFLICT (id) DO NOTHING`;
+    } else {
+      await app.sqlWrite`
+        INSERT INTO cluster_warnings (camera_id, raised_at, label, risk, box)
+        VALUES (${camera.id}, ${recordedAt}, ${cl.label ?? "Cluster warning"}, ${cl.risk ?? 0}, ${JSON.stringify(cl.box ?? {})}::jsonb)`;
+    }
     wrote = true;
   }
 
@@ -139,15 +202,26 @@ export async function persistAnalysis(
     // Best-effort lookup: any sensor on this camera's house; any cohort tied
     // to the same house. Skip the insert if neither resolves rather than
     // writing a row with a dangling/guessed foreign key.
-    const sensorRows = await app.sqlRead`
-      SELECT id FROM sensors WHERE house_id = ${camera.houseId} ORDER BY id LIMIT 1`;
+    const sensorRows = cameraId === "KINECT-01"
+      ? await app.sqlRead`SELECT id FROM sensors WHERE id = 'SN-KINECT-01' AND house_id = ${camera.houseId}`
+      : await app.sqlRead`SELECT id FROM sensors WHERE house_id = ${camera.houseId} ORDER BY id LIMIT 1`;
     if (sensorRows.count > 0) {
       const cohortRows = await app.sqlRead`
         SELECT id FROM cohorts WHERE house_id = ${camera.houseId} ORDER BY updated_at DESC LIMIT 1`;
-      await app.sqlWrite`
-        INSERT INTO volumetric_samples (sensor_id, cohort_id, calculated_mass_g, density_ratio, precision_percent, sampled_at)
-        VALUES (${sensorRows[0]!.id}, ${cohortRows[0]?.id ?? null}, ${weight.median_g ?? null}, ${null}, ${weight.confidence != null ? weight.confidence * 100 : null}, now())`;
+      if (only.eventId) {
+        const id = eventUuid(only.eventId, "volumetric-sample");
+        await app.sqlWrite`
+          INSERT INTO volumetric_samples (id, sensor_id, cohort_id, calculated_mass_g, density_ratio, precision_percent, sampled_at)
+          VALUES (${id}, ${sensorRows[0]!.id}, ${cohortRows[0]?.id ?? null}, ${weight.median_g ?? null}, ${null}, ${weight.confidence != null ? weight.confidence * 100 : null}, ${recordedAt})
+          ON CONFLICT (id) DO NOTHING`;
+      } else {
+        await app.sqlWrite`
+          INSERT INTO volumetric_samples (sensor_id, cohort_id, calculated_mass_g, density_ratio, precision_percent, sampled_at)
+          VALUES (${sensorRows[0]!.id}, ${cohortRows[0]?.id ?? null}, ${weight.median_g ?? null}, ${null}, ${weight.confidence != null ? weight.confidence * 100 : null}, ${recordedAt})`;
+      }
       wrote = true;
+    } else if (only.eventId) {
+      throw new Error(`No sensor is registered for camera ${cameraId}'s house; queued weight estimate was not stored`);
     }
   }
 

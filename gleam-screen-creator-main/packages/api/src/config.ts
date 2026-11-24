@@ -57,10 +57,12 @@ const schema = z.object({
 
   // Vision service (Flask)
   VISION_SERVICE_URL: z.string().url().default("http://127.0.0.1:5000"),
-  // Where uploaded clips (Settings > Test clip) are checked: the vision package's /video routes. The Raspberry Pi's camera
-  // service (cerebroil-stream) has no such routes, so when VISION_SERVICE_URL is the Pi, point this at a computer that runs
-  // packages/vision (it uses the same VISION_SERVICE_TOKEN). Unset = VISION_SERVICE_URL.
-  VIDEO_SERVICE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
+  // Live camera frames come from the camera stream service, which may be
+  // separate from the service used for analysis. Unset reuses VISION_SERVICE_URL.
+  CAMERA_STREAM_SERVICE_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().optional(),
+  ),
   // H-4: no insecure default — server will refuse to start without a real token.
   VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
   // The camera's RTSP link, as the fallback for the one Settings stores
@@ -81,8 +83,8 @@ const schema = z.object({
   // camera. The body is streamed to the vision service and never buffered here,
   // but the cap is enforced on this side too so an oversized upload is refused
   // before it has travelled anywhere.
-  VIDEO_MAX_MB: z.coerce.number().int().positive().default(2560),
-  VIDEO_MAX_SECONDS: z.coerce.number().positive().default(3600),
+  VIDEO_MAX_MB: z.coerce.number().int().positive().default(200),
+  VIDEO_MAX_SECONDS: z.coerce.number().positive().default(600),
   VIDEO_SWEEP_SAMPLES: z.coerce.number().int().positive().max(120).default(30),
 
   // How long the temporary password an administrator hands out keeps working if the person has not signed in.
@@ -90,9 +92,7 @@ const schema = z.object({
 
   // Where kinect_seg.py (the chicken outlines on the Kinect picture) runs: this computer, next to the Kinect.
   KINECT_SEG_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("http://127.0.0.1:8182")),
-
-  // Where the Kinect bridge listens: this computer. The API relays its stream to devices on the network (kinect-relay.ts).
-  KINECT_BRIDGE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("ws://127.0.0.1:8181/")),
+  KINECT_SEG_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(32).optional()),
 
   // Shared with the Kinect bridge (its KINECT_BRIDGE_KEY): the API hands signed-in viewers a short-lived ticket made
   // from it, and the bridge only streams depth frames to a viewer with one. Unset = the bridge needs no ticket.
@@ -135,8 +135,7 @@ const schema = z.object({
   SENSOR_SOURCE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   SENSOR_MONITOR: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "off"]).default("on")),
   SENSOR_POLL_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(5).default(60)),
-  // Every PI_BACKFILL_MINUTES (and shortly after start-up) the API reads the daily sensor files the Pi keeps and stores the
-  // readings that fall in a gap, e.g. while this computer was off (pi-backfill.ts). 0 turns it off.
+  // Refill sensor-reading gaps from the Pi's local daily CSV files. 0 turns it off.
   PI_BACKFILL_MINUTES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).default(60)),
   // A "Sensor Offline" alert is raised when a sensor that has worked has sent nothing for this many minutes.
   SENSOR_OFFLINE_MINUTES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(2).default(10)),

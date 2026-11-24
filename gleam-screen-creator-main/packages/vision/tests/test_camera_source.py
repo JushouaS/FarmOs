@@ -24,6 +24,11 @@ def test_a_named_source_keeps_its_id():
     assert camera_config.parse_sources("CAM-01=rtsp://cam/one") == {"CAM-01": "rtsp://cam/one"}
 
 
+def test_capture_feed_overrides_the_saved_camera_link(monkeypatch):
+    monkeypatch.setenv("VISION_CAPTURE_URL", "http://pi/video_feed/dahua")
+    assert camera_config.read_sources() == {"CAM-01": "http://pi/video_feed/dahua"}
+
+
 def test_unnamed_sources_are_numbered_in_order():
     assert camera_config.parse_sources("rtsp://cam/one,rtsp://cam/two") == {
         "camera_00": "rtsp://cam/one",

@@ -1,0 +1,1532 @@
+time,ammonia_ppm,error
+2026-11-16T00:00:48+08:00,6.9,
+2026-11-16T00:01:56+08:00,6.8,
+2026-11-16T00:02:58+08:00,6.7,
+2026-11-16T00:04:00+08:00,6.6,
+2026-11-16T00:05:00+08:00,7.1,
+2026-11-16T00:06:02+08:00,6.7,
+2026-11-16T00:07:09+08:00,6.6,
+2026-11-16T00:08:21+08:00,6.9,
+2026-11-16T00:09:36+08:00,6.9,
+2026-11-16T00:10:40+08:00,7.0,
+2026-11-16T00:11:45+08:00,6.8,
+2026-11-16T00:12:57+08:00,6.8,
+2026-11-16T00:13:59+08:00,6.7,
+2026-11-16T00:15:04+08:00,6.7,
+2026-11-16T00:16:09+08:00,6.9,
+2026-11-16T00:17:09+08:00,6.6,
+2026-11-16T00:18:17+08:00,7.1,
+2026-11-16T00:19:22+08:00,6.7,
+2026-11-16T00:20:40+08:00,6.7,
+2026-11-16T00:21:54+08:00,7.0,
+2026-11-16T00:23:01+08:00,6.9,
+2026-11-16T00:24:22+08:00,7.0,
+2026-11-16T00:25:22+08:00,6.6,
+2026-11-16T00:26:33+08:00,6.6,
+2026-11-16T00:27:38+08:00,6.5,
+2026-11-16T00:28:42+08:00,6.9,
+2026-11-16T00:29:52+08:00,6.8,
+2026-11-16T00:31:04+08:00,7.0,
+2026-11-16T00:32:07+08:00,7.0,
+2026-11-16T00:33:19+08:00,6.9,
+2026-11-16T00:34:22+08:00,7.0,
+2026-11-16T00:35:28+08:00,6.8,
+2026-11-16T00:36:28+08:00,6.8,
+2026-11-16T00:37:33+08:00,6.9,
+2026-11-16T00:38:42+08:00,7.3,
+2026-11-16T00:39:45+08:00,6.9,
+2026-11-16T00:40:47+08:00,6.8,
+2026-11-16T00:41:52+08:00,7.0,
+2026-11-16T00:42:58+08:00,6.7,
+2026-11-16T00:43:59+08:00,6.4,
+2026-11-16T00:45:05+08:00,6.5,
+2026-11-16T00:46:05+08:00,6.8,
+2026-11-16T00:47:17+08:00,6.7,
+2026-11-16T00:48:17+08:00,6.8,
+2026-11-16T00:49:25+08:00,6.5,
+2026-11-16T00:50:36+08:00,6.5,
+2026-11-16T00:51:43+08:00,6.5,
+2026-11-16T00:52:46+08:00,6.3,
+2026-11-16T00:53:54+08:00,6.4,
+2026-11-16T00:54:55+08:00,6.1,
+2026-11-16T00:55:59+08:00,6.2,
+2026-11-16T00:57:12+08:00,6.2,
+2026-11-16T00:58:22+08:00,6.1,
+2026-11-16T00:59:31+08:00,6.2,
+2026-11-16T01:00:35+08:00,6.1,
+2026-11-16T01:01:40+08:00,6.2,
+2026-11-16T01:02:50+08:00,6.1,
+2026-11-16T01:03:52+08:00,6.3,
+2026-11-16T01:04:52+08:00,6.3,
+2026-11-16T01:05:54+08:00,6.5,
+2026-11-16T01:06:59+08:00,6.4,
+2026-11-16T01:08:03+08:00,6.4,
+2026-11-16T01:09:05+08:00,6.8,
+2026-11-16T01:10:10+08:00,6.6,
+2026-11-16T01:11:17+08:00,6.5,
+2026-11-16T01:12:20+08:00,6.4,
+2026-11-16T01:13:23+08:00,6.4,
+2026-11-16T01:14:32+08:00,6.5,
+2026-11-16T01:15:33+08:00,6.4,
+2026-11-16T01:16:35+08:00,6.2,
+2026-11-16T01:17:40+08:00,6.5,
+2026-11-16T01:18:49+08:00,6.2,
+2026-11-16T01:19:51+08:00,6.2,
+2026-11-16T01:20:58+08:00,6.1,
+2026-11-16T01:22:02+08:00,6.2,
+2026-11-16T01:23:05+08:00,6.3,
+2026-11-16T01:24:05+08:00,6.3,
+2026-11-16T01:25:06+08:00,6.2,
+2026-11-16T01:26:08+08:00,6.1,
+2026-11-16T01:27:09+08:00,6.0,
+2026-11-16T01:28:12+08:00,6.0,
+2026-11-16T01:29:22+08:00,6.2,
+2026-11-16T01:30:38+08:00,6.4,
+2026-11-16T01:31:49+08:00,6.4,
+2026-11-16T01:32:54+08:00,6.5,
+2026-11-16T01:34:01+08:00,6.5,
+2026-11-16T01:35:04+08:00,6.4,
+2026-11-16T01:36:05+08:00,6.4,
+2026-11-16T01:37:12+08:00,6.6,
+2026-11-16T01:38:15+08:00,6.3,
+2026-11-16T01:39:23+08:00,6.2,
+2026-11-16T01:40:31+08:00,6.3,
+2026-11-16T01:41:37+08:00,6.3,
+2026-11-16T01:42:49+08:00,6.6,
+2026-11-16T01:43:52+08:00,6.5,
+2026-11-16T01:44:52+08:00,6.5,
+2026-11-16T01:45:54+08:00,6.1,
+2026-11-16T01:47:06+08:00,5.9,
+2026-11-16T01:48:10+08:00,5.9,
+2026-11-16T01:49:15+08:00,5.9,
+2026-11-16T01:50:22+08:00,6.1,
+2026-11-16T01:51:25+08:00,5.9,
+2026-11-16T01:52:39+08:00,6.0,
+2026-11-16T01:53:43+08:00,6.2,
+2026-11-16T01:54:58+08:00,6.0,
+2026-11-16T01:56:08+08:00,6.2,
+2026-11-16T01:57:10+08:00,6.2,
+2026-11-16T01:58:11+08:00,6.2,
+2026-11-16T01:59:16+08:00,6.6,
+2026-11-16T02:00:17+08:00,7.4,
+2026-11-16T02:01:21+08:00,7.0,
+2026-11-16T02:02:25+08:00,6.7,
+2026-11-16T02:03:25+08:00,6.5,
+2026-11-16T02:04:26+08:00,6.0,
+2026-11-16T02:05:31+08:00,6.1,
+2026-11-16T02:06:36+08:00,6.1,
+2026-11-16T02:07:53+08:00,6.4,
+2026-11-16T02:08:56+08:00,6.5,
+2026-11-16T02:10:00+08:00,6.4,
+2026-11-16T02:11:16+08:00,6.6,
+2026-11-16T02:12:21+08:00,6.1,
+2026-11-16T02:13:35+08:00,6.2,
+2026-11-16T02:14:44+08:00,6.1,
+2026-11-16T02:15:44+08:00,6.1,
+2026-11-16T02:16:46+08:00,6.3,
+2026-11-16T02:17:50+08:00,6.5,
+2026-11-16T02:18:59+08:00,6.3,
+2026-11-16T02:20:00+08:00,6.4,
+2026-11-16T02:21:00+08:00,6.5,
+2026-11-16T02:22:05+08:00,6.7,
+2026-11-16T02:23:07+08:00,6.3,
+2026-11-16T02:24:17+08:00,6.1,
+2026-11-16T02:25:23+08:00,6.3,
+2026-11-16T02:26:32+08:00,6.4,
+2026-11-16T02:27:46+08:00,6.5,
+2026-11-16T02:28:56+08:00,6.3,
+2026-11-16T02:30:07+08:00,6.4,
+2026-11-16T02:31:11+08:00,6.4,
+2026-11-16T02:32:12+08:00,6.0,
+2026-11-16T02:33:31+08:00,5.9,
+2026-11-16T02:34:34+08:00,5.7,
+2026-11-16T02:35:49+08:00,5.8,
+2026-11-16T02:37:03+08:00,5.8,
+2026-11-16T02:38:05+08:00,5.9,
+2026-11-16T02:39:11+08:00,6.2,
+2026-11-16T02:40:20+08:00,6.1,
+2026-11-16T02:41:25+08:00,6.1,
+2026-11-16T02:42:32+08:00,6.7,
+2026-11-16T02:43:38+08:00,6.4,
+2026-11-16T02:44:45+08:00,6.4,
+2026-11-16T02:45:54+08:00,6.2,
+2026-11-16T02:47:08+08:00,6.2,
+2026-11-16T02:48:12+08:00,5.9,
+2026-11-16T02:49:15+08:00,5.9,
+2026-11-16T02:50:23+08:00,6.0,
+2026-11-16T02:51:30+08:00,6.0,
+2026-11-16T02:52:36+08:00,6.1,
+2026-11-16T02:53:57+08:00,6.0,
+2026-11-16T02:55:09+08:00,6.7,
+2026-11-16T02:56:12+08:00,6.2,
+2026-11-16T02:57:16+08:00,6.3,
+2026-11-16T02:58:37+08:00,6.3,
+2026-11-16T02:59:38+08:00,6.3,
+2026-11-16T03:00:40+08:00,6.4,
+2026-11-16T03:01:55+08:00,6.1,
+2026-11-16T03:02:57+08:00,6.1,
+2026-11-16T03:03:58+08:00,6.1,
+2026-11-16T03:05:04+08:00,6.0,
+2026-11-16T03:06:13+08:00,6.0,
+2026-11-16T03:07:16+08:00,6.4,
+2026-11-16T03:08:25+08:00,6.0,
+2026-11-16T03:09:37+08:00,6.0,
+2026-11-16T03:10:39+08:00,5.9,
+2026-11-16T03:11:55+08:00,6.4,
+2026-11-16T03:13:10+08:00,5.9,
+2026-11-16T03:14:20+08:00,5.7,
+2026-11-16T03:15:26+08:00,5.7,
+2026-11-16T03:16:29+08:00,5.6,
+2026-11-16T03:17:33+08:00,5.5,
+2026-11-16T03:18:41+08:00,5.5,
+2026-11-16T03:19:49+08:00,5.7,
+2026-11-16T03:20:56+08:00,6.0,
+2026-11-16T03:22:00+08:00,5.8,
+2026-11-16T03:23:04+08:00,5.9,
+2026-11-16T03:24:06+08:00,5.8,
+2026-11-16T03:25:16+08:00,5.7,
+2026-11-16T03:26:25+08:00,5.8,
+2026-11-16T03:27:31+08:00,5.7,
+2026-11-16T03:28:46+08:00,5.7,
+2026-11-16T03:29:54+08:00,5.6,
+2026-11-16T03:30:56+08:00,5.6,
+2026-11-16T03:32:05+08:00,5.9,
+2026-11-16T03:33:06+08:00,6.1,
+2026-11-16T03:34:10+08:00,6.1,
+2026-11-16T03:35:16+08:00,6.1,
+2026-11-16T03:36:29+08:00,6.3,
+2026-11-16T03:37:29+08:00,6.2,
+2026-11-16T03:38:34+08:00,6.2,
+2026-11-16T03:39:46+08:00,6.3,
+2026-11-16T03:40:56+08:00,6.2,
+2026-11-16T03:42:01+08:00,6.0,
+2026-11-16T03:43:04+08:00,6.1,
+2026-11-16T03:44:14+08:00,6.2,
+2026-11-16T03:45:20+08:00,6.2,
+2026-11-16T03:46:23+08:00,6.1,
+2026-11-16T03:47:35+08:00,5.9,
+2026-11-16T03:48:35+08:00,5.9,
+2026-11-16T03:49:59+08:00,5.9,
+2026-11-16T03:50:59+08:00,5.8,
+2026-11-16T03:52:13+08:00,5.7,
+2026-11-16T03:53:14+08:00,5.7,
+2026-11-16T03:54:18+08:00,5.8,
+2026-11-16T03:55:30+08:00,5.8,
+2026-11-16T03:56:38+08:00,5.6,
+2026-11-16T03:57:38+08:00,5.6,
+2026-11-16T03:58:38+08:00,5.7,
+2026-11-16T03:59:47+08:00,5.5,
+2026-11-16T04:00:57+08:00,5.7,
+2026-11-16T04:02:02+08:00,5.7,
+2026-11-16T04:03:05+08:00,5.6,
+2026-11-16T04:04:08+08:00,5.6,
+2026-11-16T04:05:10+08:00,5.5,
+2026-11-16T04:06:18+08:00,5.7,
+2026-11-16T04:07:21+08:00,5.6,
+2026-11-16T04:08:23+08:00,5.7,
+2026-11-16T04:09:29+08:00,5.8,
+2026-11-16T04:10:36+08:00,5.7,
+2026-11-16T04:11:50+08:00,6.2,
+2026-11-16T04:12:56+08:00,6.0,
+2026-11-16T04:13:56+08:00,5.9,
+2026-11-16T04:15:00+08:00,5.8,
+2026-11-16T04:16:00+08:00,6.3,
+2026-11-16T04:17:18+08:00,6.2,
+2026-11-16T04:18:33+08:00,6.2,
+2026-11-16T04:19:47+08:00,6.2,
+2026-11-16T04:20:53+08:00,6.1,
+2026-11-16T04:21:57+08:00,6.8,
+2026-11-16T04:23:03+08:00,6.4,
+2026-11-16T04:24:03+08:00,6.4,
+2026-11-16T04:25:19+08:00,6.2,
+2026-11-16T04:26:20+08:00,6.1,
+2026-11-16T04:27:24+08:00,6.3,
+2026-11-16T04:28:37+08:00,6.2,
+2026-11-16T04:29:42+08:00,6.1,
+2026-11-16T04:30:47+08:00,6.4,
+2026-11-16T04:32:03+08:00,6.2,
+2026-11-16T04:33:18+08:00,6.0,
+2026-11-16T04:34:25+08:00,5.8,
+2026-11-16T04:35:33+08:00,5.9,
+2026-11-16T04:36:39+08:00,6.1,
+2026-11-16T04:37:44+08:00,6.2,
+2026-11-16T04:38:51+08:00,6.1,
+2026-11-16T04:39:51+08:00,6.2,
+2026-11-16T04:40:54+08:00,6.2,
+2026-11-16T04:42:12+08:00,6.3,
+2026-11-16T04:43:22+08:00,6.1,
+2026-11-16T04:44:24+08:00,6.1,
+2026-11-16T04:45:27+08:00,6.2,
+2026-11-16T04:46:27+08:00,6.1,
+2026-11-16T04:47:41+08:00,6.2,
+2026-11-16T04:48:42+08:00,6.2,
+2026-11-16T04:49:43+08:00,6.2,
+2026-11-16T04:50:45+08:00,6.5,
+2026-11-16T04:51:48+08:00,6.5,
+2026-11-16T04:53:02+08:00,6.1,
+2026-11-16T04:54:16+08:00,6.2,
+2026-11-16T04:55:24+08:00,6.3,
+2026-11-16T04:56:30+08:00,6.2,
+2026-11-16T04:57:36+08:00,6.2,
+2026-11-16T04:58:38+08:00,6.6,
+2026-11-16T04:59:47+08:00,7.2,
+2026-11-16T05:00:48+08:00,6.9,
+2026-11-16T05:01:52+08:00,6.5,
+2026-11-16T05:02:59+08:00,6.3,
+2026-11-16T05:04:12+08:00,6.4,
+2026-11-16T05:05:14+08:00,6.3,
+2026-11-16T05:06:27+08:00,6.2,
+2026-11-16T05:07:29+08:00,5.9,
+2026-11-16T05:08:33+08:00,5.9,
+2026-11-16T05:09:39+08:00,5.8,
+2026-11-16T05:10:42+08:00,5.8,
+2026-11-16T05:11:51+08:00,5.9,
+2026-11-16T05:12:57+08:00,6.2,
+2026-11-16T05:14:16+08:00,6.0,
+2026-11-16T05:15:22+08:00,6.2,
+2026-11-16T05:16:34+08:00,6.1,
+2026-11-16T05:17:36+08:00,5.9,
+2026-11-16T05:18:38+08:00,5.9,
+2026-11-16T05:19:43+08:00,5.7,
+2026-11-16T05:20:51+08:00,5.6,
+2026-11-16T05:22:01+08:00,5.8,
+2026-11-16T05:23:07+08:00,5.7,
+2026-11-16T05:24:13+08:00,5.7,
+2026-11-16T05:25:24+08:00,5.7,
+2026-11-16T05:26:26+08:00,5.7,
+2026-11-16T05:27:38+08:00,5.6,
+2026-11-16T05:28:48+08:00,5.6,
+2026-11-16T05:29:55+08:00,5.5,
+2026-11-16T05:31:07+08:00,5.5,
+2026-11-16T05:32:15+08:00,5.6,
+2026-11-16T05:33:17+08:00,5.5,
+2026-11-16T05:34:22+08:00,5.5,
+2026-11-16T05:35:24+08:00,5.6,
+2026-11-16T05:36:27+08:00,5.8,
+2026-11-16T05:37:41+08:00,6.1,
+2026-11-16T05:38:43+08:00,5.9,
+2026-11-16T05:39:55+08:00,6.0,
+2026-11-16T05:41:02+08:00,5.6,
+2026-11-16T05:42:19+08:00,5.8,
+2026-11-16T05:43:29+08:00,6.0,
+2026-11-16T05:44:29+08:00,6.2,
+2026-11-16T05:45:37+08:00,6.4,
+2026-11-16T05:46:43+08:00,6.5,
+2026-11-16T05:47:52+08:00,6.6,
+2026-11-16T05:49:04+08:00,6.3,
+2026-11-16T05:50:13+08:00,6.3,
+2026-11-16T05:51:19+08:00,6.1,
+2026-11-16T05:52:29+08:00,6.2,
+2026-11-16T05:53:29+08:00,6.5,
+2026-11-16T05:54:49+08:00,6.1,
+2026-11-16T05:55:50+08:00,5.9,
+2026-11-16T05:56:50+08:00,5.9,
+2026-11-16T05:57:50+08:00,6.2,
+2026-11-16T05:58:50+08:00,6.0,
+2026-11-16T05:59:54+08:00,6.3,
+2026-11-16T06:01:01+08:00,6.1,
+2026-11-16T06:02:13+08:00,6.2,
+2026-11-16T06:03:25+08:00,6.1,
+2026-11-16T06:04:34+08:00,5.9,
+2026-11-16T06:05:37+08:00,5.8,
+2026-11-16T06:06:42+08:00,5.8,
+2026-11-16T06:07:50+08:00,5.9,
+2026-11-16T06:08:50+08:00,6.1,
+2026-11-16T06:10:01+08:00,6.6,
+2026-11-16T06:11:20+08:00,6.5,
+2026-11-16T06:12:28+08:00,6.2,
+2026-11-16T06:13:32+08:00,6.1,
+2026-11-16T06:14:33+08:00,6.1,
+2026-11-16T06:15:33+08:00,6.1,
+2026-11-16T06:16:35+08:00,6.0,
+2026-11-16T06:17:49+08:00,5.9,
+2026-11-16T06:18:52+08:00,5.8,
+2026-11-16T06:20:01+08:00,5.8,
+2026-11-16T06:21:07+08:00,5.8,
+2026-11-16T06:22:15+08:00,5.7,
+2026-11-16T06:23:20+08:00,5.8,
+2026-11-16T06:24:23+08:00,5.8,
+2026-11-16T06:25:26+08:00,6.0,
+2026-11-16T06:26:26+08:00,6.0,
+2026-11-16T06:27:26+08:00,6.2,
+2026-11-16T06:28:33+08:00,6.2,
+2026-11-16T06:29:33+08:00,6.3,
+2026-11-16T06:30:40+08:00,6.4,
+2026-11-16T06:31:45+08:00,6.3,
+2026-11-16T06:32:51+08:00,5.9,
+2026-11-16T06:33:59+08:00,5.9,
+2026-11-16T06:35:05+08:00,5.8,
+2026-11-16T06:36:08+08:00,5.7,
+2026-11-16T06:37:08+08:00,5.8,
+2026-11-16T06:38:13+08:00,5.8,
+2026-11-16T06:39:17+08:00,5.7,
+2026-11-16T06:40:22+08:00,5.7,
+2026-11-16T06:41:27+08:00,5.6,
+2026-11-16T06:42:31+08:00,5.9,
+2026-11-16T06:43:44+08:00,5.9,
+2026-11-16T06:44:57+08:00,5.7,
+2026-11-16T06:46:10+08:00,5.6,
+2026-11-16T06:47:24+08:00,5.7,
+2026-11-16T06:48:37+08:00,5.9,
+2026-11-16T06:49:50+08:00,5.9,
+2026-11-16T06:51:03+08:00,6.0,
+2026-11-16T06:52:16+08:00,6.1,
+2026-11-16T06:53:30+08:00,6.0,
+2026-11-16T06:54:43+08:00,6.2,
+2026-11-16T06:55:56+08:00,5.7,
+2026-11-16T06:57:09+08:00,5.7,
+2026-11-16T06:58:22+08:00,5.6,
+2026-11-16T06:59:35+08:00,5.5,
+2026-11-16T07:00:49+08:00,5.5,
+2026-11-16T07:02:02+08:00,5.6,
+2026-11-16T07:03:15+08:00,5.4,
+2026-11-16T07:04:28+08:00,6.2,
+2026-11-16T07:05:41+08:00,6.2,
+2026-11-16T07:06:54+08:00,5.8,
+2026-11-16T07:08:08+08:00,5.8,
+2026-11-16T07:09:21+08:00,6.0,
+2026-11-16T07:10:34+08:00,5.8,
+2026-11-16T07:11:47+08:00,5.8,
+2026-11-16T07:13:00+08:00,5.8,
+2026-11-16T07:14:14+08:00,5.9,
+2026-11-16T07:15:27+08:00,6.0,
+2026-11-16T07:16:40+08:00,5.8,
+2026-11-16T07:17:53+08:00,5.7,
+2026-11-16T07:19:06+08:00,5.7,
+2026-11-16T07:20:20+08:00,5.6,
+2026-11-16T07:21:33+08:00,5.4,
+2026-11-16T07:22:46+08:00,5.3,
+2026-11-16T07:23:59+08:00,5.5,
+2026-11-16T07:25:12+08:00,5.8,
+2026-11-16T07:26:26+08:00,5.8,
+2026-11-16T07:27:39+08:00,5.9,
+2026-11-16T07:28:52+08:00,5.6,
+2026-11-16T07:30:05+08:00,5.5,
+2026-11-16T07:31:18+08:00,5.4,
+2026-11-16T07:32:32+08:00,5.6,
+2026-11-16T07:33:45+08:00,5.5,
+2026-11-16T07:34:58+08:00,5.3,
+2026-11-16T07:36:11+08:00,5.4,
+2026-11-16T07:37:24+08:00,5.5,
+2026-11-16T07:38:38+08:00,5.5,
+2026-11-16T07:39:51+08:00,5.4,
+2026-11-16T07:41:04+08:00,5.9,
+2026-11-16T07:42:17+08:00,6.1,
+2026-11-16T07:43:30+08:00,5.9,
+2026-11-16T07:44:44+08:00,5.8,
+2026-11-16T07:45:57+08:00,5.5,
+2026-11-16T07:47:10+08:00,5.5,
+2026-11-16T07:48:23+08:00,6.2,
+2026-11-16T07:49:37+08:00,6.2,
+2026-11-16T07:50:50+08:00,5.7,
+2026-11-16T07:52:03+08:00,5.8,
+2026-11-16T07:53:16+08:00,5.8,
+2026-11-16T07:54:30+08:00,5.9,
+2026-11-16T07:55:43+08:00,5.5,
+2026-11-16T07:56:56+08:00,5.9,
+2026-11-16T07:58:09+08:00,5.7,
+2026-11-16T07:59:22+08:00,5.9,
+2026-11-16T08:00:36+08:00,5.9,
+2026-11-16T08:01:49+08:00,6.2,
+2026-11-16T08:03:02+08:00,6.2,
+2026-11-16T08:04:15+08:00,6.6,
+2026-11-16T08:05:28+08:00,6.4,
+2026-11-16T08:06:42+08:00,6.1,
+2026-11-16T08:07:55+08:00,5.6,
+2026-11-16T08:09:08+08:00,5.8,
+2026-11-16T08:10:21+08:00,5.8,
+2026-11-16T08:11:35+08:00,5.7,
+2026-11-16T08:12:48+08:00,5.5,
+2026-11-16T08:14:01+08:00,5.4,
+2026-11-16T08:15:14+08:00,5.4,
+2026-11-16T08:16:28+08:00,5.5,
+2026-11-16T08:17:41+08:00,5.4,
+2026-11-16T08:18:54+08:00,5.6,
+2026-11-16T08:20:07+08:00,5.6,
+2026-11-16T08:21:20+08:00,5.3,
+2026-11-16T08:22:34+08:00,5.5,
+2026-11-16T08:23:47+08:00,5.2,
+2026-11-16T08:25:00+08:00,5.2,
+2026-11-16T08:26:13+08:00,5.4,
+2026-11-16T08:27:27+08:00,5.4,
+2026-11-16T08:28:40+08:00,5.2,
+2026-11-16T08:29:53+08:00,5.0,
+2026-11-16T08:31:06+08:00,4.9,
+2026-11-16T08:32:19+08:00,4.9,
+2026-11-16T08:33:33+08:00,5.3,
+2026-11-16T08:34:46+08:00,5.7,
+2026-11-16T08:35:59+08:00,5.8,
+2026-11-16T08:37:12+08:00,6.0,
+2026-11-16T08:38:26+08:00,5.4,
+2026-11-16T08:39:39+08:00,5.8,
+2026-11-16T08:40:52+08:00,5.6,
+2026-11-16T08:42:05+08:00,5.6,
+2026-11-16T08:43:19+08:00,5.3,
+2026-11-16T08:44:32+08:00,5.1,
+2026-11-16T08:45:45+08:00,5.2,
+2026-11-16T08:46:58+08:00,5.1,
+2026-11-16T08:48:12+08:00,4.8,
+2026-11-16T08:49:25+08:00,4.8,
+2026-11-16T08:50:38+08:00,4.7,
+2026-11-16T08:51:51+08:00,4.7,
+2026-11-16T08:53:05+08:00,4.8,
+2026-11-16T08:54:18+08:00,4.9,
+2026-11-16T08:55:31+08:00,4.9,
+2026-11-16T08:56:44+08:00,4.8,
+2026-11-16T08:57:58+08:00,5.5,
+2026-11-16T08:59:11+08:00,5.6,
+2026-11-16T09:00:24+08:00,5.0,
+2026-11-16T09:01:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:02:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:03:42+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:04:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:05:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:06:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:06:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:07:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:08:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:08:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:10:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:10:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:11:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:12:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:13:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:13:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:14:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:15:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:15:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:17:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:17:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:18:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:19:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:20:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:20:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:21:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:22:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:23:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:24:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:25:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:25:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:26:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:27:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:27:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:29:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:29:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:30:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:31:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:32:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:32:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:33:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:34:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:34:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:36:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:36:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:37:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:38:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:39:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:39:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:40:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:41:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:41:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:43:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:43:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:44:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:45:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:46:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:46:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:47:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:48:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:49:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:50:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:51:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:51:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:52:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:53:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:53:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:55:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:55:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:56:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:57:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:58:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:58:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T09:59:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:00:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:00:55+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:02:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:02:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:03:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:04:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:05:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:05:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:06:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:07:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:07:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:09:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:09:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:10:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:11:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:12:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:12:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:13:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:14:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:15:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:16:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:17:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:17:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:18:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:19:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:19:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:21:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:21:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:22:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:23:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:24:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:24:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:25:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:26:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:26:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:28:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:28:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:29:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:30:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:31:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:31:38+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:32:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:33:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:34:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:35:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:35:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:36:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:37:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:38:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:38:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:39:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:40:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:41:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:42:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:43:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:43:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:44:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:45:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:45:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:47:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:47:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:48:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:49:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:50:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:50:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:51:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:52:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:52:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:54:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:54:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:55:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:56:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:57:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:57:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:58:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:59:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T10:59:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:01:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:01:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:02:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:03:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:04:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:04:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:05:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:06:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:07:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:08:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:09:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:09:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:10:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:11:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:11:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:13:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:13:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:14:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:15:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:16:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:16:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:17:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:18:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:18:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:20:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:20:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:21:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:22:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:23:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:23:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:24:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:25:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:25:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:27:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:27:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:28:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:29:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:30:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:30:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:31:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:32:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:33:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:34:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:34:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:35:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:36:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:37:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:37:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:38:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:39:42+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:40:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:41:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:42:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:42:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:43:42+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:44:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:44:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:46:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:46:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:47:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:48:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:49:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:49:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:50:47+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:51:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:51:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:53:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:53:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:54:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:55:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:56:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:56:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:57:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:58:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T11:59:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:00:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:00:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:01:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:02:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:03:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:03:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:04:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:05:42+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:06:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:07:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:08:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:08:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:09:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:10:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:10:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:12:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:12:47+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:13:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:14:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:15:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:15:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:16:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:17:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:17:55+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:19:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:19:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:20:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:21:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:22:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:22:38+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:23:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:24:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:24:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:26:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:26:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:27:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:28:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:29:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:29:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:30:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:31:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:32:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:33:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:34:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:34:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:35:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:36:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:36:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:38:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:38:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:39:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:40:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:41:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:41:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:42:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:43:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:43:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:45:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:45:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:46:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:47:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:48:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:48:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:49:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:50:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:50:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:52:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:52:55+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:53:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:54:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:55:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:55:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:56:55+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:57:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:58:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T12:59:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:00:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:00:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:01:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:02:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:02:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:04:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:04:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:05:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:06:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:07:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:07:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:08:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:09:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:09:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:11:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:11:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:12:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:13:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:14:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:14:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:15:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:16:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:16:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:18:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:18:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:19:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:20:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:21:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:21:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:22:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:23:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:24:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:25:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:26:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:26:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:27:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:28:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:28:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:30:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:30:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:31:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:32:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:33:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:33:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:34:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:35:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:35:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:37:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:37:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:38:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:39:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:40:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:40:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:41:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:42:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:43:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:44:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:44:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:45:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:46:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:47:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:47:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:48:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:49:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:50:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:51:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:52:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:52:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:53:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:54:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:54:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:56:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:56:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:57:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:58:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:59:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T13:59:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:00:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:01:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:01:55+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:03:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:03:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:04:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:05:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:06:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:06:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:07:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:08:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:09:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:10:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:10:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:11:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:12:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:13:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:13:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:14:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:15:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:16:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:17:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:18:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:18:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:19:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:20:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:20:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:22:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:22:47+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:23:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:24:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:25:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:25:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:26:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:27:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:27:55+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:29:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:29:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:30:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:31:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:32:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:32:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:33:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:34:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:35:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:36:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:36:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:37:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:38:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:39:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:39:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:40:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:41:42+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:42:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:43:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:44:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:44:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:45:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:46:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:46:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:48:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:48:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:49:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:50:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:51:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:51:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:52:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:53:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:53:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:55:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:55:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:56:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:57:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:58:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:58:38+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T14:59:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:00:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:01:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:02:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:02:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:03:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:04:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:05:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:05:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:06:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:07:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:08:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:09:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:10:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:10:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:11:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:12:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:12:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:14:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:14:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:15:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:16:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:17:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:17:33+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:18:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:19:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:19:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:21:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:21:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:22:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:23:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:24:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:24:38+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:25:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:26:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:26:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:28:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:28:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:29:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:30:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:31:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:31:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:32:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:33:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:34:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:35:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:36:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:36:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:37:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:38:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:38:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:40:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:40:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:41:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:42:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:43:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:43:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:44:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:45:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:45:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:47:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:47:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:48:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:49:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:50:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:50:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:51:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:52:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:52:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:54:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:54:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:55:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:56:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:57:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:57:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:58:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T15:59:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:00:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:01:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:02:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:02:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:03:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:04:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:04:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:06:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:06:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:07:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:08:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:09:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:09:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:10:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:11:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:11:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:13:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:13:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:14:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:15:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:16:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:16:38+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:17:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:18:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:19:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:20:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:20:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:21:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:22:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:23:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:23:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:24:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:25:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:26:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:27:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:28:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:28:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:29:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:30:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:30:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:32:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:32:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:33:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:34:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:35:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:35:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:36:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:37:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:37:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:39:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:39:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:40:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:41:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:42:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:42:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:43:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:44:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:44:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:46:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:46:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:47:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:48:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:49:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:49:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:50:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:51:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:52:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:53:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:54:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:54:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:55:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:56:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:56:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:58:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:58:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T16:59:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:00:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:01:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:01:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:02:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:03:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:03:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:05:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:05:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:06:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:07:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:08:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:08:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:09:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:10:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:10:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:12:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:12:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:13:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:14:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:15:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:15:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:16:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:17:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:18:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:19:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:20:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:20:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:21:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:22:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:22:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:24:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:24:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:25:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:26:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:27:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:27:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:28:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:29:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:29:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:31:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:31:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:32:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:33:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:34:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:34:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:35:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:36:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:36:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:38:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:38:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:39:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:40:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:41:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:41:42+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:42:55+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:43:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:44:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:45:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:46:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:46:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:47:38+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:48:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:48:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:49:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:50:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:51:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:52:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:53:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:53:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:54:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:55:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:55:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:57:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:57:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:58:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T17:59:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:00:11+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:00:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:01:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:02:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:02:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:04:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:04:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:05:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:06:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:07:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:07:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:08:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:09:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:10:03+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:11:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:12:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:12:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:13:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:14:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:14:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:15:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:16:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:17:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:18:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:19:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:19:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:20:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:21:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:21:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:23:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:23:47+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:24:12+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:25:25+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:26:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:26:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:27:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:28:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:28:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:30:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:30:53+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:31:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:32:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:33:15+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:33:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:34:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:35:36+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:36:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:37:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:37:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:38:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:39:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:40:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:40:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:41:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:42:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:43:05+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:44:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:45:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:45:27+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:46:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:47:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:47:49+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:49:02+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:49:46+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:50:10+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:51:24+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:52:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:52:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:53:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:54:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:54:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:56:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:56:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:57:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:58:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:59:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T18:59:37+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:00:50+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:01:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:01:59+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:03:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:03:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:04:21+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:05:34+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:06:18+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:06:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:07:56+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:08:40+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:09:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:10:17+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:11:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:11:26+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:12:39+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:13:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:13:48+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:15:01+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:15:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:16:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:17:23+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:18:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:18:32+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:19:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:20:29+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:20:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:22:07+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:22:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:23:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:24:30+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:25:14+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:25:38+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:26:51+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:27:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:28:00+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:29:13+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:29:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:30:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:31:35+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:32:19+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:32:45+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:33:58+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:34:42+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:35:09+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:36:22+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:37:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:37:31+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:38:44+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:39:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:39:54+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:41:08+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:41:52+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:42:16+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:42:47+08:00,,no ammonia sensor connected
+2026-11-16T19:43:51+08:00,,no ammonia sensor connected
+2026-11-16T19:46:42+08:00,,no ammonia sensor connected
+2026-11-16T19:47:43+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:48:57+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:49:41+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:50:06+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:51:20+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:52:04+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:52:28+08:00,,ammonia sensor 'mq137_a3' is not supported yet
+2026-11-16T19:56:33,27.2,100.0,2.15
+2026-11-16T19:57:36,26.9,100.0,2.35
+2026-11-16T19:58:45,27.5,100.0,2.24
+2026-11-16T19:59:45,27.1,100.0,2.16
+2026-11-16T20:00:57,27.0,100.0,2.30
+2026-11-16T20:01:57,26.8,100.0,2.26
+2026-11-16T20:03:00,26.8,100.0,2.62
+2026-11-16T20:04:12,26.8,100.0,2.58
+2026-11-16T20:05:14,26.7,100.0,2.41
+2026-11-16T20:06:17,26.7,100.0,2.08
+2026-11-16T20:07:22,26.7,100.0,2.27
+2026-11-16T20:08:33,26.7,100.0,2.65
+2026-11-16T20:09:40,26.6,100.0,2.75
+2026-11-16T20:10:45,26.6,100.0,2.25
+2026-11-16T20:11:48,26.5,100.0,2.06
+2026-11-16T20:12:53,26.5,100.0,2.19
+2026-11-16T20:13:57,26.6,100.0,2.22
+2026-11-16T20:15:27,26.5,100.0,1.83
+2026-11-16T20:16:28,26.5,100.0,1.95
+2026-11-16T20:17:28,26.6,100.0,2.09
+2026-11-16T20:18:28,26.8,100.0,2.26
+2026-11-16T20:19:38,26.6,100.0,1.96
+2026-11-16T20:20:38,26.5,100.0,2.35
+2026-11-16T20:21:38,26.4,100.0,1.96
+2026-11-16T20:22:47,26.2,100.0,2.10
+2026-11-16T20:23:50,26.2,100.0,1.87
+2026-11-16T20:24:53,26.2,100.0,1.86
+2026-11-16T20:26:00,26.2,100.0,2.33
+2026-11-16T20:27:02,26.2,100.0,2.13
+2026-11-16T20:28:09,26.2,100.0,2.23
+2026-11-16T20:29:14,26.3,100.0,1.94
+2026-11-16T20:30:14,26.3,100.0,1.85
+2026-11-16T20:31:17,26.3,100.0,1.83
+2026-11-16T20:32:17,26.4,100.0,2.16
+2026-11-16T20:33:17,26.3,100.0,2.04
+2026-11-16T20:34:18,26.3,100.0,1.68
+2026-11-16T20:35:20,26.2,100.0,1.98
+2026-11-16T20:36:20,26.2,100.0,2.54
+2026-11-16T20:37:21,26.1,100.0,2.37
+2026-11-16T20:38:23,26.1,100.0,2.01
+2026-11-16T20:39:26,26.1,100.0,2.20
+2026-11-16T20:40:26,26.1,100.0,2.24
+2026-11-16T20:41:26,26.1,100.0,2.18
+2026-11-16T20:42:27,26.2,100.0,2.30
+2026-11-16T20:43:27,26.2,100.0,2.06
+2026-11-16T20:44:34,26.1,100.0,2.10
+2026-11-16T20:45:39,26.1,100.0,1.83
+2026-11-16T20:46:46,26.1,100.0,1.84
+2026-11-16T20:47:46,26.0,100.0,1.97
+2026-11-16T20:48:46,25.9,100.0,1.58
+2026-11-16T20:49:47,25.9,100.0,1.55
+2026-11-16T20:50:58,25.9,100.0,1.67
+2026-11-16T20:51:59,25.9,100.0,1.83
+2026-11-16T20:52:59,25.9,100.0,1.50
+2026-11-16T20:53:59,25.8,100.0,1.78
+2026-11-16T20:55:09,25.8,100.0,1.75
+2026-11-16T20:56:11,25.8,100.0,1.94
+2026-11-16T20:57:14,25.9,100.0,1.54
+2026-11-16T20:58:23,26.0,100.0,1.53
+2026-11-16T20:59:23,26.0,100.0,1.77
+2026-11-16T21:00:37,26.2,100.0,1.78
+2026-11-16T21:01:37,26.3,100.0,2.25
+2026-11-16T21:02:38,26.2,100.0,1.99
+2026-11-16T21:03:38,26.0,100.0,1.71
+2026-11-16T21:04:38,26.0,100.0,1.74
+2026-11-16T21:05:45,26.1,100.0,2.11
+2026-11-16T21:06:50,26.0,100.0,2.01
+2026-11-16T21:07:57,26.0,100.0,1.63
+2026-11-16T21:09:00,26.0,100.0,1.63
+2026-11-16T21:10:02,26.1,100.0,1.87
+2026-11-16T21:11:05,26.1,100.0,2.12
+2026-11-16T21:12:05,26.0,100.0,2.00
+2026-11-16T21:13:14,26.2,100.0,2.28
+2026-11-16T21:14:15,26.1,100.0,2.41
+2026-11-16T21:15:24,26.0,100.0,2.08
+2026-11-16T21:16:24,26.1,100.0,3.06
+2026-11-16T21:17:25,26.0,100.0,2.47
+2026-11-16T21:18:25,26.0,100.0,2.32
+2026-11-16T21:19:25,25.9,100.0,2.28
+2026-11-16T21:20:28,25.9,100.0,2.38
+2026-11-16T21:21:37,25.9,100.0,2.44
+2026-11-16T21:22:37,25.9,100.0,2.22
+2026-11-16T21:23:47,25.9,100.0,1.91
+2026-11-16T21:24:49,25.9,100.0,2.01
+2026-11-16T21:25:59,25.9,100.0,1.81
+2026-11-16T21:26:59,25.8,100.0,1.97
+2026-11-16T21:27:59,25.8,100.0,2.15
+2026-11-16T21:29:02,25.8,100.0,2.35
+2026-11-16T21:30:02,25.8,100.0,2.27
+2026-11-16T21:31:02,25.7,100.0,2.36
+2026-11-16T21:32:07,25.7,100.0,2.54
+2026-11-16T21:33:14,25.7,100.0,2.54
+2026-11-16T21:34:17,25.7,100.0,2.68
+2026-11-16T21:35:44,25.7,100.0,2.89
+2026-11-16T21:36:53,25.7,100.0,2.89
+2026-11-16T21:37:56,25.9,100.0,2.93
+2026-11-16T21:39:05,25.9,100.0,3.30
+2026-11-16T21:40:06,25.9,100.0,3.04
+2026-11-16T21:41:08,26.0,100.0,3.18
+2026-11-16T21:42:17,26.1,100.0,3.30
+2026-11-16T21:43:18,26.0,100.0,3.09
+2026-11-16T21:44:23,25.8,100.0,3.26
+2026-11-16T21:45:30,25.9,100.0,3.29
+2026-11-16T21:46:32,25.9,100.0,3.02
+2026-11-16T21:47:33,25.8,100.0,3.11
+2026-11-16T21:48:33,25.9,100.0,2.46
+2026-11-16T21:49:38,25.9,100.0,2.54
+2026-11-16T21:50:47,25.8,100.0,2.56
+2026-11-16T21:51:47,25.8,100.0,2.59
+2026-11-16T21:52:48,25.8,100.0,2.47
+2026-11-16T21:53:50,25.8,100.0,2.27
+2026-11-16T21:54:50,25.8,100.0,2.05
+2026-11-16T21:55:51,25.8,100.0,2.01
+2026-11-16T21:56:53,25.8,100.0,1.80
+2026-11-16T21:57:56,25.7,100.0,2.08
+2026-11-16T21:58:56,25.6,100.0,1.93
+2026-11-16T21:59:56,25.7,100.0,1.97
+2026-11-16T22:00:57,25.7,100.0,1.88
+2026-11-16T22:01:57,25.6,100.0,1.86
+2026-11-16T22:02:57,25.7,100.0,2.14
+2026-11-16T22:04:04,25.8,100.0,3.05
+2026-11-16T22:05:20,25.7,100.0,3.10
+2026-11-16T22:06:23,25.7,100.0,2.30
+2026-11-16T22:07:32,25.6,100.0,2.23
+2026-11-16T22:08:32,25.6,100.0,2.45
+2026-11-16T22:09:33,25.6,100.0,2.33
+2026-11-16T22:10:35,25.6,100.0,2.42
+2026-11-16T22:11:42,25.6,100.0,2.46
+2026-11-16T22:12:43,25.5,100.0,2.43
+2026-11-16T22:13:45,25.5,100.0,2.37
+2026-11-16T22:14:48,25.6,100.0,2.95
+2026-11-16T22:15:50,25.6,100.0,2.83
+2026-11-16T22:16:51,25.6,100.0,2.80
+2026-11-16T22:17:51,25.5,100.0,2.75
+2026-11-16T22:18:51,25.5,100.0,2.91
+2026-11-16T22:19:51,25.5,100.0,3.35
+2026-11-16T22:21:03,25.5,100.0,3.36
+2026-11-16T22:22:15,25.6,100.0,3.11
+2026-11-16T22:23:22,25.6,100.0,3.19
+2026-11-16T22:24:22,25.6,100.0,2.94
+2026-11-16T22:25:24,25.7,100.0,3.15
+2026-11-16T22:26:25,25.7,100.0,2.72
+2026-11-16T22:27:25,25.5,100.0,2.44
+2026-11-16T22:28:37,25.4,100.0,2.30
+2026-11-16T22:29:37,25.3,100.0,2.50
+2026-11-16T22:30:37,25.4,100.0,2.81
+2026-11-16T22:31:51,25.4,100.0,2.59
+2026-11-16T22:33:00,25.5,100.0,2.48
+2026-11-16T22:34:01,25.4,100.0,2.18
+2026-11-16T22:35:01,25.3,100.0,2.13
+2026-11-16T22:36:12,25.2,100.0,2.25
+2026-11-16T22:37:31,25.2,100.0,3.07
+2026-11-16T22:38:33,25.3,100.0,2.61
+2026-11-16T22:39:50,25.2,100.0,2.62
+2026-11-16T22:40:54,25.2,100.0,2.42
+2026-11-16T22:41:57,25.2,100.0,2.26
+2026-11-16T22:42:57,25.2,100.0,2.45
+2026-11-16T22:43:57,25.1,100.0,2.20
+2026-11-16T22:44:58,25.0,100.0,2.03
+2026-11-16T22:45:58,25.1,100.0,2.14
+2026-11-16T22:46:58,25.1,100.0,2.13
+2026-11-16T22:48:10,25.1,100.0,2.10
+2026-11-16T22:49:10,25.0,100.0,2.34
+2026-11-16T22:50:10,25.0,100.0,2.08
+2026-11-16T22:51:15,25.1,100.0,1.92
+2026-11-16T22:52:15,25.1,100.0,2.28
+2026-11-16T22:53:16,25.1,100.0,2.14
+2026-11-16T22:54:30,25.0,100.0,2.04
+2026-11-16T22:55:34,25.1,100.0,1.95
+2026-11-16T22:56:57,25.2,100.0,2.31
+2026-11-16T22:57:58,25.1,100.0,2.61
+2026-11-16T22:58:58,25.2,100.0,2.82
+2026-11-16T23:00:00,25.2,100.0,2.98
+2026-11-16T23:01:07,25.2,100.0,2.86
+2026-11-16T23:02:19,25.3,100.0,2.83
+2026-11-16T23:03:19,25.4,100.0,2.84
+2026-11-16T23:04:20,25.4,100.0,2.84
+2026-11-16T23:05:24,25.3,100.0,2.78
+2026-11-16T23:06:25,25.2,100.0,2.54
+2026-11-16T23:07:25,25.2,100.0,2.41
+2026-11-16T23:08:25,25.1,100.0,2.64
+2026-11-16T23:09:35,25.1,100.0,3.39
+2026-11-16T23:10:35,25.0,100.0,2.88
+2026-11-16T23:11:46,25.0,100.0,2.87
+2026-11-16T23:12:47,24.9,100.0,2.50
+2026-11-16T23:13:49,24.9,100.0,2.66
+2026-11-16T23:14:50,24.9,100.0,2.83
+2026-11-16T23:15:50,24.9,100.0,2.61
+2026-11-16T23:16:50,25.1,100.0,3.20
+2026-11-16T23:17:50,25.2,100.0,3.31
+2026-11-16T23:18:53,25.2,100.0,3.00
+2026-11-16T23:20:02,25.2,100.0,3.11
+2026-11-16T23:21:05,25.1,100.0,3.30
+2026-11-16T23:22:10,25.1,100.0,2.74
+2026-11-16T23:23:21,25.1,100.0,2.72
+2026-11-16T23:24:21,25.0,100.0,2.74
+2026-11-16T23:25:24,25.1,100.0,2.61
+2026-11-16T23:26:24,25.1,100.0,3.06
+2026-11-16T23:27:27,25.0,100.0,4.25
+2026-11-16T23:28:27,24.9,100.0,3.25
+2026-11-16T23:29:27,24.8,100.0,3.22
+2026-11-16T23:30:32,24.8,100.0,2.62
+2026-11-16T23:31:32,24.9,100.0,2.63
+2026-11-16T23:32:42,25.0,100.0,2.83
+2026-11-16T23:33:42,24.8,100.0,2.30
+2026-11-16T23:34:42,24.8,100.0,2.51
+2026-11-16T23:35:45,24.7,100.0,2.69
+2026-11-16T23:36:47,24.6,100.0,2.48
+2026-11-16T23:37:48,24.6,100.0,2.31
+2026-11-16T23:38:50,24.6,100.0,2.17
+2026-11-16T23:39:50,24.8,100.0,2.43
+2026-11-16T23:40:51,24.8,100.0,2.24
+2026-11-16T23:42:00,24.9,100.0,2.32
+2026-11-16T23:43:00,24.8,100.0,2.14
+2026-11-16T23:44:01,24.7,100.0,2.65
+2026-11-16T23:45:03,24.7,100.0,2.40
+2026-11-16T23:46:03,24.7,100.0,2.53
+2026-11-16T23:47:04,24.7,100.0,2.90
+2026-11-16T23:48:04,24.7,100.0,2.54
+2026-11-16T23:49:07,24.6,100.0,2.61
+2026-11-16T23:50:09,24.6,100.0,2.91
+2026-11-16T23:51:09,24.5,100.0,2.72
+2026-11-16T23:52:10,24.6,100.0,2.95
+2026-11-16T23:53:10,24.7,100.0,2.63
+2026-11-16T23:54:15,24.8,100.0,2.65
+2026-11-16T23:55:15,24.8,100.0,2.98
+2026-11-16T23:56:15,24.9,100.0,2.61
+2026-11-16T23:57:16,24.8,100.0,2.33
+2026-11-16T23:58:16,24.6,100.0,2.24
+2026-11-16T23:59:16,24.6,100.0,1.80
