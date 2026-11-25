@@ -103,12 +103,13 @@ export function VisualsDashboardPage() {
   // Set when the CCTV feed cannot reach the camera service at all; the panel then says so, with a Retry button.
   const [dahuaError, setDahuaError] = useState(false);
   // Demo video (thesis demo day): each panel loops a recording from public/demo/ instead of its live camera. A panel
-  // whose file is missing keeps its live view. Remembered in this browser only.
-  const [demoOn, setDemoOn] = useState(false);
+  // whose file is missing keeps its live view. On by default whenever the files are there (demo day); turning it off
+  // is remembered in this browser only.
+  const [demoOn, setDemoOn] = useState(true);
   const [demoFiles, setDemoFiles] = useState<{ behavior: boolean; weight: boolean }>({ behavior: false, weight: false });
   useEffect(() => {
     try {
-      setDemoOn(localStorage.getItem("cerebroil.demoVideo") === "1");
+      setDemoOn(localStorage.getItem("cerebroil.demoVideo") !== "0");
     } catch {}
     const has = (url: string) =>
       fetch(url, { method: "HEAD", cache: "no-store" })
@@ -604,8 +605,8 @@ export function VisualsDashboardPage() {
  * recording (packages/vision/tools/make_demo_video.py): every box, bird number, huddle and inactive bird was
  * drawn by the tracker, not by hand. The files are not in git; put them in public/demo/. */
 const DEMO_VIDEOS = {
-  behavior: { src: "/demo/behavior.mp4", label: "Recorded demo · Day 5, 12 Nov 2026, 11:00 to 12:00 · 10x speed" },
-  weight: { src: "/demo/weight.mp4", label: "Recorded demo · Kinect clips, 11 to 16 Nov 2026 · half speed" },
+  behavior: { src: "/demo/behavior.mp4", label: "Recorded demo · 12 Nov 2026, 11:30 to 11:45 · real speed" },
+  weight: { src: "/demo/weight.mp4", label: "Recorded demo · Kinect clips, 11 to 16 Nov 2026 · half speed · weights are size estimates" },
 } as const;
 
 function DemoClip({ video }: { video: { src: string; label: string } }) {
