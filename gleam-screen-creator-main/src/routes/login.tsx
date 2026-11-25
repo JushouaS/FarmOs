@@ -6,6 +6,7 @@ import { gmailComposeUrl } from "@/lib/contact";
 import { Chicken, type ChickenMood } from "@/components/farm/Chicken";
 import { tr } from "@/lib/i18n";
 import { LanguageMenu } from "@/components/farm/LanguageMenu";
+import { syncDemoCookie } from "@/lib/demo";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -90,6 +91,11 @@ function ThemeToggle() {
 function LoginPage() {
   const { login, isAuthenticated, verifyMfa, verifyMfaBackupCode } = useAuth();
   const navigate = useNavigate();
+  // Demo day: set the demo cookie while the person signs in, so the first page after sign-in already shows the
+  // recorded demo instead of switching to it a moment later.
+  useEffect(() => {
+    void syncDemoCookie();
+  }, []);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

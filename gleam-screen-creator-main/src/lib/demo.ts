@@ -37,7 +37,7 @@ function cookieOn(): boolean {
 }
 
 function writeCookie(on: boolean) {
-  document.cookie = on ? `${COOKIE}=1; path=/; SameSite=Lax` : `${COOKIE}=; path=/; max-age=0; SameSite=Lax`;
+  document.cookie = on ? `${COOKIE}=1; path=/; max-age=31536000; SameSite=Lax` : `${COOKIE}=; path=/; max-age=0; SameSite=Lax`;
 }
 
 /**

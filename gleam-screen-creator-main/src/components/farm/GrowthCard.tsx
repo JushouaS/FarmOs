@@ -348,7 +348,7 @@ function ReadingCell({ label, reading }: { label: string; reading: GrowthReading
 }
 
 export function GrowthCard({ data, onAnalyze }: Props) {
-  const { curve, standardCurve, actualG, standardG, variancePercent, cycleLength, cycleStart, cycleDay: day, flock, measuredDay, sampleSize } = data;
+  const { curve, standardCurve, actualG, standardG, variancePercent, cycleLength, cycleStart, cycleDay: day, flock, measuredDay, sampleSize, demoEstimate } = data;
   const targetLabel = data.standardName ? `${data.standardName} target` : "target";
   const has = actualG != null && standardG != null && curve.length > 0;
   const state = variancePercent != null ? standing(variancePercent) : null;
@@ -419,10 +419,12 @@ export function GrowthCard({ data, onAnalyze }: Props) {
 
           {has && measuredDay != null && (
             <p className="mt-1.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
-              {sampleSize != null
-                ? tr("Weighed on Day {day}, {n} birds on the scale.", { day: measuredDay, n: sampleSize })
-                : tr("Weighed on Day {day}.", { day: measuredDay })}
-              {day != null && measuredDay < day ? tr(" Enter today's weights on Flock Tracking to update it.") : ""}
+              {demoEstimate
+                ? tr("Recorded demo: Kinect size estimate for Day {day} (12 Nov 2026), scaled to the Ross 308 standard. Not a scale weighing.", { day: measuredDay })
+                : sampleSize != null
+                  ? tr("Weighed on Day {day}, {n} birds on the scale.", { day: measuredDay, n: sampleSize })
+                  : tr("Weighed on Day {day}.", { day: measuredDay })}
+              {!demoEstimate && day != null && measuredDay < day ? tr(" Enter today's weights on Flock Tracking to update it.") : ""}
             </p>
           )}
           {!has && (

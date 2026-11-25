@@ -92,8 +92,21 @@ export function SideNav({
       window.clearInterval(timer);
     };
   }, []);
-  const status =
-    camera === "ok"
+  // While the recorded demo shows (the demo cookie is set), say so instead of the live camera's state.
+  const [demo, setDemo] = useState(false);
+  useEffect(() => {
+    const read = () => setDemo(document.cookie.split("; ").includes("cerebroil_demo=1"));
+    read();
+    window.addEventListener("cerebroil-demo-changed", read);
+    const timer = window.setInterval(read, 2_000);
+    return () => {
+      window.removeEventListener("cerebroil-demo-changed", read);
+      window.clearInterval(timer);
+    };
+  }, []);
+  const status = demo
+    ? { title: tr("Showing the recorded demo"), note: tr("12 Nov 2026, Pen 1"), dot: "bg-sky-500", ping: "bg-sky-400", box: "rgba(14,165,233,0.08)", edge: "rgba(14,165,233,0.3)" }
+    : camera === "ok"
       ? { title: tr("System Online"), note: tr("Pen 1 Connected"), dot: "bg-emerald-500", ping: "bg-emerald-400", box: "rgba(16,185,129,0.06)", edge: "rgba(16,185,129,0.18)" }
       : camera === "down"
         ? { title: tr("Camera computer not answering"), note: tr("Pen 1 not connected"), dot: "bg-amber-500", ping: "bg-amber-400", box: "rgba(245,158,11,0.08)", edge: "rgba(245,158,11,0.3)" }

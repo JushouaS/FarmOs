@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
 import { publicCameraSource, readCameraSource } from "../camera-source.js";
@@ -31,6 +32,22 @@ const FCR_TARGET = 1.70;
  * this route returned before.
  */
 
+
+/**
+ * The recorded demo's daily flock averages (cerebroil-stream/make_weight_demo.py writes weights.json next to the demo
+ * videos), up to the demo day. They are size estimates from the Kinect clips; the overview marks them as such.
+ */
+function demoWeighIns(): WeightPoint[] {
+  try {
+    const file = JSON.parse(readFileSync(env.DEMO_WEIGHTS_FILE, "utf8")) as { daily?: { day: number; meanG: number; standardG: number }[] };
+    return (file.daily ?? [])
+      .filter((d) => Number.isFinite(d.day) && Number.isFinite(d.meanG) && d.day <= env.DEMO_DAY)
+      .map((d) => ({ day: d.day, actualG: d.meanG, standardG: d.standardG }));
+  } catch {
+    return [];
+  }
+}
+
 /** The demo moment, when the browser has the recorded demo on (Live Camera "Demo video" sets the cookie); else null. */
 function demoAt(request: FastifyRequest): Date | null {
   return (request.cookies as Record<string, string | undefined> | undefined)?.cerebroil_demo === "1" ? new Date(env.DEMO_AT) : null;
@@ -55,7 +72,8 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
     // window the pages show runs from `startDay` to the end of the grow-out.
     const today = await databaseToday(app);
     const setting = await readCycleSetting(app, today);
-    const day = currentDay(setting, today);
+    // While the recorded demo shows, the day is the flock's age on the demo date (DEMO_DAY), not today's.
+    const day = at ? env.DEMO_DAY : currentDay(setting, today);
     const harvestOn = addDays(setting.startedOn, CYCLE_END_DAY - setting.startDay);
     const cycle = await app.sqlRead`
       SELECT c.id, c.label
@@ -127,9 +145,11 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       day: Number(r.day),
       standardG: Number(r.standardG),
     }));
-    const weighIns: WeightPoint[] = weightRows
-      .filter((r) => r.actualG != null)
-      .map((r) => ({ day: Number(r.day), actualG: Number(r.actualG), standardG: Number(r.standardG) }));
+    const weighIns: WeightPoint[] = at
+      ? demoWeighIns()
+      : weightRows
+          .filter((r) => r.actualG != null)
+          .map((r) => ({ day: Number(r.day), actualG: Number(r.actualG), standardG: Number(r.standardG) }));
     // The card shows the newest weigh-in up to today, with the standard for the
     // day that bird was on the scale — not a figure interpolated between two
     // measurements, which would read as a measurement of its own.
@@ -149,6 +169,8 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       // The grow-out day the figure above was measured on, so a page can say
       // "Day 21" instead of implying it is today's weight.
       measuredDay: latest?.day ?? null,
+      // "demo_size_estimate" while the recorded demo shows: the points are the Kinect demo's size estimates, not weigh-ins.
+      source: at ? "demo_size_estimate" : "weigh_in",
       // No weigh-in is neither good nor bad news, so it does not get a green pill.
       status: latest ? (variancePercent >= 0 ? "optimal" : variancePercent > -5 ? "nominal" : "warning") : "nominal",
       // The weigh-ins themselves, and the target for every day of the window

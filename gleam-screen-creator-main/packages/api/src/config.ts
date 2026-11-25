@@ -63,6 +63,9 @@ const schema = z.object({
   // Demo day: the moment the recorded demo shows (Live Camera "Demo video"). While a browser has the demo on, the
   // overview and the sensor history answer as of this moment instead of now, so the readings match the videos.
   DEMO_AT: z.string().datetime({ offset: true }).default("2026-11-12T11:45:00+08:00"),
+  // The flock's age on that date (17 Nov 2026 was Day 35), and the demo's daily weight file (size estimates).
+  DEMO_DAY: z.coerce.number().int().min(1).max(45).default(30),
+  DEMO_WEIGHTS_FILE: z.string().default(fileURLToPath(new URL("../../../public/demo/weights.json", import.meta.url))),
   VIDEO_SERVICE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   // Live camera frames come from the camera stream service, which may be
   // separate from the service used for analysis. Unset reuses VISION_SERVICE_URL.

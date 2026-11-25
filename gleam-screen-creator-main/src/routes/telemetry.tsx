@@ -450,7 +450,9 @@ function GrowthTab({ data }: { data: Analytics }) {
             <p className="text-[11px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
               {averageG === null
                 ? tr("No weigh-in this cycle")
-                : tr("Weighed on Day {day}", { day: measuredDay ?? day })}
+                : (data.weight as any)?.source === "demo_size_estimate"
+                  ? tr("Size estimate, Day {day} (demo)", { day: measuredDay ?? day })
+                  : tr("Weighed on Day {day}", { day: measuredDay ?? day })}
             </p>
           </div>
 
@@ -1711,7 +1713,9 @@ function AnalyticsPage() {
               </span>
             </p>
             <p className="mt-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-              {weight.measuredDay !== null && weight.actualAvgG !== null
+              {(weight as any).source === "demo_size_estimate" && weight.measuredDay !== null
+                ? tr("Recorded demo: Kinect size estimates up to Day {day}, not scale weighings", { day: weight.measuredDay })
+                : weight.measuredDay !== null && weight.actualAvgG !== null
                 ? tr("Last weigh-in: Day {day}, {n} birds", {
                     day: weight.measuredDay,
                     n: weight.sampleSize ?? weighIns.length,

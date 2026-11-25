@@ -230,6 +230,16 @@ def main() -> None:
             by_day.setdefault(r["age_day"], []).append(r["mean_weight_g"])
     for d in sorted(by_day):
         print(f"  Day {d}: frame mean weight median {np.median(by_day[d]):.0f} g (Ross 308 {ross308(d):.0f} g), {len(by_day[d])} frames")
+    # The daily flock averages, for the website's demo mode (Dashboard and Analytics growth): one point a day, the
+    # median of that day's frame averages, with the clip dates it came from.
+    daily = []
+    for d in sorted(by_day):
+        dates = sorted({r["time"][:10] for r in out_rows if r["age_day"] == d and r["time"]})
+        daily.append({"day": d, "dates": dates, "meanG": round(float(np.median(by_day[d]))), "frames": len(by_day[d]),
+                      "standardG": round(ross308(d))})
+    meta = {"method": "size estimate (outline area^1.5), one scale for all clips set to the Ross 308 standard"
+                      if not model_weights else "weight model", "daily": daily}
+    (out_dir / "weights.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":

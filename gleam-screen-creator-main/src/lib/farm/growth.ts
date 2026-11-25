@@ -59,6 +59,8 @@ export interface GrowthCardData {
   sampleSize: number | null;
   /** The grow-out day `actualG` was measured on, which is not always today. */
   measuredDay: number | null;
+  /** True while the recorded demo shows: the actual weights are the Kinect demo's size estimates, not weigh-ins. */
+  demoEstimate?: boolean;
   fcr: number | null;
   flock: { total: number | null; active: number | null; inactive: number | null };
   temperature: GrowthReading;
@@ -146,6 +148,7 @@ export function buildGrowthCardData(overview: any): GrowthCardData {
     confidencePercent: num(overview?.weight?.estimationConfidencePercent),
     sampleSize: num(overview?.weight?.sampleSize),
     measuredDay: num(overview?.weight?.measuredDay),
+    demoEstimate: overview?.weight?.source === "demo_size_estimate",
     fcr: num(overview?.feed?.fcr),
     flock: { total, active, inactive: active !== null && total !== null ? total - active : null },
     temperature: reading(readings, "temperature", overviewNow(overview)),
