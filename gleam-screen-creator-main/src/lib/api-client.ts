@@ -701,6 +701,23 @@ export interface SensorHistory {
 }
 
 /** Daily summaries for the Pi's stored temperature, humidity, and ammonia readings. */
+export interface DaySeries {
+  points: { minute: number; value: number; n: number }[];
+  range: { lower: number | null; upper: number | null };
+  summary: { min: number; max: number; avg: number; readings: number } | null;
+}
+export interface DayReadings {
+  day: string;
+  demo: boolean;
+  temperature: DaySeries;
+  humidity: DaySeries;
+}
+
+/** The pen's temperature and humidity through one day in 10-minute steps (today, or the demo day while it shows). */
+export async function fetchDayReadings(): Promise<DayReadings> {
+  return apiFetch<DayReadings>("/operations/day-readings");
+}
+
 export async function fetchSensorHistory(days = 7): Promise<SensorHistory> {
   return apiFetch<SensorHistory>(`/operations/sensor-history?days=${days}`);
 }

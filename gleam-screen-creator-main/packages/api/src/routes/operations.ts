@@ -341,6 +341,61 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
   });
 
   /**
+   * GET /operations/day-readings
+   * The pen's temperature and humidity through one day, in 10-minute steps (the average of the readings in each step;
+   * a step with none is left out, never filled in), with each sensor's range and the day's low, average and high.
+   * The day is today, up to now; while the recorded demo shows, it is the demo day, the whole of it.
+   */
+  app.get("/day-readings", { preHandler: [requireAuth] }, async (request, reply) => {
+    const demo = demoAt(request);
+    const at = demo ?? new Date();
+    const rows = await app.sqlRead<{ sensor: string; slot: number; avg: number; n: number }[]>`
+      WITH day AS (
+        SELECT ((${at}::timestamptz AT TIME ZONE ${env.FARM_TZ})::date)::timestamp AT TIME ZONE ${env.FARM_TZ} AS start
+      )
+      SELECT r.sensor_id AS sensor,
+             (floor(extract(epoch FROM (r.recorded_at - day.start)) / 600))::int AS slot,
+             avg(r.value)::float AS avg, count(*)::int AS n
+      FROM sensor_readings r, day
+      WHERE r.sensor_id IN ('SN-DHT22-T', 'SN-DHT22-H')
+        AND r.recorded_at >= day.start AND r.recorded_at < day.start + interval '1 day'
+        AND (${demo}::timestamptz IS NOT NULL OR r.recorded_at <= ${at}::timestamptz)
+      GROUP BY 1, 2 ORDER BY 2`;
+    const bounds = await app.sqlRead<{ sensor: string; lower: number | null; upper: number | null }[]>`
+      SELECT DISTINCT ON (sensor_id) sensor_id AS sensor, lower_bound::float AS lower, upper_bound::float AS upper
+      FROM sensor_bounds
+      WHERE sensor_id IN ('SN-DHT22-T', 'SN-DHT22-H') AND effective_from <= CURRENT_DATE
+        AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
+      ORDER BY sensor_id, effective_from DESC`;
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: env.FARM_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+    const series = (id: string) => {
+      const points = rows
+        .filter((r) => r.sensor === id && r.slot >= 0 && r.slot < 144)
+        .map((r) => ({ minute: r.slot * 10, value: Math.round(r.avg * 10) / 10, n: r.n }));
+      const values = points.map((p) => p.value);
+      const b = bounds.find((x) => x.sensor === id);
+      return {
+        points,
+        range: { lower: b?.lower ?? null, upper: b?.upper ?? null },
+        summary: values.length
+          ? {
+              min: Math.min(...values),
+              max: Math.max(...values),
+              avg: Math.round((values.reduce((a, v) => a + v, 0) / values.length) * 10) / 10,
+              readings: points.reduce((a, p) => a + p.n, 0),
+            }
+          : null,
+      };
+    };
+    return reply.send({
+      day,
+      demo: demo !== null,
+      temperature: series("SN-DHT22-T"),
+      humidity: series("SN-DHT22-H"),
+    });
+  });
+
+  /**
    * GET /operations/sensor-history?days=7
    * Daily summaries from the Pi's DHT22 and ammonia CSV history. Days with no readings are left out, never filled in.
    */

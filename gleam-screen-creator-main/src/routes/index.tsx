@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { GrowthCard } from "@/components/farm/GrowthCard";
+import { DayReadingsCard } from "@/components/farm/DayReadingsCard";
 import { GrowthAnalysisSection } from "@/components/farm/GrowthDiagnostics";
 import { fetchWeightSpread } from "@/lib/api-client";
 import { NO_SPREAD, buildFlockWeights, type WeightSpread } from "@/lib/farm/weights";
@@ -86,6 +87,9 @@ function Dashboard() {
 
       {/* ── Growth: the weight story first, house readings kept small ── */}
       <GrowthCard data={growth} onAnalyze={() => setAnalysisRun((n) => n + 1)} />
+
+      {/* ── The day in the pen: temperature and humidity through the day ── */}
+      <DayReadingsCard />
 
       {analysisRun > 0 && (
         <div className="mb-6">
