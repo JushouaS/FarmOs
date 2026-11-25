@@ -1,6 +1,17 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
+import { env } from "../config.js";
+
+/**
+ * While the recorded demo shows (the browser's cerebroil_demo cookie), the list is as of the demo moment: the alerts the
+ * system raised in the 30 days up to DEMO_AT, nothing later and none of the 2024 sample rows.
+ */
+function demoWindow(request: FastifyRequest): { from: number; to: number } | null {
+  if ((request.cookies as Record<string, string | undefined> | undefined)?.cerebroil_demo !== "1") return null;
+  const to = Date.parse(env.DEMO_AT);
+  return { from: to - 30 * 86_400_000, to };
+}
 
 /**
  * Alert stream + acknowledge/dismiss mutations.
@@ -21,6 +32,16 @@ export async function registerAlertRoutes(app: FastifyInstance) {
     const parsed = alertFilterSchema.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_query", issues: parsed.error.issues });
     const { severity, acknowledged, limit } = parsed.data;
+    const demo = demoWindow(request);
+    const send = (rows: readonly any[]) =>
+      reply.send(
+        demo
+          ? rows.filter((r) => {
+              const t = Date.parse(String(r.raisedAt).replace(" ", "T").replace(/([+-]\d\d)$/, "$1:00"));
+              return t >= demo.from && t <= demo.to;
+            })
+          : rows,
+      );
 
     if (severity && acknowledged !== undefined) {
       const rows = await app.sqlRead`
@@ -30,7 +51,7 @@ export async function registerAlertRoutes(app: FastifyInstance) {
         FROM alerts
         WHERE severity = ${severity} AND acknowledged = ${acknowledged === "true"}
         ORDER BY raised_at DESC LIMIT ${limit}`;
-      return reply.send(rows);
+      return send(rows);
     }
     if (severity) {
       const rows = await app.sqlRead`
@@ -39,7 +60,7 @@ export async function registerAlertRoutes(app: FastifyInstance) {
                source_incident_id AS "sourceIncidentId"
         FROM alerts WHERE severity = ${severity}
         ORDER BY raised_at DESC LIMIT ${limit}`;
-      return reply.send(rows);
+      return send(rows);
     }
     if (acknowledged !== undefined) {
       const rows = await app.sqlRead`
@@ -48,14 +69,14 @@ export async function registerAlertRoutes(app: FastifyInstance) {
                source_incident_id AS "sourceIncidentId"
         FROM alerts WHERE acknowledged = ${acknowledged === "true"}
         ORDER BY raised_at DESC LIMIT ${limit}`;
-      return reply.send(rows);
+      return send(rows);
     }
     const rows = await app.sqlRead`
       SELECT id, kind, severity, message, raised_at::text AS "raisedAt",
              acknowledged, acknowledged_at::text AS "acknowledgedAt",
              source_incident_id AS "sourceIncidentId"
       FROM alerts ORDER BY raised_at DESC LIMIT ${limit}`;
-    return reply.send(rows);
+    return send(rows);
   });
 
   app.get("/:id", { preHandler: [requireAuth] }, async (request, reply) => {

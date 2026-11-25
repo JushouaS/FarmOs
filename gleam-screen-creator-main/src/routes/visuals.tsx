@@ -163,8 +163,14 @@ export function VisualsDashboardPage() {
   // the first client render match.
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
+    // While the behavior demo plays, the clock is the recording's: its start plus how far the video has played, so the
+    // day/night label matches the picture instead of the time the demo is being shown.
+    const tick = () => {
+      const video = document.querySelector<HTMLVideoElement>('video[data-demo="behavior"]');
+      setNow(video ? new Date(DEMO_BEHAVIOR_START + Math.floor(video.currentTime) * 1000) : new Date());
+    };
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
   const nightModeActive = now ? isNightCycle(now, lighting) : false;
@@ -621,6 +627,9 @@ function loadDemoScans() {
     .catch(() => null);
   return demoScans;
 }
+
+/** When the behavior demo clip starts: 12 Nov 2026, 11:30 farm time. */
+const DEMO_BEHAVIOR_START = Date.parse("2026-11-12T11:30:00+08:00");
 
 const DEMO_VIDEOS = {
   behavior: { src: "/demo/behavior.mp4", label: "Recorded demo · 12 Nov 2026, 11:30 to 11:45 · real speed" },

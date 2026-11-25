@@ -63,3 +63,6 @@ packages/api/data/
 
 # Demo-day videos (large, kept on this computer only)
 public/demo/
+
+# Demo-day recordings and their working files (large, kept on this computer only)
+demo-day/
