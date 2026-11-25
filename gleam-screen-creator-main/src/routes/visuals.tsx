@@ -102,6 +102,32 @@ export function VisualsDashboardPage() {
   const [streamKey, setStreamKey] = useState(0);
   // Set when the CCTV feed cannot reach the camera service at all; the panel then says so, with a Retry button.
   const [dahuaError, setDahuaError] = useState(false);
+  // Demo video (thesis demo day): each panel loops a recording from public/demo/ instead of its live camera. A panel
+  // whose file is missing keeps its live view. Remembered in this browser only.
+  const [demoOn, setDemoOn] = useState(false);
+  const [demoFiles, setDemoFiles] = useState<{ behavior: boolean; weight: boolean }>({ behavior: false, weight: false });
+  useEffect(() => {
+    try {
+      setDemoOn(localStorage.getItem("cerebroil.demoVideo") === "1");
+    } catch {}
+    const has = (url: string) =>
+      fetch(url, { method: "HEAD", cache: "no-store" })
+        .then((r) => r.ok && (r.headers.get("content-type") ?? "").startsWith("video/"))
+        .catch(() => false);
+    void Promise.all([has(DEMO_VIDEOS.behavior.src), has(DEMO_VIDEOS.weight.src)]).then(([behavior, weight]) =>
+      setDemoFiles({ behavior, weight }),
+    );
+  }, []);
+  const toggleDemo = () => {
+    setDemoOn((on) => {
+      try {
+        localStorage.setItem("cerebroil.demoVideo", on ? "0" : "1");
+      } catch {}
+      return !on;
+    });
+  };
+  const demoBehavior = demoOn && demoFiles.behavior;
+  const demoWeight = demoOn && demoFiles.weight;
   useEffect(() => {
     const healthUrl = visionStreamUrl("CAM-01").replace(/[/]visual[/]stream[/].*$/, "/visual/health");
     let away = false;
@@ -273,6 +299,22 @@ export function VisualsDashboardPage() {
               </button>
             </div>
 
+            {/* Demo video: loops the recordings in public/demo/ in place of the live cameras */}
+            {(demoFiles.behavior || demoFiles.weight) && (
+              <button
+                type="button"
+                onClick={toggleDemo}
+                aria-pressed={demoOn}
+                className={`tactile-btn tap flex h-8 shrink-0 items-center rounded-lg border px-2.5 text-xs font-medium ${demoOn
+                    ? "border-[var(--brand)] bg-[var(--surface-raised)] text-[var(--text-primary)]"
+                    : "border-[var(--border-default)] bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                title={demoOn ? tr("Back to the live cameras") : tr("Play the recorded demo videos")}
+              >
+                {demoOn ? tr("Demo video: on") : tr("Demo video")}
+              </button>
+            )}
+
             {/* Fullscreen Trigger Button */}
             <button
               type="button"
@@ -314,7 +356,9 @@ export function VisualsDashboardPage() {
                   {/* Video Viewport Container — 16:9 box when the page scrolls,
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
-                    {!dahuaError ? (
+                    {demoBehavior ? (
+                      <DemoClip video={DEMO_VIDEOS.behavior} />
+                    ) : !dahuaError ? (
                       <>
                         {feedOrigin && (
                           <MjpegCameraFeed
@@ -374,6 +418,9 @@ export function VisualsDashboardPage() {
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
                     {/* While the bridge is not running the view keeps asking for it, so this needs no button. It never
                         shows a stand-in picture: the camera service's simulated depth image is not the weighing station. */}
+                    {demoWeight ? (
+                      <DemoClip video={DEMO_VIDEOS.weight} />
+                    ) : (
                     <KinectDepthView onFlock={setFlock} fallback={
                       <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
                         <div className="mb-2 rounded-full bg-[var(--status-blue-bg)] p-3 text-[var(--status-blue-text)]">
@@ -389,6 +436,7 @@ export function VisualsDashboardPage() {
                         </p>
                       </div>
                     } />
+                    )}
                   </div>
                 </div>
               )}
@@ -548,5 +596,34 @@ export function VisualsDashboardPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+/* ── Demo video (thesis demo day) ────────────────────────────────────────────────────────────────
+ * Recordings shown in place of the live cameras. The behavior clip is the system's own output on a real pen
+ * recording (packages/vision/tools/make_demo_video.py): every box, bird number, huddle and inactive bird was
+ * drawn by the tracker, not by hand. The files are not in git; put them in public/demo/. */
+const DEMO_VIDEOS = {
+  behavior: { src: "/demo/behavior.mp4", label: "Recorded demo · Day 5, 12 Nov 2026, 11:00 to 12:00 · 10x speed" },
+  weight: { src: "/demo/weight.mp4", label: "Recorded demo" },
+} as const;
+
+function DemoClip({ video }: { video: { src: string; label: string } }) {
+  return (
+    <>
+      <video
+        src={video.src}
+        className="h-full w-full object-contain"
+        autoPlay
+        muted
+        loop
+        playsInline
+        controls={false}
+        aria-label={tr(video.label)}
+      />
+      <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/70 px-2 py-1 text-[11px] font-medium text-white">
+        {tr(video.label)}
+      </span>
+    </>
   );
 }

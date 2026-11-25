@@ -60,3 +60,6 @@ packages/api/data/
 
 # Output of scripts/start-public.ps1 (logs, process ids)
 .public-run
+
+# Demo-day videos (large, kept on this computer only)
+public/demo/
