@@ -146,3 +146,42 @@ class KinectWeightTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WeightModelInputCheckTests(unittest.TestCase):
+    """A model is used only when its named inputs are the ones this program measures."""
+
+    def _save(self, names, folder):
+        import xgboost as xgb
+        from pathlib import Path
+        rows = np.random.default_rng(0).random((20, len(names) if names else 17)).astype(np.float32)
+        booster = xgb.train({"max_depth": 2}, xgb.DMatrix(rows, label=rows[:, 0], feature_names=names), num_boost_round=2)
+        path = Path(folder) / "model.json"
+        booster.save_model(str(path))
+        return path
+
+    def test_matching_names_load(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            model = kinect_weight.WeightModel(self._save(list(kinect_weight.RGBD_MODEL_FEATURES), folder))
+        self.assertTrue(model.available, model.error)
+        self.assertTrue(model.rgbd_mode)
+
+    def test_same_count_but_other_inputs_is_refused(self):
+        import tempfile
+        other = ["day", "projected_area_mm2", "width_mm", "length_mm", "pixel_count", "ellipsoid_area_mm2",
+                 "area_fill_factor", "width_to_length_ratio", "equivalent_diameter_mm", "perimeter_approx_mm",
+                 "compactness", "allometric_vol_mm3", "prolate_spheroid_vol_mm3", "area_x_width_mm3",
+                 "area_x_sqrt_width_mm25", "area_per_pixel_mm2", "source_is_synthetic"]
+        with tempfile.TemporaryDirectory() as folder:
+            model = kinect_weight.WeightModel(self._save(other, folder))
+        self.assertFalse(model.available)
+        self.assertIn("do not match", model.error)
+        self.assertIn("day", model.error)
+        self.assertEqual(model.predict([{n: 1.0 for n in other}]), [])
+
+    def test_unnamed_inputs_still_load_by_count(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            model = kinect_weight.WeightModel(self._save(None, folder))
+        self.assertTrue(model.available, model.error)

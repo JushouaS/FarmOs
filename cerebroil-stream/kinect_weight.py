@@ -291,6 +291,17 @@ class WeightModel:
             else:
                 supported = f"{len(MODEL_FEATURES)} or {len(RGBD_MODEL_FEATURES)}"
                 raise ValueError(f"Expected {supported} model features, got {feature_count}")
+            # The count alone is not enough: a model with the same number of inputs but other measurements (for
+            # example one that also needs the grow-out day) would be fed the wrong values and give wrong weights
+            # without any error. When the file names its inputs, they must be exactly the ones measured here.
+            named = list(self._booster.feature_names or [])
+            if named and named != list(self.feature_names):
+                missing = [n for n in named if n not in self.feature_names]
+                raise ValueError(
+                    f"The weight model's inputs do not match what this program measures "
+                    f"(it needs {', '.join(missing[:4]) or 'them in another order'}"
+                    f"{'...' if len(missing) > 4 else ''}); not used"
+                )
             meta_path = path.with_suffix(".meta.json")
             if path == LEGACY_MODEL_PATH and META_PATH.exists():
                 meta_path = META_PATH
