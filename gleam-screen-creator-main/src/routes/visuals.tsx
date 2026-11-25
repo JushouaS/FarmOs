@@ -605,7 +605,7 @@ export function VisualsDashboardPage() {
  * drawn by the tracker, not by hand. The files are not in git; put them in public/demo/. */
 const DEMO_VIDEOS = {
   behavior: { src: "/demo/behavior.mp4", label: "Recorded demo · Day 5, 12 Nov 2026, 11:00 to 12:00 · 10x speed" },
-  weight: { src: "/demo/weight.mp4", label: "Recorded demo" },
+  weight: { src: "/demo/weight.mp4", label: "Recorded demo · Kinect clips, 11 to 16 Nov 2026 · half speed" },
 } as const;
 
 function DemoClip({ video }: { video: { src: string; label: string } }) {
