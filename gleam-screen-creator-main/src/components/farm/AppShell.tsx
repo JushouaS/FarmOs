@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
+import { demoFiles, demoWanted, syncDemoCookie } from "@/lib/demo";
 import { SideNav } from "./SideNav";
 import { AccountMenu } from "./AccountMenu";
 import { LanguageMenu } from "./LanguageMenu";
@@ -189,6 +190,25 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
+  // Demo day: keep the demo cookie in step with the demo files and this browser's choice, and reload the page's data
+  // when it changes so every page shows the same recorded moment. `demo` drives the strip that says so.
+  const router = useRouter();
+  const [demo, setDemo] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const sync = () =>
+      void syncDemoCookie().then(async (changed) => {
+        const files = await demoFiles();
+        if (live) setDemo((files.behavior || files.weight) && demoWanted());
+        if (changed) void router.invalidate();
+      });
+    sync();
+    window.addEventListener("cerebroil-demo-changed", sync);
+    return () => {
+      live = false;
+      window.removeEventListener("cerebroil-demo-changed", sync);
+    };
+  }, [router]);
   const drawerAway = !desktop && !mobileOpen;
   // An open drawer takes the keyboard: focus moves into it, the page behind cannot be reached while it is open, and
   // closing it puts focus back on the button that opened it.
@@ -285,6 +305,11 @@ export function AppShell({ children, bare = false }: { children: ReactNode; bare
 
         {/* Main layout container */}
         <div inert={mobileOpen && !desktop} className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${mainShift}`}>
+          {demo && (
+            <div role="status" className="border-b border-[var(--border-subtle)] bg-[var(--status-amber-bg)] px-4 py-1.5 text-center text-xs font-medium text-[var(--status-amber-text)]">
+              {tr("Demo mode: showing the recorded demo of 12 Nov 2026, 11:30 to 11:45 (videos, readings and analysis). Turn it off with the Demo video button on Live Camera.")}
+            </div>
+          )}
           {bare ? (
             <main className="flex flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:overflow-hidden lg:pb-0">
               {children}

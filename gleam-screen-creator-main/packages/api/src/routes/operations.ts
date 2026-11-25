@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
 import { publicCameraSource, readCameraSource } from "../camera-source.js";
 import { env } from "../config.js";
@@ -30,8 +30,15 @@ const FCR_TARGET = 1.70;
  * cluster/lastAnomaly), not just the facility/houses/cycle/alerts subset
  * this route returned before.
  */
+
+/** The demo moment, when the browser has the recorded demo on (Live Camera "Demo video" sets the cookie); else null. */
+function demoAt(request: FastifyRequest): Date | null {
+  return (request.cookies as Record<string, string | undefined> | undefined)?.cerebroil_demo === "1" ? new Date(env.DEMO_AT) : null;
+}
+
 export async function registerOperationsRoutes(app: FastifyInstance) {
   app.get("/overview", { preHandler: [requireAuth] }, async (request, reply) => {
+    const at = demoAt(request);
     const facility = await app.sqlRead`
       SELECT id, name, breed, house_range_label AS "houseRange"
       FROM facilities LIMIT 1`;
@@ -90,6 +97,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
           AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
         ORDER BY effective_from DESC LIMIT 1
       ) sb ON true
+      WHERE (${at}::timestamptz IS NULL OR (r.recorded_at <= ${at}::timestamptz AND r.recorded_at > ${at}::timestamptz - interval '30 minutes'))
       ORDER BY s.id, r.recorded_at DESC`;
 
     const alerts = await app.sqlRead`
@@ -228,6 +236,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
             ORDER BY effective_from DESC LIMIT 1
           ) sb ON true
           WHERE s.house_id = ${liveCam.houseId}
+            AND (${at}::timestamptz IS NULL OR (r.recorded_at <= ${at}::timestamptz AND r.recorded_at > ${at}::timestamptz - interval '30 minutes'))
           ORDER BY s.id, r.recorded_at DESC`
       : [];
     // index.tsx reads `reading.bounds.label` — nest it to match, rather than
@@ -300,6 +309,8 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       water,
       feed,
       cluster,
+      // Set while the browser shows the recorded demo: the readings above are as of this moment, not now.
+      demo: at ? { at: at.toISOString() } : null,
       lastAnomaly,
       minutesSinceLastAnomaly,
       report: reportRows[0] ?? null,
@@ -312,6 +323,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
    * Daily summaries from the Pi's DHT22 and ammonia CSV history. Days with no readings are left out, never filled in.
    */
   app.get("/sensor-history", { preHandler: [requireAuth] }, async (request, reply) => {
+    const at = demoAt(request) ?? new Date();
     const asked = Number((request.query as { days?: string }).days);
     const days = Number.isFinite(asked) ? Math.min(30, Math.max(1, Math.round(asked))) : 7;
     const [rows, ammonia] = await Promise.all([
@@ -326,7 +338,8 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
           JOIN sensors s ON s.id = r.sensor_id
           WHERE s.id IN ('SN-DHT22-T', 'SN-DHT22-H')
             AND r.recorded_at >=
-              (((now() AT TIME ZONE ${env.FARM_TZ})::date - (${days} - 1))::timestamp AT TIME ZONE ${env.FARM_TZ})
+              (((${at}::timestamptz AT TIME ZONE ${env.FARM_TZ})::date - (${days} - 1))::timestamp AT TIME ZONE ${env.FARM_TZ})
+            AND recorded_at <= ${at}::timestamptz
         )
         SELECT sensor, to_char(local_day, 'YYYY-MM-DD') AS day,
                avg(value)::float AS avg, min(value)::float AS min, max(value)::float AS max, count(*)::int AS n
@@ -339,7 +352,8 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
           FROM pi_ammonia_logs
           WHERE ammonia_ppm IS NOT NULL
             AND recorded_at >=
-              (((now() AT TIME ZONE ${env.FARM_TZ})::date - (${days} - 1))::timestamp AT TIME ZONE ${env.FARM_TZ})
+              (((${at}::timestamptz AT TIME ZONE ${env.FARM_TZ})::date - (${days} - 1))::timestamp AT TIME ZONE ${env.FARM_TZ})
+            AND recorded_at <= ${at}::timestamptz
         )
         SELECT to_char(local_day, 'YYYY-MM-DD') AS day,
                avg(ammonia_ppm)::float AS avg, min(ammonia_ppm)::float AS min,

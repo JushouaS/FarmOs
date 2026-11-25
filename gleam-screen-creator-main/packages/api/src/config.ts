@@ -60,6 +60,9 @@ const schema = z.object({
   // Where uploaded clips (Settings > Test clip) are checked: the vision package's /video routes. The Raspberry Pi's camera
   // service (cerebroil-stream) has no such routes, so when VISION_SERVICE_URL is the Pi, point this at a computer that runs
   // packages/vision (it uses the same VISION_SERVICE_TOKEN). Unset = VISION_SERVICE_URL.
+  // Demo day: the moment the recorded demo shows (Live Camera "Demo video"). While a browser has the demo on, the
+  // overview and the sensor history answer as of this moment instead of now, so the readings match the videos.
+  DEMO_AT: z.string().datetime({ offset: true }).default("2026-11-12T11:45:00+08:00"),
   VIDEO_SERVICE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   // Live camera frames come from the camera stream service, which may be
   // separate from the service used for analysis. Unset reuses VISION_SERVICE_URL.

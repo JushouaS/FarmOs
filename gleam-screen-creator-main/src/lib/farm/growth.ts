@@ -25,6 +25,7 @@
  */
 
 import { FRESH_MS } from "./pen-sensors";
+import { overviewNow } from "@/lib/demo";
 
 export interface GrowthPoint {
   day: number;
@@ -147,9 +148,9 @@ export function buildGrowthCardData(overview: any): GrowthCardData {
     measuredDay: num(overview?.weight?.measuredDay),
     fcr: num(overview?.feed?.fcr),
     flock: { total, active, inactive: active !== null && total !== null ? total - active : null },
-    temperature: reading(readings, "temperature"),
-    humidity: reading(readings, "humidity"),
-    ammonia: reading(readings, "nh3"),
+    temperature: reading(readings, "temperature", overviewNow(overview)),
+    humidity: reading(readings, "humidity", overviewNow(overview)),
+    ammonia: reading(readings, "nh3", overviewNow(overview)),
   };
 }
 

@@ -95,6 +95,8 @@ interface BehaviourReport {
   latest: Snapshot | null;
   recent: Snapshot[];
   sustained: { inactivity: boolean; huddling: boolean; samples: number };
+  /** Built from the recorded demo's scans, which count birds and groups but not still birds one by one. */
+  demo?: boolean;
 }
 
 interface Analytics {
@@ -1218,9 +1220,13 @@ function BehaviourSection({ behaviour }: { behaviour: BehaviourReport | null }) 
               </>
             ) : (
               <EmptyNote>
-                {tr(
-                  "The vision service did not judge that frame reliable enough to split into moving and still. The counts above are what it measured.",
-                )}
+                {behaviour?.demo
+                  ? tr(
+                      "Recorded demo: the camera computer's scans count the birds and the groups packed together, not which birds stayed still, so the split into moving and still is not shown.",
+                    )
+                  : tr(
+                      "The vision service did not judge that frame reliable enough to split into moving and still. The counts above are what it measured.",
+                    )}
               </EmptyNote>
             )}
           </div>
@@ -1656,7 +1662,11 @@ function ConditionsFindings({ data }: { data: Analytics }) {
 // ---------------------------------------------------------------------------
 
 function AnalyticsPage() {
-  const data = Route.useLoaderData() as unknown as Analytics;
+  const loaded = Route.useLoaderData() as unknown as Analytics;
+  // Demo day: the behaviour cards come from the camera computer's scans of the recorded demo (the same scans as
+  // Live Camera's Analyze data), as of the demo moment, instead of the stored snapshots.
+  const demoBehaviour = useDemoBehaviour((loaded as any).demo?.at ?? null);
+  const data = demoBehaviour ? { ...loaded, behaviour: demoBehaviour } : loaded;
   const [tab, setTab] = useState<Tab>("growth");
 
   const { cycle, facility, houses, weight, cluster, weighIns } = data;
@@ -1758,4 +1768,64 @@ function AnalyticsPage() {
       )}
     </AppShell>
   );
+}
+
+
+/**
+ * The behaviour report for the recorded demo, built from public/demo/behavior_scans.json (cerebroil-stream/
+ * make_scan_demo.py): ten scans spread over the clip up to the demo moment. Birds seen and huddled come from the
+ * scan; the scan does not count still birds bird by bird, so that stays unknown rather than guessed.
+ */
+function useDemoBehaviour(demoAt: string | null): BehaviourReport | null {
+  const [report, setReport] = useState<BehaviourReport | null>(null);
+  useEffect(() => {
+    if (!demoAt) {
+      setReport(null);
+      return;
+    }
+    let live = true;
+    void fetch("/demo/behavior_scans.json", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((file: { scans?: any[] } | null) => {
+        const until = Date.parse(demoAt);
+        const scans = (file?.scans ?? []).filter((x) => Date.parse(x.recorded_at) <= until);
+        if (!live || scans.length === 0) return;
+        const step = Math.max(1, Math.floor(scans.length / 10));
+        const picked = scans.filter((_, i) => (scans.length - 1 - i) % step === 0).slice(-10);
+        const recent: Snapshot[] = picked.reverse().map((x) => ({
+          at: x.recorded_at,
+          movement_index: Number(x.behaviour?.movement_index ?? 0),
+          movement_label: x.behaviour?.movement_label ?? null,
+          movement_status: x.behaviour?.movement_status ?? null,
+          huddling_risk: Number(x.behaviour?.huddling_risk ?? 0),
+          huddling_label: x.behaviour?.huddling_label ?? null,
+          huddling_status: x.behaviour?.huddling_status ?? null,
+          bird_count: Number.isFinite(x.detection_count) ? x.detection_count : null,
+          evaluable_count: null,
+          inactive_count: null,
+          huddled_count: (x.clusters ?? []).reduce((n: number, c: any) => n + (c.birds ?? 0), 0),
+          night: false,
+          suppressed: false,
+          reliable: true,
+        }));
+        setReport({
+          camera_id: "CAM-01",
+          demo: true,
+          night: false,
+          timezone: "Asia/Manila",
+          latest: recent[0] ?? null,
+          recent,
+          sustained: {
+            inactivity: recent.length > 0 && recent.every((r) => r.movement_status === "warning"),
+            huddling: recent.length > 0 && recent.every((r) => r.huddling_status === "warning"),
+            samples: recent.length,
+          },
+        });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [demoAt]);
+  return report;
 }

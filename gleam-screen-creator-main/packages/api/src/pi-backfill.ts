@@ -5,8 +5,10 @@ import { encodePiLogPath, piLogDate, piLogSensorKind, safePiLogPath, type PiSens
 import { statusFor } from "./sensor-monitor.js";
 
 const SENSORS = [
-  { id: "SN-DHT22-T", field: "temperature", unit: "°C", min: -40, max: 80 },
-  { id: "SN-DHT22-H", field: "humidity", unit: "%", min: 0, max: 100 },
+  // What a broiler pen can read. The sensor's own limits are wider (-40 to 80 °C, 0 to 100 %), but its corrupted reads
+  // land outside the pen's: 0.0 and 0.1 to 2.4 °C, 51.1 °C, and 0 to 20 % humidity were all found in the Pi's files.
+  { id: "SN-DHT22-T", field: "temperature", unit: "°C", min: 5, max: 45 },
+  { id: "SN-DHT22-H", field: "humidity", unit: "%", min: 20, max: 100 },
 ] as const;
 
 export const TOLERANCE_MS = 90_000;
@@ -36,6 +38,9 @@ export function parseSensorCsv(text: string, now = Date.now(), kind?: PiSensorLo
   const tempIndex = temperatureIndex >= 0 ? temperatureIndex : kind === "temperature" ? valueIndex : -1;
   const humidIndex = humidityIndex >= 0 ? humidityIndex : kind === "humidity" ? valueIndex : -1;
   if (tempIndex < 0 && humidIndex < 0) return [];
+  // An older reader wrote 0.0 for a failed read and gave the reason in the error column (e.g. "only 24 of 40 bits
+  // arrived"). That 0 is not a reading. A row with an error may still repeat the last good value, so only the 0 goes.
+  const errorIndex = header.indexOf("error");
   const seen = new Set<number>();
   const rows: PiSensorRow[] = [];
   for (const f of records.slice(1)) {
@@ -47,6 +52,10 @@ export function parseSensorCsv(text: string, now = Date.now(), kind?: PiSensorLo
     if (at > now + 5 * 60_000 || seen.has(at)) continue;
     let temperature = tempIndex >= 0 ? number(f[tempIndex]) : null;
     let humidity = humidIndex >= 0 ? number(f[humidIndex]) : null;
+    if (errorIndex >= 0 && (f[errorIndex] ?? "").trim() !== "") {
+      if (temperature === 0) temperature = null;
+      if (humidity === 0) humidity = null;
+    }
     if (temperature !== null && (temperature < SENSORS[0].min || temperature > SENSORS[0].max)) temperature = null;
     if (humidity !== null && (humidity < SENSORS[1].min || humidity > SENSORS[1].max)) humidity = null;
     if (temperature === null && humidity === null) continue;

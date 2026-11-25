@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
 import { CameraAnalysis, type DemoScanSource } from "@/components/farm/CameraAnalysis";
+import { setDemoWanted } from "@/lib/demo";
 import { CameraDetectionsOverlay } from "@/components/farm/CameraDetectionsOverlay";
 import { PiCsvHistoryPanel } from "@/components/farm/PiCsvHistoryPanel";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
@@ -121,9 +122,8 @@ export function VisualsDashboardPage() {
   }, []);
   const toggleDemo = () => {
     setDemoOn((on) => {
-      try {
-        localStorage.setItem("cerebroil.demoVideo", on ? "0" : "1");
-      } catch {}
+      setDemoWanted(!on);
+      window.dispatchEvent(new Event("cerebroil-demo-changed"));
       return !on;
     });
   };

@@ -1,3 +1,5 @@
+import { overviewNow } from "@/lib/demo";
+
 /**
  * The pen's real sensor readings, from the dashboard data (`cluster.readings`).
  *
@@ -13,7 +15,7 @@ export interface PenReading {
   status: string;
 }
 
-export function freshReading(overview: any, parameter: "temperature" | "humidity", now = Date.now()): PenReading | null {
+export function freshReading(overview: any, parameter: "temperature" | "humidity", now = overviewNow(overview)): PenReading | null {
   const readings: any[] = overview?.cluster?.readings ?? [];
   const found = readings
     .filter((r) => r?.parameter === parameter && r.recordedAt)
@@ -29,7 +31,7 @@ export function freshReading(overview: any, parameter: "temperature" | "humidity
  * How long ago a sensor last reported, when it has gone quiet: more than the fresh limit and at most a week.
  * Older than that is the seeded sample from 2024 or a sensor that was never connected, which is not "offline".
  */
-export function silentFor(overview: any, parameter: "temperature" | "humidity", now = Date.now()): number | null {
+export function silentFor(overview: any, parameter: "temperature" | "humidity", now = overviewNow(overview)): number | null {
   const readings: any[] = overview?.cluster?.readings ?? [];
   const times = readings
     .filter((r) => r?.parameter === parameter && r.recordedAt)

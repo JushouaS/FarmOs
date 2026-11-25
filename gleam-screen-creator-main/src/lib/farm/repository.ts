@@ -210,6 +210,8 @@ export const getGrowthAnalytics = createServerFn({ method: "GET" }).handler(asyn
     mortality: growth.mortality,
     /** Latest behaviour snapshot plus the rolling window behind it, or null. */
     behaviour,
+    /** Set while the recorded demo is on: the moment the page's data is for. */
+    demo: overview.demo ?? null,
     /** The per-bird weights typed for `weight.measuredDay`, and nothing else. */
     weighIns,
   };

@@ -59,3 +59,27 @@ describe("Pi sensor CSV backfill", () => {
     assert.deepEqual(rowsToFill(rows, [2_090_000, 3_000_000]), [rows[0]]);
   });
 });
+
+describe("failed reads", () => {
+  it("a failed read written as 0.0 with an error is not a reading", () => {
+    const text = [
+      "time,temperature_c,reading_age_s,error",
+      "2026-11-11T17:10:00+08:00,28.4,0,",
+      "2026-11-11T17:11:23+08:00,0.0,67,only 24 of 40 bits arrived",
+      "2026-11-11T17:12:00+08:00,28.4,60,the check number did not match (a noisy read)",
+    ].join("\n");
+    const rows = parseSensorCsv(text, Date.parse("2026-11-12T00:00:00+08:00"), "temperature");
+    assert.deepEqual(rows.map((r) => r.temperature), [28.4, 28.4]);
+  });
+
+  it("readings a broiler pen cannot have are left out", () => {
+    const text = [
+      "time,temperature_c,reading_age_s,error",
+      "2026-11-08T03:28:58+08:00,0.0,0,",
+      "2026-11-11T19:41:51+08:00,51.1,48,",
+      "2026-11-11T19:42:51+08:00,29.9,0,",
+    ].join("\n");
+    const rows = parseSensorCsv(text, Date.parse("2026-11-12T00:00:00+08:00"), "temperature");
+    assert.deepEqual(rows.map((r) => r.temperature), [29.9]);
+  });
+});
