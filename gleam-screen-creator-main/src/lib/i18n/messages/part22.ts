@@ -8,4 +8,17 @@ export const part22: Messages = {
     "Magaspang na tantiya: ang isang manok ay maaaring mali ng mga {pct}%",
     "Ruda nga banabana: ang usa ka manok mahimong sayop og mga {pct}%",
   ],
+  "Experimental estimate; verify against a scale.": [
+    "Pang-eksperimentong tantiya; tiyakin gamit ang timbangan.",
+    "Eksperimental nga banabana; kumpirmaha gamit ang timbangan.",
+  ],
+  "Connecting to camera…": ["Kumokonekta sa kamera…", "Nagkonektar sa kamera…"],
+  "Camera stream interrupted; reconnecting…": [
+    "Naputol ang video; muling kumokonekta…",
+    "Naputol ang video; nagkonektar pag-usab…",
+  ],
+  "Detecting chickens…": ["Hinahanap ang mga manok…", "Nangita og mga manok…"],
+  "Detector unavailable": ["Hindi maabot ang detector", "Dili maabot ang detector"],
+  "No chickens detected": ["Walang nakitang manok", "Walay nakitang manok"],
+  "{n} chickens detected": ["{n} manok ang nakita", "{n} ka manok ang nakit-an"],
 };

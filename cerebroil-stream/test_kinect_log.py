@@ -137,11 +137,14 @@ class PageTest(unittest.TestCase):
         except ImportError as err:      # flask, cv2 or ultralytics missing on this machine
             self.skipTest(str(err))
         kinect_seg._result = GOOD
-        body = kinect_seg.app.test_client().get("/latest").get_json()
+        token = {"X-Kinect-Token": "t" * 32}
+        with mock.patch.dict(os.environ, {"KINECT_SEG_TOKEN": "t" * 32}):
+            client = kinect_seg.app.test_client()
+            body = client.get("/latest", headers=token).get_json()
+            health = client.get("/health", headers=token).get_json()
         self.assertEqual(len(body["birds"]), 3)
         self.assertTrue(all("_size" not in b for b in body["birds"]))
         self.assertIn("_size", GOOD["birds"][0])                     # the saved copy still has them
-        health = kinect_seg.app.test_client().get("/health").get_json()
         self.assertIn("saving", health)
 
 

@@ -333,6 +333,7 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
         const body = (await res.json()) as {
           clip: VisionClip;
           zone_camera: string;
+          model_loaded?: boolean;
           sampling: { requested: number; taken: number; truncated: boolean; delta_ms: number };
           samples: VisionSample[];
         };
@@ -357,7 +358,7 @@ export async function registerVisionVideoRoutes(app: FastifyInstance) {
         }));
         const sustained = sustainedFlags(windowRows);
         const usable = samples.filter((s) => s.behavior.reliable && !s.behavior.suppressed);
-        const modelLoaded = body.samples.some((s) => s.metrics?.model_loaded === true);
+        const modelLoaded = body.model_loaded ?? body.samples.some((s) => s.metrics?.model_loaded === true);
 
         let conclusion: VideoConclusion;
         if (samples.length === 0) {

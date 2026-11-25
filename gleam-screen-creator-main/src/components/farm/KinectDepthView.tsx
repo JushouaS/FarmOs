@@ -465,7 +465,9 @@ export function KinectDepthView({ fallback, onFlock }: { fallback: ReactNode; on
               : tr("Looking for chickens…")}
           {chickens.ok && chickens.weight && (
             <span className="block text-[11px] text-white/60">
-              {tr("Rough estimate: one bird can be off by about {pct}%", { pct: chickens.weight.errorPercent })}
+              {chickens.weight.errorPercent != null
+                ? tr("Rough estimate: one bird can be off by about {pct}%", { pct: chickens.weight.errorPercent })
+                : tr("Experimental estimate; verify against a scale.")}
             </span>
           )}
         </p>

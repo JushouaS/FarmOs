@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
 import { publicCameraSource, readCameraSource } from "../camera-source.js";
+import { env } from "../config.js";
 import { readLighting } from "../lighting.js";
 import {
   CYCLE_END_DAY,
@@ -308,25 +309,54 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
 
   /**
    * GET /operations/sensor-history?days=7
-   * The pen's real temperature and humidity (the DHT22 on the Raspberry Pi, stored by sensor-monitor.ts),
-   * one point per day that has readings: the day's average, lowest and highest, and how many readings it holds.
-   * Days with no readings are left out, never filled in.
+   * Daily summaries from the Pi's DHT22 and ammonia CSV history. Days with no readings are left out, never filled in.
    */
   app.get("/sensor-history", { preHandler: [requireAuth] }, async (request, reply) => {
     const asked = Number((request.query as { days?: string }).days);
     const days = Number.isFinite(asked) ? Math.min(30, Math.max(1, Math.round(asked))) : 7;
-    const rows = await app.sqlRead<{ sensor: string; day: string; avg: number; min: number; max: number; n: number }[]>`
-      SELECT s.sensor_type_code AS sensor,
-             to_char(date_trunc('day', r.recorded_at), 'YYYY-MM-DD') AS day,
-             avg(r.value)::float AS avg, min(r.value)::float AS min, max(r.value)::float AS max, count(*)::int AS n
-      FROM sensor_readings r
-      JOIN sensors s ON s.id = r.sensor_id
-      WHERE s.id IN ('SN-DHT22-T', 'SN-DHT22-H')
-        AND r.recorded_at >= date_trunc('day', now()) - ((${days} - 1) * interval '1 day')
-      GROUP BY s.sensor_type_code, date_trunc('day', r.recorded_at)
-      ORDER BY day ASC`;
+    const [rows, ammonia] = await Promise.all([
+      app.sqlRead<
+        { sensor: string; day: string; avg: number; min: number; max: number; n: number }[]
+      >`
+        WITH readings AS (
+          SELECT s.sensor_type_code AS sensor,
+                 (r.recorded_at AT TIME ZONE ${env.FARM_TZ})::date AS local_day,
+                 r.value
+          FROM sensor_readings r
+          JOIN sensors s ON s.id = r.sensor_id
+          WHERE s.id IN ('SN-DHT22-T', 'SN-DHT22-H')
+            AND r.recorded_at >=
+              (((now() AT TIME ZONE ${env.FARM_TZ})::date - (${days} - 1))::timestamp AT TIME ZONE ${env.FARM_TZ})
+        )
+        SELECT sensor, to_char(local_day, 'YYYY-MM-DD') AS day,
+               avg(value)::float AS avg, min(value)::float AS min, max(value)::float AS max, count(*)::int AS n
+        FROM readings
+        GROUP BY sensor, local_day
+        ORDER BY local_day ASC`,
+      app.sqlRead<{ day: string; avg: number; min: number; max: number; n: number }[]>`
+        WITH readings AS (
+          SELECT (recorded_at AT TIME ZONE ${env.FARM_TZ})::date AS local_day, ammonia_ppm
+          FROM pi_ammonia_logs
+          WHERE ammonia_ppm IS NOT NULL
+            AND recorded_at >=
+              (((now() AT TIME ZONE ${env.FARM_TZ})::date - (${days} - 1))::timestamp AT TIME ZONE ${env.FARM_TZ})
+        )
+        SELECT to_char(local_day, 'YYYY-MM-DD') AS day,
+               avg(ammonia_ppm)::float AS avg, min(ammonia_ppm)::float AS min,
+               max(ammonia_ppm)::float AS max, count(*)::int AS n
+        FROM readings
+        GROUP BY local_day
+        ORDER BY local_day ASC`,
+    ]);
     const pick = (sensor: string) =>
-      rows.filter((r) => r.sensor === sensor).map(({ day, avg, min, max, n }) => ({ day, avg, min, max, n }));
-    return reply.send({ days, temperature: pick("temperature"), humidity: pick("humidity") });
+      rows
+        .filter((r) => r.sensor === sensor)
+        .map(({ day, avg, min, max, n }) => ({ day, avg, min, max, n }));
+    return reply.send({
+      days,
+      temperature: pick("temperature"),
+      humidity: pick("humidity"),
+      ammonia,
+    });
   });
 }

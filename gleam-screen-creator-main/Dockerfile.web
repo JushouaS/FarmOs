@@ -21,6 +21,10 @@ WORKDIR /app
 ARG VITE_API_URL=http://localhost:4000
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Used only to identify the configured camera host in an unavailable message.
+ARG VITE_VISION_ORIGIN=
+ENV VITE_VISION_ORIGIN=${VITE_VISION_ORIGIN}
+
 # The port cerebroil-stream publishes on the host (the camera page builds
 # http://<this machine>:<port>/video_feed/... from it). Not 5000 by default:
 # that port is commonly taken by something else on the same machine.

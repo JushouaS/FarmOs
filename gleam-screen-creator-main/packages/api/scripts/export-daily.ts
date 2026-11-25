@@ -1,15 +1,3 @@
-/**
- * export-daily.ts: writes one day's data as CSV files and a health summary, ready to be collected or synced.
- *
- *   npx tsx scripts/export-daily.ts                       yesterday (the farm's calendar day)
- *   npx tsx scripts/export-daily.ts --date 2026-11-05     one day
- *   npx tsx scripts/export-daily.ts --days 7              the last 7 finished days (catches up after an outage)
- *   npx tsx scripts/export-daily.ts --out D:\Drive\farm   somewhere else (default: EXPORT_DIR, else packages\api\exports)
- *
- * Files go to <out>\<date>\ (see src/export-daily.ts). Run it again for the same day and it writes the same files over:
- * a day that was incomplete when first exported (the laptop was off) is complete after the gap-fill has run.
- * Needs the database running. Point EXPORT_DIR at a folder that Google Drive or OneDrive syncs to get the files at home.
- */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -43,7 +31,6 @@ try {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("--date must look like 2026-11-05");
     wanted.push(date);
   } else {
-    // The last `days` finished days: yesterday and the ones before it, in the farm's calendar.
     for (let back = 1; back <= days; back++) {
       const [row] = await sql`SELECT ((now() AT TIME ZONE ${timeZone})::date - ${back}::int)::text AS d`;
       wanted.push(String(row!.d));

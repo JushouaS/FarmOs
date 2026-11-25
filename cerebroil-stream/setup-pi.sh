@@ -18,6 +18,9 @@ if [ ! -f .env ]; then
   CAM_USER="${CAM_USER:-admin}"
   read -r -s -p "Camera password: " CAM_PASS; echo
   read -r -s -p "Token (the VISION_SERVICE_TOKEN from packages/api/.env on the laptop): " TOKEN; echo
+  read -r -p "API offline-sync URL (for example http://LAPTOP-WIFI-IP:4000/visual/offline-sync; leave blank to configure later): " SYNC_URL
+  read -r -p "Camera ids to sample [CAM-01,KINECT-01] (KINECT is skipped unless a real source is configured): " QUEUE_CAMERAS
+  QUEUE_CAMERAS="${QUEUE_CAMERAS:-CAM-01,KINECT-01}"
   if [ -z "$CAM_PASS" ] || [ -z "$TOKEN" ]; then
     echo "The camera password and the token are both needed."
     exit 1
@@ -30,6 +33,11 @@ if [ ! -f .env ]; then
 DAHUA_RTSP_URL=rtsp://$ENC_USER:$ENC_PASS@$CAM_IP:554/cam/realmonitor?channel=1&subtype=0
 KINECT_SOURCE=simulated
 VISION_SERVICE_TOKEN=$TOKEN
+OFFLINE_QUEUE_ENABLED=1
+OFFLINE_SAMPLE_SECONDS=300
+OFFLINE_SYNC_SECONDS=15
+OFFLINE_QUEUE_CAMERAS=$QUEUE_CAMERAS
+OFFLINE_SYNC_URL=$SYNC_URL
 EOF
   umask 022
   echo "Saved .env (only you can read it)."

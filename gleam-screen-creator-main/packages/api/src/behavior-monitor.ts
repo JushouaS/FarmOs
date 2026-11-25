@@ -22,6 +22,7 @@ import { raiseAlert } from "./notify.js";
  */
 
 const COOLDOWN_MINUTES = 60;
+const CAMERA_STREAM_BASE = env.CAMERA_STREAM_SERVICE_URL ?? env.VISION_SERVICE_URL;
 
 const toMinutes = (hhmm: string): number => {
   const [h, m] = hhmm.split(":");
@@ -33,7 +34,10 @@ export function isNight(now: Date, lighting: Lighting): boolean {
   const minute = now.getHours() * 60 + now.getMinutes();
   const dayStart = toMinutes(lighting.dayStart);
   const nightStart = toMinutes(lighting.nightStart);
-  const day = dayStart < nightStart ? minute >= dayStart && minute < nightStart : minute >= dayStart || minute < nightStart;
+  const day =
+    dayStart < nightStart
+      ? minute >= dayStart && minute < nightStart
+      : minute >= dayStart || minute < nightStart;
   return !day;
 }
 
@@ -96,7 +100,12 @@ export async function applyStatus(
   const raise = async (kind: string, message: string) => {
     const last = lastRaised.get(kind) ?? 0;
     if (now - last < COOLDOWN_MINUTES * 60_000) return;
-    const made = await raiseAlert(app, { kind, severity: "warning", message, dedupeMinutes: COOLDOWN_MINUTES });
+    const made = await raiseAlert(app, {
+      kind,
+      severity: "warning",
+      message,
+      dedupeMinutes: COOLDOWN_MINUTES,
+    });
     lastRaised.set(kind, now);
     if (made) raised.push(kind);
   };
@@ -134,7 +143,7 @@ export function startBehaviorMonitor(app: FastifyInstance): void {
     const night = isNight(new Date(), await readLighting(app));
     let status: BehaviorStatus;
     try {
-      const res = await fetch(`${env.VISION_SERVICE_URL}/behavior/status?night=${night ? 1 : 0}`, {
+      const res = await fetch(`${CAMERA_STREAM_BASE}/behavior/status?night=${night ? 1 : 0}`, {
         headers: { "X-Vision-Token": env.VISION_SERVICE_TOKEN },
         signal: AbortSignal.timeout(8_000),
       });
@@ -143,7 +152,10 @@ export function startBehaviorMonitor(app: FastifyInstance): void {
     } catch (err) {
       // The camera service being off or older is normal; say so once, not every half minute.
       if (!warned) {
-        app.log.info({ err: err instanceof Error ? err.message : err }, "behavior monitor: camera service not answering");
+        app.log.info(
+          { err: err instanceof Error ? err.message : err },
+          "behavior monitor: camera service not answering",
+        );
         warned = true;
       }
       return;
@@ -155,7 +167,10 @@ export function startBehaviorMonitor(app: FastifyInstance): void {
     if (raised.length > 0) app.log.info({ raised }, "behavior monitor: alerts raised");
   };
 
-  const timer = setInterval(() => void tick().catch((err) => app.log.error({ err }, "behavior monitor failed")), env.BEHAVIOR_POLL_SECONDS * 1000);
+  const timer = setInterval(
+    () => void tick().catch((err) => app.log.error({ err }, "behavior monitor failed")),
+    env.BEHAVIOR_POLL_SECONDS * 1000,
+  );
   timer.unref();
   app.addHook("onClose", async () => clearInterval(timer));
   app.log.info({ everySeconds: env.BEHAVIOR_POLL_SECONDS }, "behavior monitor started");

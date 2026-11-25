@@ -465,6 +465,24 @@ export interface AnalysisResult {
   cluster_count: number;
 }
 
+export interface LiveDetectionSnapshot {
+  camera_id: string;
+  detections: VisionDetection[];
+  detection_count: number;
+  metrics: VisionMetrics;
+  model_loaded: boolean;
+}
+
+export async function fetchLiveDetections(
+  cameraId: string,
+  signal?: AbortSignal,
+): Promise<LiveDetectionSnapshot> {
+  return apiFetch<LiveDetectionSnapshot>(
+    `/visual/detections/${encodeURIComponent(cameraId)}`,
+    { signal },
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Feeder / drinker zones                                                    */
 /* -------------------------------------------------------------------------- */
@@ -586,13 +604,13 @@ export interface KinectChicken {
   confidence: number;
   box: [number, number, number, number];
   polygon: [number, number][];
-  /** Grams, estimated from the bird's size on the depth picture (about 18 % off for one bird), or null when it cannot be estimated. */
+  /** Grams, estimated by the configured Kinect RGB or RGB-D model, or null when unavailable. */
   weightG: number | null;
 }
 
 export interface KinectChickens {
   ok: boolean;
-  /** Why there is no answer: "starting", "waiting_for_picture", "bridge_unreachable", "model_not_installed", "not_running", "error". */
+  /** Why there is no answer: "starting", "waiting_for_picture", "waiting_for_rgbd", "bridge_unreachable", "model_not_installed", "not_running", "error". */
   status?: string;
   message?: string;
   at?: number;
@@ -600,10 +618,10 @@ export interface KinectChickens {
   height?: number;
   count?: number;
   birds?: KinectChicken[];
-  /** "ok", "no_depth" (no depth picture came), "model_not_installed" or "no_birds". */
+  /** Weight inference state, including RGB-D startup calibration and bridge availability. */
   weightStatus?: string;
-  /** The flock's average from the birds that have an estimate. It is much closer than one bird's estimate. */
-  weight?: { n: number; meanG: number; medianG: number; errorPercent: number } | null;
+  /** The flock's average from the birds that have an estimate. Error is present only when validated metadata exists. */
+  weight?: { n: number; meanG: number; medianG: number; errorPercent?: number } | null;
 }
 
 /** The newest chicken outlines on the Kinect picture. Never throws: a program that is not running comes back as `ok: false`. */
@@ -639,6 +657,33 @@ export async function fetchLiveBehavior(night: boolean): Promise<LiveBehavior> {
   }
 }
 
+export interface PiAmmoniaHistoryRow {
+  recordedAt: string;
+  ammoniaPpm: number | null;
+  error: string | null;
+  sourceFile: string;
+}
+
+export interface PiBehaviorHistoryRow {
+  recordedAt: string;
+  birds: number | null;
+  stillBirds: number | null;
+  huddledBirds: number | null;
+  flockMoving: number | null;
+  huddleFdi: number | null;
+  error: string | null;
+  sourceFile: string;
+}
+
+export interface PiCsvHistory {
+  ammonia: PiAmmoniaHistoryRow[];
+  behavior: PiBehaviorHistoryRow[];
+}
+
+export async function fetchPiCsvHistory(): Promise<PiCsvHistory> {
+  return apiFetch<PiCsvHistory>("/visual/pi-csv-history");
+}
+
 export interface SensorDay {
   /** YYYY-MM-DD, the database's day. */
   day: string;
@@ -652,15 +697,12 @@ export interface SensorHistory {
   days: number;
   temperature: SensorDay[];
   humidity: SensorDay[];
+  ammonia: SensorDay[];
 }
 
-/** The DHT22's stored readings, one point per day that has any. Empty lists when there are none or the API is away. */
+/** Daily summaries for the Pi's stored temperature, humidity, and ammonia readings. */
 export async function fetchSensorHistory(days = 7): Promise<SensorHistory> {
-  try {
-    return await apiFetch<SensorHistory>(`/operations/sensor-history?days=${days}`);
-  } catch {
-    return { days, temperature: [], humidity: [] };
-  }
+  return apiFetch<SensorHistory>(`/operations/sensor-history?days=${days}`);
 }
 
 /** Build the MJPEG stream URL for a given camera (served via Fastify proxy). */

@@ -1,39 +1,62 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "./config.js";
+import { parsePiCsv } from "./pi-csv.js";
+import { encodePiLogPath, piLogDate, piLogSensorKind, safePiLogPath, type PiSensorLogKind } from "./pi-logs.js";
 import { statusFor } from "./sensor-monitor.js";
-
-/**
- * Fills the gaps in the stored temperature and humidity from the files the Raspberry Pi keeps.
- *
- * The API stores a reading each time it asks the Pi for one, so while the laptop is off, asleep, or cannot
- * reach the Pi, nothing is stored. The Pi writes its own row every minute (cerebroil-stream/daily_log.py), one
- * folder per reading: temperature/temperature-YYYY-MM-DD.csv and humidity/humidity-YYYY-MM-DD.csv (before
- * 2026-11-07 both were in one file, sensors-YYYY-MM-DD.csv, which is still read). Once the laptop is back this
- * reads those files and stores only the readings that fall in a gap: one that already has a stored reading within
- * TOLERANCE_MS is left alone, so running it again, or running it while the live polling works, adds nothing.
- *
- * The ammonia folder is not read back: there is no ammonia sensor yet, so it holds no values to store.
- *
- * Behaviour files are not read back: the Pi writes counts without the day or night rule and with other columns
- * than behavior_snapshots, so they stay as CSV for the daily export rather than being squeezed into that table.
- */
 
 const SENSORS = [
   { id: "SN-DHT22-T", field: "temperature", unit: "°C", min: -40, max: 80 },
   { id: "SN-DHT22-H", field: "humidity", unit: "%", min: 0, max: 100 },
 ] as const;
 
-/** A stored reading this close to a file row is the same reading, or close enough that the row adds nothing. */
 export const TOLERANCE_MS = 90_000;
 
 export interface PiSensorRow {
-  /** When the sensor was read: the time the row was written minus the age of the reading. */
   at: number;
   temperature: number | null;
   humidity: number | null;
 }
 
-/** One CSV line into fields; a field may be in double quotes with "" for a quote. */
+const number = (text: string | undefined): number | null => {
+  if (text === undefined || text.trim() === "") return null;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+};
+
+export function parseSensorCsv(text: string, now = Date.now(), kind?: PiSensorLogKind): PiSensorRow[] {
+  const records = parsePiCsv(text);
+  if (!records[0]) return [];
+  const header = records[0]!.map((value) => value.trim());
+  const timeIndex = header.indexOf("time");
+  if (timeIndex < 0) return [];
+  const ageIndex = header.indexOf("reading_age_s");
+  const valueIndex = header.findIndex((column) => column === "value" || column === "reading");
+  const temperatureIndex = header.findIndex((column) => column === "temperature_c" || column === "temperature");
+  const humidityIndex = header.findIndex((column) => column === "humidity_pct" || column === "humidity");
+  const tempIndex = temperatureIndex >= 0 ? temperatureIndex : kind === "temperature" ? valueIndex : -1;
+  const humidIndex = humidityIndex >= 0 ? humidityIndex : kind === "humidity" ? valueIndex : -1;
+  if (tempIndex < 0 && humidIndex < 0) return [];
+  const seen = new Set<number>();
+  const rows: PiSensorRow[] = [];
+  for (const f of records.slice(1)) {
+    if (f.length <= Math.max(timeIndex, tempIndex, humidIndex, ageIndex)) continue;
+    const wrote = Date.parse(f[timeIndex]!);
+    const age = ageIndex < 0 ? 0 : number(f[ageIndex]);
+    if (!Number.isFinite(wrote) || age === null || age < 0) continue;
+    const at = Math.round((wrote - age * 1000) / 1000) * 1000;
+    if (at > now + 5 * 60_000 || seen.has(at)) continue;
+    let temperature = tempIndex >= 0 ? number(f[tempIndex]) : null;
+    let humidity = humidIndex >= 0 ? number(f[humidIndex]) : null;
+    if (temperature !== null && (temperature < SENSORS[0].min || temperature > SENSORS[0].max)) temperature = null;
+    if (humidity !== null && (humidity < SENSORS[1].min || humidity > SENSORS[1].max)) humidity = null;
+    if (temperature === null && humidity === null) continue;
+    seen.add(at);
+    rows.push({ at, temperature, humidity });
+  }
+  return rows;
+}
+
+/* Helpers for the per-reading files (temperature/, humidity/), kept for the file tests and other callers. */
 function fields(line: string): string[] {
   const out: string[] = [];
   let cur = "";
@@ -56,39 +79,6 @@ function fields(line: string): string[] {
   return out;
 }
 
-const number = (text: string | undefined): number | null => {
-  if (text === undefined || text.trim() === "") return null;
-  const n = Number(text);
-  return Number.isFinite(n) ? n : null;
-};
-
-/**
- * The rows of a sensors-*.csv that carry a reading. A row cut short by a power cut, one with an unreadable time,
- * one with no value, a value outside what the sensor can measure, and a reading that appears twice are all left out.
- */
-export function parseSensorCsv(text: string, now = Date.now()): PiSensorRow[] {
-  const lines = text.split(/\r?\n/);
-  if (!lines[0]?.startsWith("time,temperature_c,humidity_pct,reading_age_s")) return [];
-  const seen = new Set<number>();
-  const rows: PiSensorRow[] = [];
-  for (const line of lines.slice(1)) {
-    const f = fields(line);
-    if (f.length < 5) continue;
-    const wrote = Date.parse(f[0]!);
-    const age = number(f[3]);
-    if (!Number.isFinite(wrote) || age === null || age < 0) continue;
-    const at = Math.round((wrote - age * 1000) / 1000) * 1000;
-    if (at > now + 5 * 60_000 || seen.has(at)) continue;
-    let temperature = number(f[1]);
-    let humidity = number(f[2]);
-    if (temperature !== null && (temperature < SENSORS[0].min || temperature > SENSORS[0].max)) temperature = null;
-    if (humidity !== null && (humidity < SENSORS[1].min || humidity > SENSORS[1].max)) humidity = null;
-    if (temperature === null && humidity === null) continue;
-    seen.add(at);
-    rows.push({ at, temperature, humidity });
-  }
-  return rows;
-}
 
 export interface PiValueRow {
   at: number;
@@ -166,6 +156,7 @@ export function sensorDays(files: PiFile[], days: number): SensorDay[] {
 }
 
 /** The rows with no stored reading within `toleranceMs`. `storedMs` is the stored reading times, in any order. */
+
 export function rowsToFill(rows: PiSensorRow[], storedMs: number[], toleranceMs = TOLERANCE_MS): PiSensorRow[] {
   const stored = [...storedMs].sort((a, b) => a - b);
   return rows.filter((row) => {
@@ -187,7 +178,6 @@ export interface BackfillResult {
   stored: number;
 }
 
-/** Reads the newest `days` days of sensor files from the Pi and stores the readings that fall in a gap. */
 export async function backfillSensors(
   app: FastifyInstance,
   days = 2,
@@ -197,25 +187,17 @@ export async function backfillSensors(
   const headers = { "X-Vision-Token": source.token };
   const listed = await fetch(`${base}/logs`, { headers, signal: AbortSignal.timeout(8_000) });
   if (!listed.ok) throw new Error(`the Pi's file list answered HTTP ${listed.status}`);
-  const dayFiles = sensorDays(((await listed.json()) as { files?: PiFile[] }).files ?? [], days);
-  if (!dayFiles.length) return { files: 0, stored: 0 };
-
-  let fetched = 0;
-  const download = async (path: string): Promise<string | null> => {
-    const res = await fetch(`${base}/logs/${path}`, { headers, signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) return null;
-    fetched++;
-    return res.text();
-  };
-  const readDay = async (day: SensorDay): Promise<PiSensorRow[]> => {
-    if (day.temperature || day.humidity) {
-      const t = day.temperature ? await download(day.temperature) : null;
-      const h = day.humidity ? await download(day.humidity) : null;
-      return mergeReadings(t ? parseValueCsv(t, "temperature") : [], h ? parseValueCsv(h, "humidity") : []);
-    }
-    const text = day.combined ? await download(day.combined) : null;
-    return text ? parseSensorCsv(text) : [];
-  };
+  const files = ((await listed.json()) as { files?: { name?: unknown; path?: unknown }[] }).files ?? [];
+  const candidates = files
+    .map((file) => {
+      const path = safePiLogPath(file);
+      return path ? { path, date: piLogDate(path), kind: piLogSensorKind(path) } : null;
+    })
+    .filter((file): file is { path: string; date: string; kind: PiSensorLogKind } =>
+      file !== null && file.date !== null && file.kind !== null);
+  const dates = [...new Set(candidates.map((file) => file.date))].sort().reverse().slice(0, days);
+  const selected = candidates.filter((file) => dates.includes(file.date));
+  if (selected.length === 0) return { files: 0, stored: 0 };
 
   const bounds = new Map<string, { lower: number | null; upper: number | null }>();
   for (const sensor of SENSORS) {
@@ -231,32 +213,47 @@ export async function backfillSensors(
     });
   }
 
-  let stored = 0;
-  for (const day of dayFiles) {
-    const rows = await readDay(day);
-    if (rows.length === 0) continue;
-    const from = new Date(Math.min(...rows.map((r) => r.at)) - TOLERANCE_MS);
-    const to = new Date(Math.max(...rows.map((r) => r.at)) + TOLERANCE_MS);
-    const have = await app.sqlRead`
-      SELECT recorded_at FROM sensor_readings
-      WHERE sensor_id IN ('SN-DHT22-T', 'SN-DHT22-H') AND recorded_at BETWEEN ${from} AND ${to}`;
-    const missing = rowsToFill(rows, have.map((r) => new Date(r.recorded_at as string | Date).getTime()));
-    for (const row of missing) {
-      for (const sensor of SENSORS) {
-        const value = row[sensor.field];
-        if (value === null) continue;
-        const b = bounds.get(sensor.id)!;
-        await app.sqlWrite`
-          INSERT INTO sensor_readings (sensor_id, value, unit, status, recorded_at)
-          VALUES (${sensor.id}, ${value}, ${sensor.unit}, ${statusFor(value, b.lower, b.upper)}, ${new Date(row.at)})`;
-        stored++;
-      }
+  const merged = new Map<number, PiSensorRow>();
+  for (const file of selected) {
+    const res = await fetch(`${base}/logs/${encodePiLogPath(file.path)}`, { headers, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`the Pi's log ${file.path} answered HTTP ${res.status}`);
+    const rows = parseSensorCsv(await res.text(), Date.now(), file.kind);
+    for (const row of rows) {
+      const current = merged.get(row.at) ?? { at: row.at, temperature: null, humidity: null };
+      merged.set(row.at, {
+        at: row.at,
+        temperature: row.temperature ?? current.temperature,
+        humidity: row.humidity ?? current.humidity,
+      });
     }
   }
-  return { files: fetched, stored };
+  const rows = [...merged.values()].filter((row) => row.temperature !== null || row.humidity !== null);
+  if (rows.length === 0) return { files: selected.length, stored: 0 };
+  const from = new Date(Math.min(...rows.map((row) => row.at)) - TOLERANCE_MS);
+  const to = new Date(Math.max(...rows.map((row) => row.at)) + TOLERANCE_MS);
+  const have = await app.sqlRead`
+    SELECT sensor_id, recorded_at FROM sensor_readings
+    WHERE sensor_id IN ('SN-DHT22-T', 'SN-DHT22-H') AND recorded_at BETWEEN ${from} AND ${to}`;
+
+  let stored = 0;
+  for (const sensor of SENSORS) {
+    const sensorRows = rows.filter((row) => row[sensor.field] !== null);
+    const storedTimes = have
+      .filter((row) => row.sensor_id === sensor.id)
+      .map((row) => new Date(row.recorded_at as string | Date).getTime());
+    const missing = rowsToFill(sensorRows, storedTimes);
+    for (const row of missing) {
+      const value = row[sensor.field]!;
+      const boundsForSensor = bounds.get(sensor.id)!;
+      await app.sqlWrite`
+        INSERT INTO sensor_readings (sensor_id, value, unit, status, recorded_at)
+        VALUES (${sensor.id}, ${value}, ${sensor.unit}, ${statusFor(value, boundsForSensor.lower, boundsForSensor.upper)}, ${new Date(row.at)})`;
+      stored++;
+    }
+  }
+  return { files: selected.length, stored };
 }
 
-/** Runs the gap-fill shortly after start-up and then every PI_BACKFILL_MINUTES. 0 turns it off. */
 export function startPiBackfill(app: FastifyInstance): void {
   if (env.SENSOR_MONITOR === "off" || env.PI_BACKFILL_MINUTES <= 0) return;
   let running = false;
@@ -269,7 +266,6 @@ export function startPiBackfill(app: FastifyInstance): void {
       warned = false;
       if (done.stored > 0) app.log.info(done, "filled a gap in the sensor readings from the Pi's files");
     } catch (err) {
-      // The Pi being off or older than this feature is normal; say so once, not every hour.
       if (!warned) app.log.info({ err: err instanceof Error ? err.message : err }, "sensor gap-fill: the Pi's files are not available");
       warned = true;
     } finally {

@@ -60,8 +60,10 @@ You open **one window for each**. The optional ones (vision package, Kinect brid
 |---|---------|------|--------|--------------|
 | 1 | Database (PostgreSQL) | 5434 | `gleam-screen-creator-main\packages\api` (data in `.pgdata`) | Stores users, flock, settings, alerts |
 | 2 | API server | 4000 | `gleam-screen-creator-main\packages\api` | Logins, all the data the pages show, saves your settings |
-| 3 | Camera service | 5000 | `cerebroil-stream` | Connects to the camera, streams video, analyzes frames |
+| 3 | Camera service | 5000 | `cerebroil-stream` | Connects to the camera and streams video |
 | 4 | Web app | 8080 | `gleam-screen-creator-main` | The website itself |
+
+In the Docker setup, the Live Vision page gets its MJPEG picture from `cerebroil-stream` through the authenticated API; the ONNX vision service remains responsible for analysis. The API's `CAMERA_STREAM_SERVICE_URL` defaults to `http://stream:5000` in Compose. If deploying the API outside Compose, leave this unset to use `VISION_SERVICE_URL` for the stream too.
 
 **Start them in this order:** database, API, camera, web app.
 The API needs the database. The web app needs the API. The camera is only needed for Live Camera.
@@ -183,6 +185,7 @@ What goes in each one (names only, keep the values private):
 | `API_HOST`, `API_PORT` | Use `0.0.0.0` and `4000` if you want phones on the same Wi-Fi to reach it. |
 | `API_CORS_ORIGINS` | Websites allowed to call the API, for example `http://localhost:8080`. |
 | `VISION_SERVICE_TOKEN` | A shared secret between the API and the camera service. **Must be identical in both `.env` files.** |
+| `BEHAVIOR_INTERVAL_MINUTES` | Set to `0` when the Pi's offline analysis queue is enabled, to avoid duplicate scheduled samples. |
 | `NODE_ENV` | `development` for everyday use. |
 
 Make a random token with:
@@ -199,21 +202,26 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `DAHUA_RTSP_URL` | The camera's address: `rtsp://USER:PASSWORD@CAMERA-IP:554/...`. If the password has symbols such as `@` or `#`, they must be URL-encoded (`@` becomes `%40`). No camera yet (level A of section 0)? Leave the example line: the service just keeps retrying. |
 | `KINECT_SOURCE` | `simulated` (default, a fake depth picture), a device number like `0`, or a URL. |
 | `LIVE_BEHAVIOR` | Remove the `#` and set `1` only when the model file of section 3.5 is in place. |
+| `OFFLINE_SYNC_URL` | API LAN address ending in `/visual/offline-sync`; the Pi retries queued camera analyses here when reachable. |
+| `OFFLINE_QUEUE_ENABLED`, `OFFLINE_QUEUE_CAMERAS`, `OFFLINE_REQUIRE_MODEL` | Keep scheduled camera analysis results on the Pi, choose camera IDs, and require ONNX detections (default) instead of queuing motion-only fallbacks. Kinect is excluded automatically while `KINECT_SOURCE=simulated`. |
+| `OFFLINE_SAMPLE_SECONDS`, `OFFLINE_SYNC_SECONDS`, `OFFLINE_QUEUE_MAX_EVENTS` | Sampling interval, retry interval, and maximum queued records (10,000 by default). |
 
 **Project root `.env`**
 
 | Name | Meaning |
 |------|---------|
 | `GROQ_API_KEY` | Needed only for the **Insights** page (the AI briefing). Get a free key at console.groq.com. Without it the Insights AI cards show a "key not configured" message and everything else still works. |
+| `VIDEO_TEST_MODEL_PATH` | Optional ONNX detector in `packages\vision\models` used only by Settings → Test Clips. It does not change live-camera detection or the Raspberry Pi implementation. |
 
 **Other settings** (all have sensible defaults; each `.env.example` lists them with a comment, and `packages\api\src\config.ts` is the full list for the API)
 
 | Name | Where | Meaning |
 |------|-------|---------|
 | `VISION_SERVICE_URL` | `packages\api\.env` | Where the camera service is: `http://127.0.0.1:5000`, or the Raspberry Pi (see section 7). |
+| `VISION_CAPTURE_URL` | project root `.env` | Optional authenticated upstream video URL for local model analysis. Use the Pi's `/video_feed/dahua` URL if the Dahua camera is reachable from the Pi but not from Docker. |
 | `SENSOR_MONITOR`, `SENSOR_POLL_SECONDS`, `SENSOR_OFFLINE_MINUTES` | `packages\api\.env` | Reads the pen's temperature and humidity every minute; raises a "Sensor Offline" alert after 10 minutes of silence. |
 | `BEHAVIOR_MONITOR`, `BEHAVIOR_POLL_SECONDS` | `packages\api\.env` | Asks the camera service every 30 seconds which birds are inactive or huddled and raises alerts. |
-| `KINECT_BRIDGE_KEY`, `KINECT_SEG_URL` | `packages\api\.env` | Access key shared with the Kinect bridge, and where the chicken finder is. |
+| `KINECT_BRIDGE_KEY`, `KINECT_SEG_TOKEN`, `KINECT_SEG_URL` | project root `.env` | Bridge ticket key; private token shared with the Kinect finder; and the finder URL (`http://host.docker.internal:8182` in Docker Desktop). |
 | `SMTP_*`, `VAPID_*`, `APP_URL` | `packages\api\.env` | Email and browser-push alerts (see "Alerts and notifications"). |
 | `TEMP_PASSWORD_HOURS`, `TRUST_PROXY`, `COOKIE_SECURE` | `packages\api\.env` | Temporary-password lifetime; proxy and HTTPS settings (see "Security notes"). |
 | `LIVE_BEHAVIOR`, `DETECTOR_MODEL_PATH`, `SCAN_DETECTOR`, `DEMO_*`, `BEHAVIOR_*` | `cerebroil-stream\.env` | Live behavior monitoring and the detector (see section 7). |
@@ -527,8 +535,16 @@ blocks that. A phone hotspot or a small router works.
 - Project root `.env`: `VITE_VISION_ORIGIN=http://PI-WIFI-ADDRESS:5000` (only used for the "not answering" message now; the video itself comes through the API)
 - `packages\api\.env`: `VISION_SERVICE_URL=http://PI-WIFI-ADDRESS:5000`
 - `VISION_SERVICE_TOKEN` must be the same in `packages\api\.env` and in the Pi's `cerebroil-stream/.env`.
+- Set the Pi's `OFFLINE_SYNC_URL` in `cerebroil-stream/.env` to `http://LAPTOP-WIFI-ADDRESS:4000/visual/offline-sync`. The API must listen on the laptop's Wi-Fi interface (`API_HOST=0.0.0.0`), and the laptop firewall must allow its API port from the Pi.
+- Keep `OFFLINE_QUEUE_ENABLED=1` on the Pi and set `BEHAVIOR_INTERVAL_MINUTES=0` in `packages\api\.env`. This makes the Pi the only scheduled sampler.
 
-Remove those two lines to go back to the camera service on the laptop.
+The Pi samples `CAM-01` behavior every five minutes by default. It runs the ONNX model configured by `DETECTOR_MODEL_PATH` (default `cerebroil-stream/models/detector.onnx`) against the latest camera frame. With `OFFLINE_REQUIRE_MODEL=1`, it skips saving if the model is missing and the service falls back to motion-only detection. The Pi appends each model result to `analysis_queue.csv` on its SD card. Each CSV row includes the camera ID, UTC timestamp, model/source, behavior summary, count, detections, clusters, any weight estimate, the complete analysis JSON, and a pending/synced status. The CSV survives service restarts and remains readable in a spreadsheet; after upload the row is marked `synced` rather than deleted, so the Pi keeps its local history.
+
+The `KINECT-01` weight sample is automatically skipped while `KINECT_SOURCE=simulated` (the default), so generated test images are never saved as real weights. Configure `KINECT_SOURCE` to the real depth camera to begin queueing its estimates; the default camera list already includes `KINECT-01`. A failed real camera connection is retried and does not fall back to synthetic weight data. The project estimates weight from the Kinect feed; the Dahua behavior camera does not produce weight estimates. Apply database migrations after updating the project (`bun run db:migrate` in `packages\api`) to register the Kinect camera and its dedicated weight sensor. The Pi retries every 15 seconds and deletes each record only after the API confirms it was stored. Stable record IDs make retries idempotent. If the queue reaches its 10,000-record limit, new samples are skipped and an error is written to the Pi service log; queued records are kept.
+
+This queues **camera-derived** behavior and Kinect weight estimates only. It does not queue manually entered actual weights from a disconnected browser, and it stores analysis results rather than video footage. Ensure the real Kinect source and trained models are installed if those are needed; the default `KINECT_SOURCE=simulated` is only for development.
+
+To go back to API-side scheduled sampling, set `OFFLINE_QUEUE_ENABLED=0` on the Pi (or remove it) and restore `BEHAVIOR_INTERVAL_MINUTES` to a positive interval.
 
 ### Temperature and humidity: the DHT22 sensor on the Raspberry Pi (optional)
 
@@ -789,6 +805,32 @@ echo "LIVE_BEHAVIOR=1" >> ~/cerebroil-stream/.env && sudo systemctl restart cere
 
 It keeps the Pi busy (one detector run every 3 seconds). If `/behavior/status` then says `model_not_installed`, copy `detector.onnx` into that folder.
 Undo it by deleting that line from `.env` and restarting the service.
+raises one "Sensor Offline" alert. Ammonia CSV values are shown separately as raw ppm history; they are not yet calibrated
+against ammonia sensor bounds or used for alerts.
+
+The Pi keeps daily CSVs in `cerebroil-stream\logs`. New sensor and behavior files are in separate
+folders (`temperature`, `humidity`, `ammonia`, and `behavior`); older flat `sensors-*.csv` and
+`behavior-*.csv` files remain supported. Run `npm run export:daily -- --date YYYY-MM-DD` in
+`packages\api` to copy that day's Pi CSVs into `exports\YYYY-MM-DD\pi`, preserving subfolders. To import the downloaded CSVs
+into the website, run `npm run db:migrate` and then `npm run import:pi-csv` in `packages\api`. Temperature and humidity go to
+the existing sensor telemetry. **Analytics → Telemetry** has **Daily sensor records** for temperature, humidity, and ammonia,
+with daily average, range, and reading count for the last 7, 14, or 30 days. Days with no readings are omitted. Raw ammonia
+and behavior tracker history also appear in the **Pi CSV History** panel on Live Camera.
+Legacy ammonia files with a timezone-less `timestamp` column are interpreted in `FARM_TZ` (default `Asia/Manila`). The
+behavior history shows the logger's counts and shares without converting them into welfare classifications. The import can
+be rerun safely. No Kinect weight CSVs were present in the fetched Pi file list, so this import does not add historical weights.
+
+### Live broiler detector
+
+The Live Camera analysis service uses the YOLO11n broiler detector from
+[BehaviorMonitoring, branch `bytetrack-tuning`](https://github.com/kyaanise1/BehaviorMonitoring/tree/bytetrack-tuning),
+pinned at commit `4530052c0cdbbae9c910157a54e11e0d763728a0`. Its ONNX export belongs at
+`gleam-screen-creator-main/packages/vision/models/chicken.onnx`; Compose mounts that folder into the vision service.
+The existing vision analysis applies its behavior measurements to the model's detections. This uses the branch's
+detector weights, not its separate experimental ByteTrack validation runner. The exported model metadata declares
+AGPL-3.0; check that license's requirements for your deployment.
+The Live Camera page draws the current detections over CAM-01 and refreshes them every four seconds using a
+read-only endpoint, so displaying boxes does not add a database row for every refresh.
 
 ### Test video: the trained model on an uploaded clip (optional)
 
@@ -903,13 +945,19 @@ on, and **Send a test** sends the signed-in person a test notice.
   It works on `localhost` and on https, and the browser must not have blocked notifications for the site.
 - Restart the API after changing `.env`. Run `npm run db:migrate` once (it adds the table for push).
 
-**Alerts from the camera.** With the trained model installed on the camera computer (see "Test video"),
-set `LIVE_BEHAVIOR=1` in `cerebroil-stream\.env` and restart it. It then follows the birds on the live
-camera and the API (checking every 30 seconds) raises:
+**Live behavior and alerts from the camera.** In this Docker Compose setup, the stream service uses
+`packages/vision/models/chicken.onnx`, mounted automatically into the container. `LIVE_BEHAVIOR` defaults to
+`1`; set `LIVE_BEHAVIOR=0` in the project-root `.env` to turn the live tracker off. The tracker analyzes a
+camera frame every three seconds and follows detections across frames; it is not making a 30-minute decision
+from one snapshot. The API polls its status every 30 seconds and raises:
 
-- **Inactive Bird**: birds that have not moved for 30 minutes while the rest of the flock moves (by day).
-- **Flock Inactivity**: most of the flock still for 30 minutes during the day.
-- **Huddling Detected**: 35% or more of the birds huddled together for 10 minutes.
+- **Inactive Bird**: a tracked bird stays still for 30 minutes while the rest of the flock moves (by day).
+- **Flock Inactivity**: most of the flock remains still for 30 minutes during the day.
+- **Huddling Detected**: 35% or more of the birds stay in a huddle for 10 minutes.
+
+The website's **Behavior Breakdown** reads this same live tracker. On a Raspberry Pi deployment, install the
+ONNX detector at `cerebroil-stream/models/detector.onnx`, set `LIVE_BEHAVIOR=1` and
+`LIVE_INACTIVE_SECONDS=1800` in the Pi's `cerebroil-stream/.env`, then restart the Pi camera service.
 
 **Sensor Offline** comes from the API itself: when the temperature and humidity sensor has reported before and then sends
 nothing for 10 minutes (`SENSOR_OFFLINE_MINUTES`), one alert says so (not again within 12 hours). Check its wires and the Pi's power.
@@ -1000,31 +1048,38 @@ runs the trained segmentation model, and keeps the newest answer. Put the model 
 
 ```
 cd cerebroil-stream
-pip install -r requirements.txt
-pip install -r requirements-kinect.txt     (once; it brings PyTorch, so it is big)
-python kinect_seg.py
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-kinect.txt
 ```
 
-It only listens on this computer (`127.0.0.1:8182`). The API asks it (`GET /visual/kinect-chickens`, which needs a
-sign-in), so nobody reaches it from outside. It works continuously while somebody has the Picture view open; otherwise
+Set the same random `KINECT_SEG_TOKEN` in the project root `.env` and
+`cerebroil-stream\.env`. The finder runner uses that virtual environment and
+starts the model service for Docker Desktop:
+
+```
+..\gleam-screen-creator-main\scripts\run-kinect-finder.ps1
+```
+
+It listens on this computer (`127.0.0.1:8182`; `KINECT_SEG_HOST` changes that, e.g. for the Docker API) and answers only
+requests that carry `KINECT_SEG_TOKEN`: set the same value (32+ characters) in `cerebroil-stream\.env` and `packagespi\.env`,
+or the Picture view says the finder is not running. The API asks it (`GET /visual/kinect-chickens`, which needs a sign-in), so
+nobody reaches it from outside. It works continuously while somebody has the Picture view open; otherwise
 it only takes the once-a-minute saved reading (see "Saved weights" below) and rests in between. If it is not running, the Picture view says "Chicken finder is not running" and everything else works.
 `KINECT_SEG_URL` in `packages\api\.env` changes where the API looks for it. In a room with no chickens it may still
 find one now and then (a person or an object): the model counts anything above 25% confidence
 (`KINECT_SEG_CONFIDENCE`).
 
-**Weights.** Each outlined bird also gets an estimated weight. The Picture view shows it on the bird, and the
-flock's average under the picture. The weight comes from the size of the bird's outline on the depth picture
-(`cerebroil-stream\kinect_weight.py`): its footprint, length and width go into a small model
-(`models\weight_model_size_v1.json`, not in the repository like the other models). The program asks the bridge for
-the depth picture as well as the colour one. `pip install -r requirements-kinect.txt` brings `xgboost`, which it needs.
+**Weights.** The active model is the 17-feature RGB-D regressor
+`C:\Images\weight_calibration\weight_model_live_rgbd_20261117_candidate.json`. Its settings in
+`cerebroil-stream\.env` point to that model and `C:\Images\intrinsics_depth_kinect_v2_reference.json`.
+The bridge must be rebuilt with `kinect-bridge\build.cmd` to provide synchronized color, full-resolution
+depth and Kinect depth-to-color coordinates. On startup, the finder estimates the depth scale from 25
+frames and the configured 1500 mm floor height, then computes the same 2D and point-cloud features used
+to train the model. `pip install -r requirements-kinect.txt` installs XGBoost and SciPy.
 
-How far to trust it: one bird is typically about 18 % (about 175 g) off, because a footprint says only so much; the
-flock's average from one picture is typically within about 5 % (tested on 40 labelled frames with the real outline
-model). The model was trained on one flock, days 26 to 40, so check it with a few birds on a scale before relying on
-it, and especially for birds much younger or older. To train it again on your own data (a CSV with the columns
-`projected_area_mm2`, `length_mm`, `width_mm`, `elongation`, `pixel_count`, `weight_g`, `session` and `band_id`):
-`python train_weight_model.py your.csv`. Without the model file, `xgboost` or the depth picture, the weights are left
-out and everything else works.
+This candidate has not been validated against live scale measurements. Treat each estimate as
+experimental and compare it with weighed birds before relying on it. If depth, the coordinate map,
+model or intrinsics are unavailable, outlines still work but weights remain unset.
 
 **Saved weights, on the Kinect computer.** `kinect_seg.py` also weighs the flock once a minute when nobody is watching
 (it takes one picture, weighs, and lets go of the Kinect again), and keeps every reading in two files a day in

@@ -104,6 +104,8 @@ _sources: dict[str, str] = camera_config.read_sources()
 # Global instances
 cameras = CameraManager(sources=_sources)
 detector = Detector()
+VIDEO_TEST_MODEL_PATH = os.getenv("VIDEO_TEST_MODEL_PATH", "").strip()
+video_detector = Detector(VIDEO_TEST_MODEL_PATH) if VIDEO_TEST_MODEL_PATH else detector
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +146,8 @@ def health():
         "model_loaded": detector.available,
         "model_error": detector.load_error,
         "analysis_mode": "onnx" if detector.available else "unavailable",
+        "video_test_model_loaded": video_detector.available,
+        "video_test_model_error": video_detector.load_error,
         "video_clips": clip_store.count(),
     })
 
@@ -410,7 +414,7 @@ def video_frame(clip_id: str):
         return jsonify({"error": "video_frame_unavailable", "t": t}), 422
 
     if request.args.get("annotate") in ("1", "true", "yes"):
-        frame = clip_store.annotate(frame, detector.detect(frame))
+        frame = clip_store.annotate(frame, video_detector.detect(frame))
 
     jpeg = clip_store.encode_jpeg(frame)
     if jpeg is None:
@@ -660,12 +664,14 @@ def video_analyze(clip_id: str):
     if frame is None:
         return jsonify({"error": "video_frame_unavailable", "t": t}), 422
 
-    result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, detector, zones=zones)
+    result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, video_detector, zones=zones)
 
     return jsonify({
         "clip": clip.as_dict(),
         "t": t,
         "zone_camera": VIDEO_ZONE_CAMERA,
+        "model_loaded": video_detector.available,
+        "model_error": video_detector.load_error,
         "db_written": False,
         "detections": [d.as_dict() for d in result.detections],
         "detection_count": len(result.detections),
@@ -709,7 +715,7 @@ def video_sweep(clip_id: str):
         if frame is None:
             samples.append({"t": t, "metrics": None, "warnings": ["video_frame_unavailable"]})
             continue
-        result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, detector)
+        result = analyse_pair(VIDEO_ZONE_CAMERA, prev_frame, frame, video_detector)
         samples.append({"t": t, "metrics": result.metrics, "warnings": result.warnings})
 
     logger.info(
@@ -720,6 +726,8 @@ def video_sweep(clip_id: str):
     return jsonify({
         "clip": clip.as_dict(),
         "zone_camera": VIDEO_ZONE_CAMERA,
+        "model_loaded": video_detector.available,
+        "model_error": video_detector.load_error,
         "sampling": {
             "requested": count,
             "taken": len(samples),

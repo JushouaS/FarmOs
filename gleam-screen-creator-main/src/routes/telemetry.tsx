@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/farm/AppShell";
 import { AxisLineChart, DonutChart, type ChartSeries } from "@/components/farm/charts";
+import { fetchSensorHistory, type SensorDay, type SensorHistory } from "@/lib/api-client";
 import { getGrowthAnalytics } from "@/lib/farm/repository";
 import {
   HEAVY_RATIO,
@@ -1248,12 +1249,6 @@ function EnvironmentSection({ cluster }: { cluster: Analytics["cluster"] }) {
         <EmptyNote>{tr("No readings are stored for the house on camera.")}</EmptyNote>
       ) : (
         <>
-          <EmptyNote>
-            {tr(
-              "Each sensor holds one stored reading, and nothing in this system logs them, so there is no history to plot — only the last value and the range it should sit in.",
-            )}
-          </EmptyNote>
-
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {readings.map((reading) => {
               const color = readingColor(reading.parameter);
@@ -1317,7 +1312,195 @@ function EnvironmentSection({ cluster }: { cluster: Analytics["cluster"] }) {
           </div>
         </>
       )}
+      <SensorDailyHistory />
     </section>
+  );
+}
+
+type DailySensorRow = {
+  day: string;
+  temperature: SensorDay | null;
+  humidity: SensorDay | null;
+  ammonia: SensorDay | null;
+};
+
+function SensorDailyHistory() {
+  const [days, setDays] = useState(7);
+  const [result, setResult] = useState<{
+    days: number;
+    history?: SensorHistory;
+    error?: string;
+  }>({ days: 0 });
+
+  useEffect(() => {
+    let active = true;
+    void fetchSensorHistory(days)
+      .then((history) => {
+        if (active) setResult({ days, history });
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setResult({ days, error: reason instanceof Error ? reason.message : String(reason) });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [days]);
+
+  const history = result.days === days ? (result.history ?? null) : null;
+  const error = result.days === days ? (result.error ?? null) : null;
+  const rowsByDay = new Map<string, DailySensorRow>();
+  if (history) {
+    for (const sensor of ["temperature", "humidity", "ammonia"] as const) {
+      for (const reading of history[sensor]) {
+        const row = rowsByDay.get(reading.day) ?? {
+          day: reading.day,
+          temperature: null,
+          humidity: null,
+          ammonia: null,
+        };
+        row[sensor] = reading;
+        rowsByDay.set(reading.day, row);
+      }
+    }
+  }
+  const rows = [...rowsByDay.values()].sort((a, b) => b.day.localeCompare(a.day));
+
+  return (
+    <div className="cb-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
+            {tr("Daily sensor records")}
+          </h3>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+            {tr("Daily average, range, and number of readings. Days without readings are omitted.")}
+          </p>
+        </div>
+        <label
+          className="flex items-center gap-2 text-xs"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          {tr("Period")}
+          <select
+            aria-label={tr("History period")}
+            className="rounded-md border px-2 py-1.5"
+            style={{
+              background: "var(--surface-raised)",
+              borderColor: "var(--border-default)",
+              color: "var(--text-primary)",
+            }}
+            value={days}
+            onChange={(event) => setDays(Number(event.target.value))}
+          >
+            {[7, 14, 30].map((period) => (
+              <option key={period} value={period}>
+                {tr("{n} days", { n: period })}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {error && (
+        <p role="status" className="mt-4 text-sm text-[var(--status-red)]">
+          {tr("Could not load daily sensor records: {reason}", { reason: error })}
+        </p>
+      )}
+      {!history && !error && (
+        <p role="status" className="mt-4 text-sm" style={{ color: "var(--text-tertiary)" }}>
+          {tr("Loading daily records…")}
+        </p>
+      )}
+      {history && rows.length === 0 && (
+        <p className="mt-4 text-sm" style={{ color: "var(--text-tertiary)" }}>
+          {tr("No daily readings in this period.")}
+        </p>
+      )}
+      {history && rows.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-xs">
+            <thead>
+              <tr
+                className="border-b"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-tertiary)" }}
+              >
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  {tr("Date")}
+                </th>
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  {tr("Temperature")}
+                </th>
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  {tr("Humidity")}
+                </th>
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  {tr("Ammonia (ppm)")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={row.day}
+                  className="border-b last:border-0"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                >
+                  <th
+                    scope="row"
+                    className="whitespace-nowrap px-3 py-3 font-medium"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {new Date(`${row.day}T12:00:00`).toLocaleDateString(localeTag(), {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </th>
+                  <td className="px-3 py-3">
+                    <SensorDaySummary reading={row.temperature} unit="°C" digits={1} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <SensorDaySummary reading={row.humidity} unit="%" digits={1} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <SensorDaySummary reading={row.ammonia} unit="ppm" digits={2} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SensorDaySummary({
+  reading,
+  unit,
+  digits,
+}: {
+  reading: SensorDay | null;
+  unit: string;
+  digits: number;
+}) {
+  if (!reading) return <span style={{ color: "var(--text-tertiary)" }}>—</span>;
+  return (
+    <div className="space-y-0.5">
+      <p className="font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
+        {tr("Average: {avg}{unit}", { avg: reading.avg.toFixed(digits), unit })}
+      </p>
+      <p className="tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+        {tr("Range: {min}–{max}{unit} · {count} readings", {
+          min: reading.min.toFixed(digits),
+          max: reading.max.toFixed(digits),
+          unit,
+          count: reading.n,
+        })}
+      </p>
+    </div>
   );
 }
 

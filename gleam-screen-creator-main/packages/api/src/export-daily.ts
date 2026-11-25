@@ -1,19 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type postgres from "postgres";
-
-/**
- * One day's data as plain files, so it can be collected without opening the website: the readings, the
- * behaviour snapshots, the weights, the alerts, and a short health summary that says whether the day is whole.
- *
- *   exports/2026-11-07/sensors.csv  behavior.csv  weights-typed.csv  weights-by-day.csv  alerts.csv
- *                      health.txt   health.json
- *                      pi/temperature/temperature-2026-11-07.csv  pi/humidity/humidity-2026-11-07.csv
- *                      pi/ammonia/ammonia-2026-11-07.csv          pi/behavior/behavior-2026-11-07.csv
- *   (a day from before the Pi kept one folder per reading has pi/sensors-<date>.csv and pi/behavior-<date>.csv)
- *
- * Run by scripts/export-daily.ts. The day is the farm's calendar day (FARM_TZ), not the database's or the Pi's.
- */
+import { encodePiLogPath, piLogDate, safePiLogPath, type PiLogFile } from "./pi-logs.js";
 
 type Row = Record<string, unknown>;
 
@@ -24,7 +12,7 @@ export function csvCell(value: unknown): string {
 }
 
 export function toCsv(columns: string[], rows: Row[]): string {
-  return [columns.join(","), ...rows.map((row) => columns.map((c) => csvCell(row[c])).join(","))].join("\n") + "\n";
+  return [columns.join(","), ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(","))].join("\n") + "\n";
 }
 
 export interface Gap {
@@ -33,7 +21,6 @@ export interface Gap {
   minutes: number;
 }
 
-/** The silences of at least `minMinutes` between consecutive times, plus the stretch before the first and after the last inside [start, end]. */
 export function findGaps(timesMs: number[], startMs: number, endMs: number, minMinutes: number): Gap[] {
   const sorted = [...timesMs].sort((a, b) => a - b);
   const edges = [startMs, ...sorted, endMs];
@@ -45,7 +32,6 @@ export function findGaps(timesMs: number[], startMs: number, endMs: number, minM
   return gaps;
 }
 
-/** A time as the farm's wall clock, "2026-11-05 16:20:07". */
 export function localTime(ms: number, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -57,7 +43,7 @@ export function localTime(ms: number, timeZone: string): string {
     second: "2-digit",
     hourCycle: "h23",
   }).formatToParts(new Date(ms));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
@@ -96,14 +82,17 @@ export async function exportDay(
 ): Promise<DaySummary> {
   const folder = join(outDir, date);
   await mkdir(folder, { recursive: true });
-  // The farm's day as two instants, so the indexes on the time columns are used.
   const [{ start, end }] = (await sql`
     SELECT ((${date}::date)::timestamp AT TIME ZONE ${timeZone}) AS start,
            ((${date}::date + 1)::timestamp AT TIME ZONE ${timeZone}) AS "end"`) as unknown as [{ start: Date; end: Date }];
   const startMs = start.getTime();
   const endMs = end.getTime();
   const withLocal = (rows: Row[], key: string): Row[] =>
-    rows.map((r) => ({ ...r, time_utc: new Date(r[key] as string | Date).toISOString(), time_local: localTime(new Date(r[key] as string | Date).getTime(), timeZone) }));
+    rows.map((row) => ({
+      ...row,
+      time_utc: new Date(row[key] as string | Date).toISOString(),
+      time_local: localTime(new Date(row[key] as string | Date).getTime(), timeZone),
+    }));
 
   const sensors = withLocal(
     await sql`
@@ -150,7 +139,6 @@ export async function exportDay(
   await writeFile(join(folder, "weights-by-day.csv"), toCsv(["grow_out_day", "actual_g", "standard_g", "sample_size", "source"], byDay as unknown as Row[]));
   await writeFile(join(folder, "alerts.csv"), toCsv(["time_local", "time_utc", "id", "kind", "severity", "message", "acknowledged"], alerts));
 
-  // The Pi's own files for the day, which hold what the laptop could not store while it was off (and the behaviour counts).
   const piSummary: DaySummary["pi"] = { reachable: false, files: [], note: null };
   if (pi) {
     try {
@@ -158,20 +146,25 @@ export async function exportDay(
       const listed = await fetch(`${pi.baseUrl}/logs`, { headers, signal: AbortSignal.timeout(8_000) });
       if (!listed.ok) throw new Error(`HTTP ${listed.status}`);
       piSummary.reachable = true;
-      // One folder per reading on the Pi (temperature/, humidity/, ammonia/, behavior/); an older Pi lists only names.
-      const paths = ((await listed.json()) as { files: { name: string; path?: string }[] }).files
-        .filter((f) => f.name.endsWith(`-${date}.csv`))
-        .map((f) => f.path ?? f.name)
-        .filter((p) => /^([a-z]+\/)?[a-z-]+-\d{4}-\d{2}-\d{2}\.csv$/.test(p));
+      const entries = (await listed.json()) as { files?: PiLogFile[] };
+      const paths = [...new Set((entries.files ?? [])
+        .map(safePiLogPath)
+        .filter((path): path is string => path !== null && piLogDate(path) === date))];
+      if (paths.length > 0) await mkdir(join(folder, "pi"), { recursive: true });
+      const failures: string[] = [];
       for (const path of paths) {
-        const res = await fetch(`${pi.baseUrl}/logs/${path}`, { headers, signal: AbortSignal.timeout(15_000) });
-        if (!res.ok) continue;
-        const dest = join(folder, "pi", ...path.split("/"));
-        await mkdir(join(dest, ".."), { recursive: true });
-        await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+        const res = await fetch(`${pi.baseUrl}/logs/${encodePiLogPath(path)}`, { headers, signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) {
+          failures.push(`${path}: HTTP ${res.status}`);
+          continue;
+        }
+        const destination = join(folder, "pi", ...path.split("/"));
+        await mkdir(dirname(destination), { recursive: true });
+        await writeFile(destination, Buffer.from(await res.arrayBuffer()));
         piSummary.files.push(path);
       }
       if (paths.length === 0) piSummary.note = "The Pi answered but has no file for this day.";
+      else if (failures.length > 0) piSummary.note = `Some Pi files could not be fetched: ${failures.join("; ")}`;
     } catch (err) {
       piSummary.note = `The Pi's files could not be fetched (${err instanceof Error ? err.message : err}).`;
     }
@@ -179,11 +172,11 @@ export async function exportDay(
     piSummary.note = "No Pi address is configured.";
   }
 
-  const times = sensors.filter((r) => r.sensor_id === SENSOR_IDS[0]).map((r) => new Date(r.recorded_at as string | Date).getTime());
+  const times = sensors.filter((row) => row.sensor_id === SENSOR_IDS[0]).map((row) => new Date(row.recorded_at as string | Date).getTime());
   const expected = Math.round(86_400 / pollSeconds);
   const gaps = findGaps(times, startMs, endMs, GAP_MINUTES);
   const byKind: Record<string, number> = {};
-  for (const a of alerts) byKind[String(a.kind)] = (byKind[String(a.kind)] ?? 0) + 1;
+  for (const alert of alerts) byKind[String(alert.kind)] = (byKind[String(alert.kind)] ?? 0) + 1;
   const summary: DaySummary = {
     date,
     timeZone,
@@ -195,7 +188,7 @@ export async function exportDay(
       first: times.length ? localTime(Math.min(...times), timeZone) : null,
       last: times.length ? localTime(Math.max(...times), timeZone) : null,
       gapsOverMinutes: GAP_MINUTES,
-      gaps: gaps.slice(0, 20).map((g) => ({ from: localTime(g.from, timeZone), to: localTime(g.to, timeZone), minutes: g.minutes })),
+      gaps: gaps.slice(0, 20).map((gap) => ({ from: localTime(gap.from, timeZone), to: localTime(gap.to, timeZone), minutes: gap.minutes })),
     },
     alerts: { total: alerts.length, byKind },
     pi: piSummary,
@@ -205,29 +198,29 @@ export async function exportDay(
   return summary;
 }
 
-export function formatSummary(s: DaySummary, gapCount: number): string {
+export function formatSummary(summary: DaySummary, gapCount: number): string {
   const lines = [
-    `Daily export for ${s.date} (${s.timeZone})`,
+    `Daily export for ${summary.date} (${summary.timeZone})`,
     "",
-    `Temperature and humidity: ${s.sensor.readings} readings of about ${s.sensor.expectedPerSensorPerDay} expected` +
-      (s.sensor.coveragePercent === null ? " (none today)" : ` (${s.sensor.coveragePercent} %)`),
+    `Temperature and humidity: ${summary.sensor.readings} readings of about ${summary.sensor.expectedPerSensorPerDay} expected` +
+      (summary.sensor.coveragePercent === null ? " (none today)" : ` (${summary.sensor.coveragePercent} %)`),
   ];
-  if (s.sensor.first) lines.push(`  first ${s.sensor.first}, last ${s.sensor.last}`);
+  if (summary.sensor.first) lines.push(`  first ${summary.sensor.first}, last ${summary.sensor.last}`);
   if (gapCount > 0) {
-    lines.push(`  ${gapCount} silence(s) of ${s.sensor.gapsOverMinutes} minutes or more${gapCount > s.sensor.gaps.length ? ` (the first ${s.sensor.gaps.length} shown)` : ""}:`);
-    for (const g of s.sensor.gaps) lines.push(`    ${g.from} to ${g.to}  (${g.minutes} min)`);
-  } else if (s.sensor.readings > 0) {
+    lines.push(`  ${gapCount} silence(s) of ${summary.sensor.gapsOverMinutes} minutes or more${gapCount > summary.sensor.gaps.length ? ` (the first ${summary.sensor.gaps.length} shown)` : ""}:`);
+    for (const gap of summary.sensor.gaps) lines.push(`    ${gap.from} to ${gap.to}  (${gap.minutes} min)`);
+  } else if (summary.sensor.readings > 0) {
     lines.push("  no silences");
   }
   lines.push(
     "",
-    `Behaviour snapshots: ${s.rows.behavior}`,
-    `Weights typed in: ${s.rows.weightsTyped}`,
-    `Alerts raised: ${s.alerts.total}` + (s.alerts.total ? ` (${Object.entries(s.alerts.byKind).map(([k, n]) => `${k} ${n}`).join(", ")})` : ""),
+    `Behaviour snapshots: ${summary.rows.behavior}`,
+    `Weights typed in: ${summary.rows.weightsTyped}`,
+    `Alerts raised: ${summary.alerts.total}` + (summary.alerts.total ? ` (${Object.entries(summary.alerts.byKind).map(([kind, count]) => `${kind} ${count}`).join(", ")})` : ""),
     "",
-    s.pi.reachable
-      ? `Raspberry Pi files: ${s.pi.files.length ? s.pi.files.join(", ") : "none for this day"}${s.pi.note ? ` (${s.pi.note})` : ""}`
-      : `Raspberry Pi files: not fetched. ${s.pi.note ?? ""}`,
+    summary.pi.reachable
+      ? `Raspberry Pi files: ${summary.pi.files.length ? summary.pi.files.join(", ") : "none for this day"}${summary.pi.note ? ` (${summary.pi.note})` : ""}`
+      : `Raspberry Pi files: not fetched. ${summary.pi.note ?? ""}`,
     "",
     "A blank value in a Pi file means no reading that minute; the error column says why. A silence above is a time with nothing stored.",
     "",

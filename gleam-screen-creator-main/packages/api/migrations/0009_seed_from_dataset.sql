@@ -23,7 +23,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO houses (id, facility_id, label, section, population, sort_order) VALUES
     ('H01', 'FARM-001', 'House 01', 'SEC_A', 4210, 1),
-    ('H02', 'FARM-001', 'House 02', 'SEC_B', 4180, 2),
+    ('H02', 'FARM-001', 'House 02', 'SEC_B', 28, 2),
     ('H03', 'FARM-001', 'House 03', 'SEC_C', 4260, 3),
     ('H04', 'FARM-001', 'House 04', 'SEC_D', 4190, 4)
 ON CONFLICT (id) DO UPDATE SET

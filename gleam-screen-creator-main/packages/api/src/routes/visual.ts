@@ -75,4 +75,25 @@ export async function registerVisualRoutes(app: FastifyInstance) {
       timeline,
     });
   });
+
+  app.get("/pi-csv-history", { preHandler: [requireAuth] }, async (request, reply) => {
+    const [ammonia, behavior] = await Promise.all([
+      app.sqlRead`
+        SELECT recorded_at::text AS "recordedAt", ammonia_ppm::float AS "ammoniaPpm",
+               error, source_file AS "sourceFile"
+        FROM pi_ammonia_logs
+        WHERE recorded_at >= now() - interval '30 days'
+        ORDER BY recorded_at DESC, id DESC
+        LIMIT 40`,
+      app.sqlRead`
+        SELECT recorded_at::text AS "recordedAt", birds, still_birds AS "stillBirds",
+               huddled_birds AS "huddledBirds", flock_moving::float AS "flockMoving",
+               huddle_fdi::float AS "huddleFdi", error, source_file AS "sourceFile"
+        FROM pi_behavior_logs
+        WHERE recorded_at >= now() - interval '30 days'
+        ORDER BY recorded_at DESC, id DESC
+        LIMIT 40`,
+    ]);
+    return reply.send({ ammonia, behavior });
+  });
 }

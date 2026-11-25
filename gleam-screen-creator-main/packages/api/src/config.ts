@@ -61,6 +61,12 @@ const schema = z.object({
   // service (cerebroil-stream) has no such routes, so when VISION_SERVICE_URL is the Pi, point this at a computer that runs
   // packages/vision (it uses the same VISION_SERVICE_TOKEN). Unset = VISION_SERVICE_URL.
   VIDEO_SERVICE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
+  // Live camera frames come from the camera stream service, which may be
+  // separate from the service used for analysis. Unset reuses VISION_SERVICE_URL.
+  CAMERA_STREAM_SERVICE_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().optional(),
+  ),
   // H-4: no insecure default — server will refuse to start without a real token.
   VISION_SERVICE_TOKEN: z.string().min(8, "VISION_SERVICE_TOKEN is required (min 8 chars)"),
   // The camera's RTSP link, as the fallback for the one Settings stores
@@ -90,6 +96,7 @@ const schema = z.object({
 
   // Where kinect_seg.py (the chicken outlines on the Kinect picture) runs: this computer, next to the Kinect.
   KINECT_SEG_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("http://127.0.0.1:8182")),
+  KINECT_SEG_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(32).optional()),
 
   // Where the Kinect bridge listens: this computer. The API relays its stream to devices on the network (kinect-relay.ts).
   KINECT_BRIDGE_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().default("ws://127.0.0.1:8181/")),

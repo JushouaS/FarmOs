@@ -4,3 +4,6 @@ __pycache__/
 venv/
 .git
 .gitignore
+# Local Kinect assets are used on the Kinect PC, not in the Raspberry Pi image.
+models/kinect_chicken_seg.pt
+models/weight_model_size_v1.json

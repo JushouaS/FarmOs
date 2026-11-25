@@ -1,0 +1,254 @@
+time,temperature_c,reading_age_s,error
+2026-11-07T19:01:37+08:00,26.0,0,
+2026-11-07T19:02:42+08:00,26.1,0,
+2026-11-07T19:02:55+08:00,26.1,0,
+2026-11-07T19:04:05+08:00,26.2,0,
+2026-11-07T19:05:14+08:00,26.3,65,only 34 of 40 bits arrived
+2026-11-07T19:06:17+08:00,26.2,0,
+2026-11-07T19:07:17+08:00,26.4,0,
+2026-11-07T19:08:24+08:00,26.4,0,
+2026-11-07T19:09:27+08:00,26.3,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:10:31+08:00,26.3,50,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:11:37+08:00,26.5,0,
+2026-11-07T19:12:52+08:00,26.5,0,
+2026-11-07T19:13:54+08:00,26.4,0,
+2026-11-07T19:14:56+08:00,26.3,0,
+2026-11-07T19:16:06+08:00,26.2,0,
+2026-11-07T19:17:06+08:00,26.1,0,
+2026-11-07T19:18:09+08:00,26.1,0,
+2026-11-07T19:19:19+08:00,26.3,0,
+2026-11-07T19:20:21+08:00,26.9,0,
+2026-11-07T19:21:28+08:00,26.5,0,
+2026-11-07T19:22:34+08:00,26.3,0,
+2026-11-07T19:23:38+08:00,26.1,0,
+2026-11-07T19:24:44+08:00,26.0,0,
+2026-11-07T19:25:50+08:00,25.9,0,
+2026-11-07T19:26:56+08:00,26.0,36,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:28:04+08:00,26.0,64,only 36 of 40 bits arrived
+2026-11-07T19:29:17+08:00,26.0,19,only 39 of 40 bits arrived
+2026-11-07T19:30:26+08:00,25.9,0,
+2026-11-07T19:31:27+08:00,25.9,0,
+2026-11-07T19:32:30+08:00,26.0,23,only 27 of 40 bits arrived
+2026-11-07T19:33:36+08:00,26.0,0,
+2026-11-07T19:34:39+08:00,26.0,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:35:48+08:00,25.9,31,only 37 of 40 bits arrived
+2026-11-07T19:37:02+08:00,25.9,105,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:38:10+08:00,25.8,17,only 4 of 40 bits arrived
+2026-11-07T19:39:20+08:00,25.7,0,
+2026-11-07T19:40:31+08:00,25.7,58,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:41:36+08:00,25.7,0,
+2026-11-07T19:42:44+08:00,25.6,38,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:43:48+08:00,25.7,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:44:52+08:00,25.7,38,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:45:59+08:00,25.6,0,
+2026-11-07T19:47:02+08:00,25.6,0,
+2026-11-07T19:48:11+08:00,25.6,0,
+2026-11-07T19:49:18+08:00,25.6,0,
+2026-11-07T19:50:24+08:00,25.6,0,
+2026-11-07T19:51:26+08:00,25.6,38,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:52:40+08:00,25.8,0,
+2026-11-07T19:53:49+08:00,25.8,21,only 38 of 40 bits arrived
+2026-11-07T19:54:49+08:00,25.7,0,
+2026-11-07T19:56:08+08:00,25.7,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:57:11+08:00,25.7,0,
+2026-11-07T19:58:12+08:00,25.7,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T19:59:21+08:00,26.2,0,
+2026-11-07T20:00:27+08:00,26.2,0,
+2026-11-07T20:01:42+08:00,26.1,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:02:45+08:00,26.1,0,
+2026-11-07T20:03:50+08:00,26.1,21,only 8 of 40 bits arrived
+2026-11-07T20:04:54+08:00,26.1,36,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:06:03+08:00,26.0,44,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:07:06+08:00,26.0,29,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:08:19+08:00,26.0,102,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:09:28+08:00,26.2,15,only 34 of 40 bits arrived
+2026-11-07T20:10:38+08:00,26.2,58,only 12 of 40 bits arrived
+2026-11-07T20:11:52+08:00,26.1,23,only 8 of 40 bits arrived
+2026-11-07T20:13:15+08:00,26.2,23,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:14:27+08:00,26.2,96,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:15:40+08:00,,169,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:16:54+08:00,26.3,36,only 12 of 40 bits arrived
+2026-11-07T20:18:02+08:00,26.3,63,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:19:06+08:00,26.4,38,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:20:13+08:00,26.4,0,
+2026-11-07T20:21:13+08:00,26.4,61,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:22:27+08:00,26.6,48,only 1 of 40 bits arrived
+2026-11-07T20:23:40+08:00,,121,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:24:48+08:00,26.3,36,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:26:00+08:00,26.3,108,only 39 of 40 bits arrived
+2026-11-07T20:27:14+08:00,26.3,23,only 14 of 40 bits arrived
+2026-11-07T20:28:25+08:00,26.2,21,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:29:41+08:00,26.2,19,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:30:45+08:00,26.2,0,
+2026-11-07T20:31:45+08:00,26.2,43,only 38 of 40 bits arrived
+2026-11-07T20:32:53+08:00,26.3,38,only 37 of 40 bits arrived
+2026-11-07T20:34:06+08:00,26.3,111,only 35 of 40 bits arrived
+2026-11-07T20:35:10+08:00,26.0,0,
+2026-11-07T20:36:22+08:00,26.1,60,only 30 of 40 bits arrived
+2026-11-07T20:37:35+08:00,,133,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:38:40+08:00,25.8,0,
+2026-11-07T20:39:47+08:00,25.8,0,
+2026-11-07T20:40:48+08:00,25.8,61,the check number did not match (a noisy read)
+2026-11-07T20:41:55+08:00,0.0,36,the check number did not match (a noisy read)
+2026-11-07T20:43:08+08:00,0.0,109,only 0 of 40 bits arrived
+2026-11-07T20:44:21+08:00,,183,only 0 of 40 bits arrived
+2026-11-07T20:45:34+08:00,,256,only 37 of 40 bits arrived
+2026-11-07T20:46:48+08:00,,329,only 20 of 40 bits arrived
+2026-11-07T20:48:01+08:00,,402,only 5 of 40 bits arrived
+2026-11-07T20:49:14+08:00,,475,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T20:50:27+08:00,,549,only 0 of 40 bits arrived
+2026-11-07T20:51:40+08:00,,622,only 0 of 40 bits arrived
+2026-11-07T20:52:54+08:00,,695,the check number did not match (a noisy read)
+2026-11-07T20:54:07+08:00,,768,the check number did not match (a noisy read)
+2026-11-07T20:55:20+08:00,,842,only 0 of 40 bits arrived
+2026-11-07T20:56:33+08:00,,915,only 34 of 40 bits arrived
+2026-11-07T20:57:47+08:00,,988,only 0 of 40 bits arrived
+2026-11-07T20:59:00+08:00,,1061,only 0 of 40 bits arrived
+2026-11-07T21:00:13+08:00,,1134,the check number did not match (a noisy read)
+2026-11-07T21:01:26+08:00,,1207,the check number did not match (a noisy read)
+2026-11-07T21:02:39+08:00,,1281,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T21:03:52+08:00,,1354,the check number did not match (a noisy read)
+2026-11-07T21:05:05+08:00,,1427,only 0 of 40 bits arrived
+2026-11-07T21:06:19+08:00,,1500,the check number did not match (a noisy read)
+2026-11-07T21:07:32+08:00,,1573,only 31 of 40 bits arrived
+2026-11-07T21:08:45+08:00,,1646,only 26 of 40 bits arrived
+2026-11-07T21:09:58+08:00,,1719,only 0 of 40 bits arrived
+2026-11-07T21:11:11+08:00,,1793,the check number did not match (a noisy read)
+2026-11-07T21:12:24+08:00,,1866,only 2 of 40 bits arrived
+2026-11-07T21:13:38+08:00,,1939,only 21 of 40 bits arrived
+2026-11-07T21:14:51+08:00,,2012,the check number did not match (a noisy read)
+2026-11-07T21:16:04+08:00,,2085,only 0 of 40 bits arrived
+2026-11-07T21:17:17+08:00,,2159,only 0 of 40 bits arrived
+2026-11-07T21:18:30+08:00,,2232,only 0 of 40 bits arrived
+2026-11-07T21:19:44+08:00,,2305,the check number did not match (a noisy read)
+2026-11-07T21:20:57+08:00,,2378,the check number did not match (a noisy read)
+2026-11-07T21:22:10+08:00,,2451,only 0 of 40 bits arrived
+2026-11-07T21:23:23+08:00,,2524,only 0 of 40 bits arrived
+2026-11-07T21:24:36+08:00,,2598,the check number did not match (a noisy read)
+2026-11-07T21:25:49+08:00,,2671,only 12 of 40 bits arrived
+2026-11-07T21:27:03+08:00,,2744,only 0 of 40 bits arrived
+2026-11-07T21:28:16+08:00,,2817,only 34 of 40 bits arrived
+2026-11-07T21:29:29+08:00,,2890,only 1 of 40 bits arrived
+2026-11-07T21:30:42+08:00,,2964,only 0 of 40 bits arrived
+2026-11-07T21:31:55+08:00,,3037,only 1 of 40 bits arrived
+2026-11-07T21:33:09+08:00,,3110,the check number did not match (a noisy read)
+2026-11-07T21:34:22+08:00,,3183,only 0 of 40 bits arrived
+2026-11-07T21:35:35+08:00,,3256,only 0 of 40 bits arrived
+2026-11-07T21:36:48+08:00,,3329,the check number did not match (a noisy read)
+2026-11-07T21:38:01+08:00,,3403,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T21:39:15+08:00,,3476,only 38 of 40 bits arrived
+2026-11-07T21:40:28+08:00,,3549,only 30 of 40 bits arrived
+2026-11-07T21:41:41+08:00,,3622,only 34 of 40 bits arrived
+2026-11-07T21:42:54+08:00,,3695,only 3 of 40 bits arrived
+2026-11-07T21:44:07+08:00,,3769,the check number did not match (a noisy read)
+2026-11-07T21:45:20+08:00,,3842,only 38 of 40 bits arrived
+2026-11-07T21:46:34+08:00,,3915,only 0 of 40 bits arrived
+2026-11-07T21:47:47+08:00,,3988,only 38 of 40 bits arrived
+2026-11-07T21:49:00+08:00,,4061,only 25 of 40 bits arrived
+2026-11-07T21:50:13+08:00,,4134,only 4 of 40 bits arrived
+2026-11-07T21:51:26+08:00,,4207,only 4 of 40 bits arrived
+2026-11-07T21:52:39+08:00,,4281,only 32 of 40 bits arrived
+2026-11-07T21:53:52+08:00,,4354,the check number did not match (a noisy read)
+2026-11-07T21:55:05+08:00,,4427,only 0 of 40 bits arrived
+2026-11-07T21:56:19+08:00,,4500,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T21:57:32+08:00,,4573,the check number did not match (a noisy read)
+2026-11-07T21:58:45+08:00,,4646,only 18 of 40 bits arrived
+2026-11-07T21:59:58+08:00,,4720,only 30 of 40 bits arrived
+2026-11-07T22:01:11+08:00,,4793,the check number did not match (a noisy read)
+2026-11-07T22:02:25+08:00,,4866,only 2 of 40 bits arrived
+2026-11-07T22:03:38+08:00,,4939,only 0 of 40 bits arrived
+2026-11-07T22:04:51+08:00,,5012,only 36 of 40 bits arrived
+2026-11-07T22:06:04+08:00,,5086,the check number did not match (a noisy read)
+2026-11-07T22:07:17+08:00,,5159,only 0 of 40 bits arrived
+2026-11-07T22:08:31+08:00,,5232,only 1 of 40 bits arrived
+2026-11-07T22:09:44+08:00,,5305,only 28 of 40 bits arrived
+2026-11-07T22:10:57+08:00,,5378,only 27 of 40 bits arrived
+2026-11-07T22:12:10+08:00,,5452,only 7 of 40 bits arrived
+2026-11-07T22:13:23+08:00,,5525,the check number did not match (a noisy read)
+2026-11-07T22:14:37+08:00,,5598,the check number did not match (a noisy read)
+2026-11-07T22:15:50+08:00,,5671,only 30 of 40 bits arrived
+2026-11-07T22:17:03+08:00,,5744,only 37 of 40 bits arrived
+2026-11-07T22:18:16+08:00,,5817,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T22:19:29+08:00,,5891,only 0 of 40 bits arrived
+2026-11-07T22:20:42+08:00,,5964,only 0 of 40 bits arrived
+2026-11-07T22:21:56+08:00,,6037,the check number did not match (a noisy read)
+2026-11-07T22:23:09+08:00,,6110,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T22:24:13+08:00,19.2,0,
+2026-11-07T22:25:16+08:00,19.2,63,the check number did not match (a noisy read)
+2026-11-07T22:26:29+08:00,,136,only 32 of 40 bits arrived
+2026-11-07T22:27:42+08:00,,209,the check number did not match (a noisy read)
+2026-11-07T22:28:55+08:00,,282,only 20 of 40 bits arrived
+2026-11-07T22:30:08+08:00,,356,only 35 of 40 bits arrived
+2026-11-07T22:31:22+08:00,,429,only 0 of 40 bits arrived
+2026-11-07T22:32:35+08:00,,502,only 27 of 40 bits arrived
+2026-11-07T22:33:48+08:00,,575,only 0 of 40 bits arrived
+2026-11-07T22:35:01+08:00,,649,only 1 of 40 bits arrived
+2026-11-07T22:36:14+08:00,,722,only 6 of 40 bits arrived
+2026-11-07T22:37:28+08:00,,795,only 0 of 40 bits arrived
+2026-11-07T22:38:41+08:00,,868,the check number did not match (a noisy read)
+2026-11-07T22:39:54+08:00,,941,only 0 of 40 bits arrived
+2026-11-07T22:41:07+08:00,,1014,the check number did not match (a noisy read)
+2026-11-07T22:42:20+08:00,,1088,the check number did not match (a noisy read)
+2026-11-07T22:43:34+08:00,,1161,only 0 of 40 bits arrived
+2026-11-07T22:44:47+08:00,,1234,only 1 of 40 bits arrived
+2026-11-07T22:46:00+08:00,,1307,only 25 of 40 bits arrived
+2026-11-07T22:47:13+08:00,,1380,only 0 of 40 bits arrived
+2026-11-07T22:48:26+08:00,,1453,only 34 of 40 bits arrived
+2026-11-07T22:49:40+08:00,,1527,only 0 of 40 bits arrived
+2026-11-07T22:50:52+08:00,,1600,only 0 of 40 bits arrived
+2026-11-07T22:52:06+08:00,,1673,only 0 of 40 bits arrived
+2026-11-07T22:53:19+08:00,,1746,the check number did not match (a noisy read)
+2026-11-07T22:54:32+08:00,,1819,only 0 of 40 bits arrived
+2026-11-07T22:55:45+08:00,,1892,only 1 of 40 bits arrived
+2026-11-07T22:56:58+08:00,,1965,only 0 of 40 bits arrived
+2026-11-07T22:58:12+08:00,,2039,only 0 of 40 bits arrived
+2026-11-07T22:59:25+08:00,,2112,only 9 of 40 bits arrived
+2026-11-07T23:00:38+08:00,,2185,only 24 of 40 bits arrived
+2026-11-07T23:01:51+08:00,,2258,only 14 of 40 bits arrived
+2026-11-07T23:03:04+08:00,,2331,only 29 of 40 bits arrived
+2026-11-07T23:04:17+08:00,,2404,only 0 of 40 bits arrived
+2026-11-07T23:05:30+08:00,,2478,only 0 of 40 bits arrived
+2026-11-07T23:06:44+08:00,,2551,only 14 of 40 bits arrived
+2026-11-07T23:07:57+08:00,,2624,only 0 of 40 bits arrived
+2026-11-07T23:09:10+08:00,,2697,only 0 of 40 bits arrived
+2026-11-07T23:10:23+08:00,,2770,only 0 of 40 bits arrived
+2026-11-07T23:11:36+08:00,,2843,only 0 of 40 bits arrived
+2026-11-07T23:12:49+08:00,,2916,the check number did not match (a noisy read)
+2026-11-07T23:14:02+08:00,,2990,only 32 of 40 bits arrived
+2026-11-07T23:15:16+08:00,,3063,the check number did not match (a noisy read)
+2026-11-07T23:16:29+08:00,,3136,the check number did not match (a noisy read)
+2026-11-07T23:17:42+08:00,,3209,only 36 of 40 bits arrived
+2026-11-07T23:18:55+08:00,,3282,only 0 of 40 bits arrived
+2026-11-07T23:20:08+08:00,,3355,only 0 of 40 bits arrived
+2026-11-07T23:21:21+08:00,,3429,only 27 of 40 bits arrived
+2026-11-07T23:22:35+08:00,,3502,the check number did not match (a noisy read)
+2026-11-07T23:23:48+08:00,,3575,only 8 of 40 bits arrived
+2026-11-07T23:25:01+08:00,,3648,only 23 of 40 bits arrived
+2026-11-07T23:26:14+08:00,,3721,only 0 of 40 bits arrived
+2026-11-07T23:27:27+08:00,,3795,only 0 of 40 bits arrived
+2026-11-07T23:28:40+08:00,,3868,the check number did not match (a noisy read)
+2026-11-07T23:29:54+08:00,,3941,only 0 of 40 bits arrived
+2026-11-07T23:31:07+08:00,,4014,the check number did not match (a noisy read)
+2026-11-07T23:32:20+08:00,,4087,only 13 of 40 bits arrived
+2026-11-07T23:33:33+08:00,,4160,only 0 of 40 bits arrived
+2026-11-07T23:34:46+08:00,,4233,only 0 of 40 bits arrived
+2026-11-07T23:35:59+08:00,,4306,only 25 of 40 bits arrived
+2026-11-07T23:37:13+08:00,,4380,only 38 of 40 bits arrived
+2026-11-07T23:38:26+08:00,,4453,only 0 of 40 bits arrived
+2026-11-07T23:39:39+08:00,,4526,the check number did not match (a noisy read)
+2026-11-07T23:40:52+08:00,,4599,the check number did not match (a noisy read)
+2026-11-07T23:42:05+08:00,,4672,only 0 of 40 bits arrived
+2026-11-07T23:43:19+08:00,,4746,the check number did not match (a noisy read)
+2026-11-07T23:44:32+08:00,,4819,only 36 of 40 bits arrived
+2026-11-07T23:45:45+08:00,,4892,only 19 of 40 bits arrived
+2026-11-07T23:46:58+08:00,,4965,only 0 of 40 bits arrived
+2026-11-07T23:48:11+08:00,,5039,only 4 of 40 bits arrived
+2026-11-07T23:49:25+08:00,,5112,only 2 of 40 bits arrived
+2026-11-07T23:50:38+08:00,,5185,only 35 of 40 bits arrived
+2026-11-07T23:51:51+08:00,,5258,only 0 of 40 bits arrived
+2026-11-07T23:53:04+08:00,,5331,only 16 of 40 bits arrived
+2026-11-07T23:54:17+08:00,,5404,only 0 of 40 bits arrived
+2026-11-07T23:55:30+08:00,,5477,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T23:56:44+08:00,,5551,the sensor did not answer (check the wires and the 3.3 V)
+2026-11-07T23:57:57+08:00,,5624,only 0 of 40 bits arrived
+2026-11-07T23:59:10+08:00,,5697,only 25 of 40 bits arrived
