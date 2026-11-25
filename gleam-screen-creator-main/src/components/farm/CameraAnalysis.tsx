@@ -43,18 +43,28 @@ function errorKeyFor(err: unknown): ErrorKey {
   return "err_generic";
 }
 
-export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: LightingHours }) {
+/** In demo mode the page passes this: the scan the camera computer's analysis gave for the moment the demo video is
+ *  showing (computed ahead of time from the recording, never written to the database), and when that moment was. */
+export type DemoScanSource = () => Promise<{ result: ScanResult; at: Date } | null>;
+
+export function CameraAnalysis({ lighting = DEFAULT_LIGHTING, demoScan }: { lighting?: LightingHours; demoScan?: DemoScanSource }) {
   const { refresh } = useAuth();
   const { lang } = useLanguage();
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<ErrorKey | null>(null);
-  const [scan, setScan] = useState<{ result: ScanResult; at: Date; findings: Finding[] } | null>(null);
+  const [scan, setScan] = useState<{ result: ScanResult; at: Date; findings: Finding[]; demo: boolean } | null>(null);
 
   const run = async () => {
     if (scanning) return;
     setScanning(true);
     setError(null);
     try {
+      if (demoScan) {
+        const found = await demoScan();
+        if (!found) throw new Error("demo_scan_missing");
+        setScan({ ...found, findings: buildFindings(found.result, isNightCycle(found.at, lighting)), demo: true });
+        return;
+      }
       let result: ScanResult;
       try {
         result = await scanCamera(CAMERA_ID);
@@ -67,7 +77,7 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
         }
       }
       const at = new Date();
-      setScan({ result, at, findings: buildFindings(result, isNightCycle(at, lighting)) });
+      setScan({ result, at, findings: buildFindings(result, isNightCycle(at, lighting)), demo: false });
     } catch (err) {
       setError(errorKeyFor(err));
     } finally {
@@ -133,9 +143,18 @@ export function CameraAnalysis({ lighting = DEFAULT_LIGHTING }: { lighting?: Lig
               {ui(lang, statusKey)}
             </span>
             <span className="text-xs text-[var(--text-tertiary)]">
-              {ui(lang, "scannedAt", { time: scan.at.toLocaleTimeString(localeTag(), { hour: "2-digit", minute: "2-digit" }) })}
+              {ui(lang, "scannedAt", {
+                time: scan.at.toLocaleTimeString(localeTag(), scan.demo ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" }),
+              })}
             </span>
           </div>
+          {scan.demo && (
+            <p className="text-[11px] leading-snug text-[var(--text-tertiary)]">
+              {tr("Recorded demo: the camera computer's analysis of the moment on screen ({date}). Not saved to the flock's history.", {
+                date: scan.at.toLocaleDateString(localeTag(), { day: "numeric", month: "short", year: "numeric" }),
+              })}
+            </p>
+          )}
 
           <dl className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg bg-[var(--surface-raised)] p-2">

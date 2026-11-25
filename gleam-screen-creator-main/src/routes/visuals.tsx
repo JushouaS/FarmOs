@@ -2,7 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { AppShell, useAppShell } from "@/components/farm/AppShell";
 import { Menu } from "lucide-react";
-import { CameraAnalysis } from "@/components/farm/CameraAnalysis";
+import { CameraAnalysis, type DemoScanSource } from "@/components/farm/CameraAnalysis";
 import { CameraDetectionsOverlay } from "@/components/farm/CameraDetectionsOverlay";
 import { PiCsvHistoryPanel } from "@/components/farm/PiCsvHistoryPanel";
 import { KinectDepthView } from "@/components/farm/KinectDepthView";
@@ -10,7 +10,7 @@ import { MjpegCameraFeed } from "@/components/farm/MjpegCameraFeed";
 import { DEFAULT_LIGHTING, clock12, isNightCycle, type LightingHours } from "@/lib/farm/lighting";
 import { getOperationsOverview } from "@/lib/farm/repository";
 import { freshReading, silentFor } from "@/lib/farm/pen-sensors";
-import { fetchLiveBehavior, visionStreamUrl, type KinectChickens, type LiveBehavior } from "@/lib/api-client";
+import { fetchLiveBehavior, visionStreamUrl, type CameraScan as ScanResult, type KinectChickens, type LiveBehavior } from "@/lib/api-client";
 import { HEAVY_RATIO, UNDERWEIGHT_RATIO, fmtW, rangeLabel, standardForToday, weightCategoryFor } from "@/lib/farm/weights";
 import { pictureArea, watchMinutes, watchSummary } from "@/lib/farm/stillness";
 import { localeTag, tr } from "@/lib/i18n";
@@ -128,6 +128,15 @@ export function VisualsDashboardPage() {
     });
   };
   const demoBehavior = demoOn && demoFiles.behavior;
+  // Analyze data in demo mode: the camera computer's scan of the second the CAM-01 demo video is showing.
+  const demoScanNow: DemoScanSource = async () => {
+    const video = document.querySelector<HTMLVideoElement>('video[data-demo="behavior"]');
+    const data = await loadDemoScans();
+    if (!video || !data || !data.scans.length) return null;
+    const i = Math.min(data.scans.length - 1, Math.max(0, Math.floor(video.currentTime) - data.first_second));
+    const result = data.scans[i];
+    return { result, at: new Date(result.recorded_at) };
+  };
   const demoWeight = demoOn && demoFiles.weight;
   useEffect(() => {
     const healthUrl = visionStreamUrl("CAM-01").replace(/[/]visual[/]stream[/].*$/, "/visual/health");
@@ -358,7 +367,7 @@ export function VisualsDashboardPage() {
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
                     {demoBehavior ? (
-                      <DemoClip video={DEMO_VIDEOS.behavior} />
+                      <DemoClip video={DEMO_VIDEOS.behavior} name="behavior" />
                     ) : !dahuaError ? (
                       <>
                         {feedOrigin && (
@@ -420,7 +429,7 @@ export function VisualsDashboardPage() {
                     {/* While the bridge is not running the view keeps asking for it, so this needs no button. It never
                         shows a stand-in picture: the camera service's simulated depth image is not the weighing station. */}
                     {demoWeight ? (
-                      <DemoClip video={DEMO_VIDEOS.weight} />
+                      <DemoClip video={DEMO_VIDEOS.weight} name="weight" />
                     ) : (
                     <KinectDepthView onFlock={setFlock} fallback={
                       <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
@@ -447,7 +456,7 @@ export function VisualsDashboardPage() {
           {/* Right Inspector & Analytics Drawer Panel */}
           {/* Stacks under the feeds below lg (2-up on tablets), docks right from lg */}
           <aside className="grid gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-card)] p-3 sm:grid-cols-2 sm:p-4 lg:flex lg:w-72 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:border-t-0 lg:border-l lg:p-3">
-            <CameraAnalysis lighting={lighting} />
+            <CameraAnalysis lighting={lighting} demoScan={demoBehavior ? demoScanNow : undefined} />
 
             {/* What the live monitor on the camera computer sees. It is off until LIVE_BEHAVIOR=1 is set there. */}
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-sunken)] p-4 elevation-1">
@@ -604,16 +613,26 @@ export function VisualsDashboardPage() {
  * Recordings shown in place of the live cameras. The behavior clip is the system's own output on a real pen
  * recording (packages/vision/tools/make_demo_video.py): every box, bird number, huddle and inactive bird was
  * drawn by the tracker, not by hand. The files are not in git; put them in public/demo/. */
+// The Analyze data scans for the behavior clip, one per second (cerebroil-stream/make_scan_demo.py).
+let demoScans: Promise<{ first_second: number; scans: (ScanResult & { recorded_at: string })[] } | null> | null = null;
+function loadDemoScans() {
+  demoScans ??= fetch("/demo/behavior_scans.json", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+  return demoScans;
+}
+
 const DEMO_VIDEOS = {
   behavior: { src: "/demo/behavior.mp4", label: "Recorded demo · 12 Nov 2026, 11:30 to 11:45 · real speed" },
   weight: { src: "/demo/weight.mp4", label: "Recorded demo · Kinect clips, 11 to 16 Nov 2026 · half speed · weights are size estimates" },
 } as const;
 
-function DemoClip({ video }: { video: { src: string; label: string } }) {
+function DemoClip({ video, name }: { video: { src: string; label: string }; name: string }) {
   return (
     <>
       <video
         src={video.src}
+        data-demo={name}
         className="h-full w-full object-contain"
         autoPlay
         muted
