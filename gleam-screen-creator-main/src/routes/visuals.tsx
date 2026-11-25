@@ -100,6 +100,8 @@ export function VisualsDashboardPage() {
   // for a moment, the browser leaves the picture frozen and never asks again. So every 10 seconds the page asks whether
   // the camera path works and, when it works again after being away, opens the pictures anew.
   const [streamKey, setStreamKey] = useState(0);
+  // Set when the CCTV feed cannot reach the camera service at all; the panel then says so, with a Retry button.
+  const [dahuaError, setDahuaError] = useState(false);
   useEffect(() => {
     const healthUrl = visionStreamUrl("CAM-01").replace(/[/]visual[/]stream[/].*$/, "/visual/health");
     let away = false;
@@ -110,6 +112,7 @@ export function VisualsDashboardPage() {
         if (!res.ok) throw new Error("camera path is down");
         if (away) {
           away = false;
+          setDahuaError(false);
           setStreamKey((k) => k + 1);
         }
       } catch {
@@ -152,6 +155,16 @@ export function VisualsDashboardPage() {
   useEffect(() => {
     setFeedOrigin(window.location.origin);
   }, []);
+
+  // The camera service's address, only for the "not answering" message. VITE_VISION_ORIGIN names the Pi (e.g.
+  // http://192.168.1.20:5000); on a public https address the visitor is not on the farm's network, so the message
+  // names the address they are using, never the camera computer's private one.
+  const feedHost = !feedOrigin
+    ? "port 5000"
+    : feedOrigin.startsWith("https:")
+      ? feedOrigin.replace(/^https?:\/\//, "")
+      : ((import.meta.env.VITE_VISION_ORIGIN as string | undefined)?.trim().replace(/\/+$/, "") ||
+          `${new URL(feedOrigin).hostname}:5000`).replace(/^https?:\/\//, "");
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -301,15 +314,44 @@ export function VisualsDashboardPage() {
                   {/* Video Viewport Container — 16:9 box when the page scrolls,
                       fills the available height in the lg workspace */}
                   <div className="relative flex aspect-video min-h-60 items-center justify-center overflow-hidden bg-black lg:aspect-auto lg:min-h-0 lg:flex-1">
-                    {feedOrigin && (
-                      <MjpegCameraFeed
-                        key={`dahua-${streamKey}`}
-                        src={`${visionStreamUrl("CAM-01")}?k=${streamKey}`}
-                        alt={tr("Live camera feed of the broilers' behavior")}
-                        className="h-full w-full object-contain"
-                      />
+                    {!dahuaError ? (
+                      <>
+                        {feedOrigin && (
+                          <MjpegCameraFeed
+                            key={`dahua-${streamKey}`}
+                            src={`${visionStreamUrl("CAM-01")}?k=${streamKey}`}
+                            alt={tr("Live camera feed of the broilers' behavior")}
+                            className="h-full w-full object-contain"
+                            onUnreachable={() => setDahuaError(true)}
+                          />
+                        )}
+                        <CameraDetectionsOverlay cameraId="CAM-01" />
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center px-6 pt-4 pb-12 text-center">
+                        <div className="mb-2 rounded-full bg-[var(--status-amber-bg)] p-3 text-[var(--status-amber-text)]">
+                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                        </div>
+                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                          {tr("Vision service not reachable")}
+                        </h2>
+                        <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary)]">{tr("Nothing is answering at {feedHost}. Start cerebroil-stream, then retry.", { feedHost })}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDahuaError(false);
+                            setStreamKey((k) => k + 1);
+                          }}
+                          className="tactile-btn tap mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--surface-raised)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--brand)]"
+                        >
+                          {tr("Retry Connection")}
+                        </button>
+                      </div>
                     )}
-                    <CameraDetectionsOverlay cameraId="CAM-01" />
                   </div>
                 </div>
               )}

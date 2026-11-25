@@ -7,6 +7,9 @@ interface Props {
   src: string;
   alt: string;
   className?: string;
+  /** Called once when the camera path fails this many times in a row before any picture has arrived (default 2). */
+  onUnreachable?: () => void;
+  unreachableAfter?: number;
 }
 
 function findMarker(bytes: Uint8Array, start: number, marker: number): number {
@@ -16,15 +19,21 @@ function findMarker(bytes: Uint8Array, start: number, marker: number): number {
   return -1;
 }
 
-export function MjpegCameraFeed({ src, alt, className }: Props) {
+export function MjpegCameraFeed({ src, alt, className, onUnreachable, unreachableAfter = 2 }: Props) {
   const imageRef = useRef<HTMLImageElement>(null);
   const [state, setState] = useState<FeedState>("connecting");
+  const [hasFrame, setHasFrame] = useState(false);
+  // Kept in a ref so a new callback from the page does not restart the connection.
+  const unreachableRef = useRef(onUnreachable);
+  unreachableRef.current = onUnreachable;
 
   useEffect(() => {
     let stopped = false;
     let lastFrameUrl: string | null = null;
     let lastPaintAt = 0;
     let retryCount = 0;
+    let failuresBeforeFirstFrame = 0;
+    let reported = false;
     let activeController: AbortController | null = null;
     const objectUrls = new Set<string>();
     const revokeTimers = new Set<number>();
@@ -87,6 +96,7 @@ export function MjpegCameraFeed({ src, alt, className }: Props) {
               lastFrameUrl = url;
               if (imageRef.current) imageRef.current.src = url;
               setState("live");
+              setHasFrame(true);
 
               if (previousUrl) {
                 const timer = window.setTimeout(() => {
@@ -101,6 +111,11 @@ export function MjpegCameraFeed({ src, alt, className }: Props) {
         } catch {
           if (stopped) break;
           setState(lastFrameUrl ? "reconnecting" : "connecting");
+          // Nothing has ever arrived and the camera path keeps failing: let the page say so instead of spinning.
+          if (!lastFrameUrl && !reported && ++failuresBeforeFirstFrame >= unreachableAfter && unreachableRef.current) {
+            reported = true;
+            unreachableRef.current();
+          }
           await sleep(Math.min(1_000 * 2 ** retryCount, 8_000));
           retryCount = Math.min(retryCount + 1, 3);
         } finally {
@@ -117,11 +132,12 @@ export function MjpegCameraFeed({ src, alt, className }: Props) {
       for (const timer of revokeTimers) window.clearTimeout(timer);
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [src]);
+  }, [src, unreachableAfter]);
 
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black">
-      <img ref={imageRef} alt={alt} className={className} />
+      {/* Hidden until the first picture arrives, so an empty image never shows the browser's broken-image icon. */}
+      <img ref={imageRef} alt={alt} className={className} style={hasFrame ? undefined : { visibility: "hidden" }} />
       {state !== "live" && (
         <div className="absolute inset-x-0 bottom-3 text-center text-xs text-white/80" role="status">
           {state === "connecting" ? tr("Connecting to camera…") : tr("Camera stream interrupted; reconnecting…")}
