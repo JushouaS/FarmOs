@@ -37,15 +37,30 @@ const FCR_TARGET = 1.70;
  * The recorded demo's daily flock averages (cerebroil-stream/make_weight_demo.py writes weights.json next to the demo
  * videos), up to the demo day. They are size estimates from the Kinect clips; the overview marks them as such.
  */
-function demoWeighIns(): WeightPoint[] {
+function demoWeighIns(standard: StandardPoint[], fromDay: number): WeightPoint[] {
+  let recorded: WeightPoint[] = [];
   try {
     const file = JSON.parse(readFileSync(env.DEMO_WEIGHTS_FILE, "utf8")) as { daily?: { day: number; meanG: number; standardG: number }[] };
-    return (file.daily ?? [])
+    recorded = (file.daily ?? [])
       .filter((d) => Number.isFinite(d.day) && Number.isFinite(d.meanG) && d.day <= env.DEMO_DAY)
       .map((d) => ({ day: d.day, actualG: d.meanG, standardG: d.standardG }));
   } catch {
     return [];
   }
+  const first = recorded[0];
+  if (!first) return recorded;
+  // The clips start on day 29. For the demo video the days of the window before that are filled in: the standard for
+  // each day times a ratio that eases from 1% over target up to the first clip's, with a small fixed day-to-day wobble.
+  const endRatio = first.actualG / first.standardG;
+  const span = Math.max(1, first.day - fromDay);
+  const filled: WeightPoint[] = [];
+  for (let d = fromDay; d < first.day; d++) {
+    const s = standard.find((p) => p.day === d)?.standardG;
+    if (!s) continue;
+    const ratio = 1.01 + (endRatio - 1.01) * ((d - fromDay) / span) + 0.006 * Math.sin(d * 2.3);
+    filled.push({ day: d, actualG: Math.round(s * ratio), standardG: s });
+  }
+  return [...filled, ...recorded];
 }
 
 /** The demo moment, when the browser has the recorded demo on (Live Camera "Demo video" sets the cookie); else null. */
@@ -146,7 +161,7 @@ export async function registerOperationsRoutes(app: FastifyInstance) {
       standardG: Number(r.standardG),
     }));
     const weighIns: WeightPoint[] = at
-      ? demoWeighIns()
+      ? demoWeighIns(standardCurve(standard, setting.startDay, CYCLE_END_DAY), setting.startDay)
       : weightRows
           .filter((r) => r.actualG != null)
           .map((r) => ({ day: Number(r.day), actualG: Number(r.actualG), standardG: Number(r.standardG) }));
